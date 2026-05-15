@@ -120,6 +120,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/).
 - `bootstrap.py`: skip selectivo (diff entre filenames locales y object_keys en MinIO) en vez de skip total si existe cualquier objeto en el bucket
 - `CSVIngester`: el log de ingesta ya no fuerza `df.count()` (eliminaba un action innecesario sobre el DataFrame)
 - **Deep Learning: PyTorch reemplazado por Keras/TensorFlow** tras auditar el temario del Master. La asignatura de Aprenentatge Automatic (Jordi, Bloque 6) usa exclusivamente `keras.Sequential`, `Conv2D`, `MaxPooling2D`, `Dropout`, `EarlyStopping` y normalizacion `pixels/255`. Ver ADR-003. Coste de migracion: cero (el modelo aun no estaba implementado). README, CLAUDE.md, backlog y lessons actualizados
+- **Watcher integrado como servicio real en docker-compose** (antes solo existia como modulo Python con tests unitarios, pero sin proceso vivo en produccion). Cierra el lado automatico de RF-7 / CA-1: dropear `patients.csv` + `admissions.csv` en `data/incoming/` ahora dispara el ETL y mueve los ficheros a `data/incoming/processed/`. Nuevos artefactos: `src/pipeline/scripts/watcher_daemon.py` (entrypoint long-running), `data/incoming/` con volumen rw, servicio `watcher` en compose con `restart: unless-stopped`, test E2E `test_watcher_integration.py`
 
 ### Fixed
 

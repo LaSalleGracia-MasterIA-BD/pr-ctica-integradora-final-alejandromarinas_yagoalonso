@@ -408,6 +408,25 @@
   - **Auditar la teoria contra el codigo antes de implementar** evita reescritura tardia. El cambio de PyTorch a Keras tiene coste cero porque el modelo aun no estaba escrito; si hubiera estado ya implementado, habria sido una semana de migracion en plena fase final
   - **Distinguir docs vivos vs docs historicos:** un ADR `accepted` con nota `superseded` no se reescribe, se anota. Un README o CLAUDE.md sí. Un diario append-only sí mantiene el rastro, pero anade una sesion nueva con la rectificacion
 
+### Sesion 23 — 2026-05-16: Integracion del watcher como servicio real
+- **Objetivo:** Cerrar el gap entre "lo que el proyecto promete" (RF-7 / CA-1: automatizacion al colocar CSVs nuevos en un directorio de entrada) y "lo que realmente hace" (solo bootstrap inicial; el watcher existia como modulo + tests, pero no como proceso vivo)
+- **Prompts representativos:**
+  - "La spec dice que al poner nuevos CSVs en un directorio de entrada, el pipeline debe procesarlos automaticamente. Ahora existe un watcher en el codigo, pero no parece estar levantado como servicio real en docker-compose"
+- **Resultado:**
+  - `src/pipeline/scripts/watcher_daemon.py`: entrypoint long-running que crea Spark + Mongo + orchestrator + watcher una vez, registra handlers de SIGINT/SIGTERM para shutdown limpio y se queda en `stop_event.wait()`
+  - Callback del watcher invoca el orchestrator con `trigger_type="watcher"` y captura excepciones (el orchestrator ya marca el run como `failed`; el watcher debe sobrevivir para procesar el siguiente batch)
+  - `data/incoming/` y `data/incoming/processed/` creados con `.gitkeep`
+  - Servicio `watcher` en `docker-compose.yml`: reutiliza la imagen `hospital-pipeline`, `depends_on` con `pipeline` (bootstrap) completado, volumen `./data/incoming:/app/data/incoming:rw` (rw es obligatorio para que el watcher mueva ficheros a `processed/`), `restart: unless-stopped` para resiliencia
+  - `tests/e2e/test_watcher_integration.py`: dropea CSVs minimos en `incoming/`, espera con polling a que aparezcan en `processed/` (60s timeout), verifica que se ha creado un `pipeline_run` con `trigger_type=watcher` y que el nuevo paciente esta en MongoDB. Skip limpio si el watcher no esta corriendo
+- **Aciertos de la IA:**
+  - Elegir entre "integrar" o "documentar como no implementado" tras analizar viabilidad real, no por defecto
+  - Usar `shutil.move` con archivo tmp (`.patients.csv.tmp` → `patients.csv`) en el test para evitar que el watcher dispare con un fichero a medio escribir
+  - El callback del watcher captura excepciones del orchestrator para no matar el daemon — el orchestrator ya logea + marca el run como failed, asi que swallow aqui es correcto, no silencioso
+- **Casos donde hubo que corregir:** ninguno destacable
+- **Leccion aprendida:**
+  - **"Tener el codigo" != "tener la funcionalidad".** Un modulo con tests unitarios puede estar perfecto y aun asi NO cumplir el requisito si no esta cableado en produccion. El gap entre `src/pipeline/watcher.py` (escrito en T9) y un servicio Docker que lo arranca es una pieza pequeña pero critica que cambia "lo prometido funciona" por "lo prometido funciona de verdad"
+  - **Decision rw vs ro en volumenes:** el contenedor `pipeline` (bootstrap) monta `./data` en `ro` porque solo lee. El `watcher` necesita `rw` en `./data/incoming` porque mueve a `processed/`. Mejor montar solo el subdirectorio necesario en cada servicio que abrir todo en rw
+
 ## Reflexion critica (en construccion)
 
 ### Que ha aportado la IA hasta ahora
