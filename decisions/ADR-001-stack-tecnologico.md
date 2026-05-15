@@ -1,7 +1,8 @@
 # ADR-001: Stack tecnologico del proyecto
 
-> Estado: accepted
+> Estado: accepted (parcialmente superado)
 > Fecha: 2026-04-14
+> Superseded by: [ADR-003](ADR-003-keras-tensorflow.md) en el punto "Deep Learning: PyTorch" → cambiado a Keras/TensorFlow tras auditar el temario del Master (la asignatura usa TensorFlow, no PyTorch)
 
 ## Contexto
 El enunciado requiere un framework de procesamiento distribuido y un modelo de Deep Learning para clasificacion de radiografias. Hay que elegir tecnologias concretas.
