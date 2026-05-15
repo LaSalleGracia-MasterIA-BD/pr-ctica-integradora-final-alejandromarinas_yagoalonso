@@ -67,6 +67,21 @@ def test_ca3_invalid_records_in_rejected_collection_with_reason(mongo_db):
     assert len(reasons) >= 2, f"Esperaba multiples motivos de rechazo, encontrados: {reasons}"
 
 
+def test_ca3_orphan_admissions_persisted_as_rejected(mongo_db):
+    """T3 inyecta ~5% de admissions con patient_external_id huerfano.
+    Esos NO deben evaporarse: deben quedar en rejected_records con motivo claro."""
+    orphans = list(mongo_db.rejected_records.find(
+        {"rejection_reason": "orphan patient_external_id"}
+    ).limit(5))
+    assert len(orphans) > 0, (
+        "Los admissions huerfanos del dataset sintetico deberian aparecer "
+        "en rejected_records con motivo 'orphan patient_external_id'"
+    )
+    sample = orphans[0]
+    assert sample["source_file"] == "admissions.csv"
+    assert sample["raw_data"]["patient_external_id"], "Falta el patient_external_id en raw_data"
+
+
 # ---------------------------------------------------------------------------
 # CA-4 (RF-4): "Los datos en MongoDB estan normalizados y enriquecidos
 #              (ej: edad calculada, categorias estandarizadas)"

@@ -178,6 +178,68 @@ def test_orchestrator_registers_pipeline_run_with_stats(
     assert run_doc["records_processed"] >= 2
 
 
+def test_orphan_admissions_are_rejected_with_clear_reason(
+    orchestrator: PipelineOrchestrator, mongo_writer: MongoWriter, tmp_path: Path
+):
+    """Admissions whose patient_external_id does not exist in this batch must
+    end up in rejected_records with motive 'orphan patient_external_id'."""
+    patients_csv = tmp_path / "patients.csv"
+    admissions_csv = tmp_path / "admissions.csv"
+
+    _write_patients_csv(patients_csv, [
+        ["HOSP-000001", "Ana", "1980-05-12", "F", "A+"],
+    ])
+    _write_admissions_csv(admissions_csv, [
+        ["HOSP-000001", "2025-03-10", "", "UCI", "J18.9", "Pneumonia", "admitted"],
+        # Format is valid (HOSP-NNNNNN) but the patient does not exist
+        ["HOSP-999999", "2025-04-05", "", "Urgencias", "I21.9", "MI", "admitted"],
+    ])
+
+    result = orchestrator.run_from_files(
+        patients_csv=patients_csv,
+        admissions_csv=admissions_csv,
+    )
+
+    orphan_docs = list(mongo_writer.db.rejected_records.find({
+        "pipeline_run_id": result.run_id,
+        "rejection_reason": "orphan patient_external_id",
+    }))
+    assert len(orphan_docs) == 1
+    assert orphan_docs[0]["raw_data"]["patient_external_id"] == "HOSP-999999"
+
+    # The orphan admission must NOT be embedded in any patient
+    ana = mongo_writer.db.patients.find_one({"external_id": "HOSP-000001"})
+    assert len(ana["admissions"]) == 1
+    assert ana["admissions"][0]["patient_external_id"] == "HOSP-000001"
+
+
+def test_stats_count_only_persisted_records_not_orphans(
+    orchestrator: PipelineOrchestrator, mongo_writer: MongoWriter, tmp_path: Path
+):
+    """records_processed must reflect what actually got persisted, not the raw input."""
+    patients_csv = tmp_path / "patients.csv"
+    admissions_csv = tmp_path / "admissions.csv"
+
+    _write_patients_csv(patients_csv, [
+        ["HOSP-000001", "Ana", "1980-05-12", "F", "A+"],
+    ])
+    _write_admissions_csv(admissions_csv, [
+        ["HOSP-000001", "2025-03-10", "", "UCI", "J18.9", "Pneumonia", "admitted"],
+        ["HOSP-999998", "2025-04-05", "", "Urgencias", "I21.9", "MI", "admitted"],
+        ["HOSP-999999", "2025-05-05", "", "UCI", "J18.9", "Pneumonia", "admitted"],
+    ])
+
+    result = orchestrator.run_from_files(
+        patients_csv=patients_csv,
+        admissions_csv=admissions_csv,
+    )
+
+    # 1 patient + 1 valid admission embedded = 2 persisted
+    assert result.records_processed == 2
+    # 2 orphans went to rejected_records
+    assert result.records_rejected == 2
+
+
 def test_orchestrator_marks_run_as_failed_on_exception(
     orchestrator: PipelineOrchestrator, mongo_writer: MongoWriter, tmp_path: Path
 ):

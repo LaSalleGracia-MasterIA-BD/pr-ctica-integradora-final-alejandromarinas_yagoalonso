@@ -87,14 +87,25 @@ class PipelineOrchestrator:
             patients_records = [row.asDict() for row in patients_clean.collect()]
             admissions_records = [row.asDict() for row in admissions_clean.collect()]
 
+            # Cross-entity validation: drop admissions whose patient does not
+            # exist in this batch. The single-row validator cannot do this
+            # because it would need access to the full patients dataframe.
+            # The data contract (design/pipeline-datos.md) requires
+            # "patient debe existir" for admissions.
+            admissions_records, orphan_admissions = self._split_orphan_admissions(
+                admissions_records, patients_records
+            )
+
             self._writer.bulk_upsert_patients_with_admissions(
                 patients=patients_records,
                 admissions=admissions_records,
             )
 
-            rejected = self._collect_rejected(
-                patients_rejected, source="patients.csv"
-            ) + self._collect_rejected(admissions_rejected, source="admissions.csv")
+            rejected = (
+                self._collect_rejected(patients_rejected, source="patients.csv")
+                + self._collect_rejected(admissions_rejected, source="admissions.csv")
+                + self._build_orphan_rejections(orphan_admissions)
+            )
             self._writer.write_rejected(rejected, run_id)
 
             stats = {
@@ -105,10 +116,11 @@ class PipelineOrchestrator:
             self._writer.finish_pipeline_run(run_id, status="success", stats=stats)
 
             logger.info(
-                "Pipeline run %s finished: %d processed, %d rejected",
+                "Pipeline run %s finished: %d processed, %d rejected (incl. %d orphan admissions)",
                 run_id,
                 stats["records_processed"],
                 stats["records_rejected"],
+                len(orphan_admissions),
             )
             return PipelineRunResult(
                 run_id=run_id,
@@ -167,3 +179,35 @@ class PipelineOrchestrator:
                 }
             )
         return out
+
+    @staticmethod
+    def _split_orphan_admissions(
+        admissions: list[dict], patients: list[dict]
+    ) -> tuple[list[dict], list[dict]]:
+        """Split admissions into (valid, orphans) based on whether their
+        `patient_external_id` exists in the patients batch.
+
+        Orphans are admissions that pass the per-row validator but reference
+        a patient that does not exist in this run's patients dataset. Without
+        this check they would silently disappear at the embedding step.
+        """
+        known_ids = {p["external_id"] for p in patients}
+        valid: list[dict] = []
+        orphans: list[dict] = []
+        for adm in admissions:
+            if adm.get("patient_external_id") in known_ids:
+                valid.append(adm)
+            else:
+                orphans.append(adm)
+        return valid, orphans
+
+    @staticmethod
+    def _build_orphan_rejections(orphan_admissions: list[dict]) -> list[dict]:
+        return [
+            {
+                "source_file": "admissions.csv",
+                "rejection_reason": "orphan patient_external_id",
+                "raw_data": adm,
+            }
+            for adm in orphan_admissions
+        ]
