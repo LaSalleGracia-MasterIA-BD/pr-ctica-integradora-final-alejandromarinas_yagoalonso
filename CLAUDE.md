@@ -10,7 +10,7 @@ Sistema de IA para el hospital ficticio laSalle Health Center que clasifica radi
 ## Stack
 - **Backend/API:** Python (FastAPI)
 - **Pipeline de datos:** PySpark
-- **ML/Deep Learning:** PyTorch
+- **ML/Deep Learning:** Keras/TensorFlow (CNN: Conv2D + MaxPooling2D + Dropout + Dense, con EarlyStopping). Ver ADR-003
 - **Base de datos:** MongoDB (datos clinicos) + MinIO (imagenes/objetos)
 - **Dataset:** COVID-19 Radiography Database (Kaggle)
 - **Dashboard:** Streamlit

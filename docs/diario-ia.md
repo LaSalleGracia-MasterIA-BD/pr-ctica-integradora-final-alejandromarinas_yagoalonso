@@ -388,6 +388,26 @@
   - Una **auditoria de codigo explicita** (revision sistematica al cerrar un bloque grande) descubre huecos que los tests no detectan, sobre todo entre lo que el sistema "afirma" (README, endpoints declarados) y lo que realmente hace en produccion. Vale la pena hacer al menos una pasada antes de entregas importantes
   - El gap clasico: tests pasan + smoke test contra ejemplo "feliz" funciona, pero el sistema en produccion tiene una rama (POST /trigger) que NUNCA se prueba. La cobertura de tests no implica cobertura de uso
 
+### Sesion 22 — 2026-05-16: Auditoria temario Master vs proyecto + cambio a Keras/TensorFlow
+- **Objetivo:** Cruzar las decisiones tecnicas del proyecto contra el material real impartido en clase (carpeta `TEMARIO MASTER IA Y BIG DATA`) para detectar cualquier divergencia que pudiera penalizar la evaluacion
+- **Prompts representativos:**
+  - "haz una auditoria que todo lo que hayamos hecho en este proyecto no se sale de todos los conocimientos que hemos adquirido durante este master"
+  - "En algunos archivos todavia pone que el modelo de Deep Learning se hara con PyTorch, pero despues decidimos cambiarlo a Keras/TensorFlow porque es lo que aparece en el temario del master"
+- **Resultado:**
+  - Inventario completo de tecnologias enseñadas por asignatura: Big Data (Eric) usa PySpark, MinIO, FastAPI, Docker, Pandas, SQLite, SQLAlchemy, Hadoop, Delta Lake, Tableau. Aprenentatge Automatic (Jordi) usa `numpy`, `pandas`, `scikit-learn`, `tensorflow`. Modelos IA (Yuri) no aplica al scope del proyecto
+  - Detectado que PyTorch (ADR-001) NO esta en ningun material del Master. La asignatura usa Keras/TensorFlow exclusivamente (Bloque 6: `keras.Sequential`, `Conv2D`, `MaxPooling2D`, `Dropout`, `EarlyStopping`)
+  - Creado ADR-003 con la decision de cambiar a Keras/TensorFlow. ADR-001 marcado como `superseded` en ese punto
+  - Actualizado README, CLAUDE.md, backlog, lessons y CHANGELOG. ADR-001 y ADR-003 (que documentan la historia de la decision) no se tocan
+- **Aciertos de la IA:**
+  - Buscar todas las menciones de PyTorch con `grep -rn` antes de tocar nada — evito olvidar archivos
+  - Diferenciar entre "documentos vivos" (README, CLAUDE.md, backlog) y "documentos historicos" (ADRs, diario, sesiones pasadas del lessons.md): los primeros se actualizan, los segundos se conservan porque reflejan la historia real de la decision
+  - Sin tocar el diario en las sesiones pasadas que mencionan PyTorch (sesion 2 del 14-abr): son entradas de un diario append-only y describen lo que ocurrio ese dia
+- **Casos donde hubo que corregir:**
+  - Ninguno destacable
+- **Leccion aprendida:**
+  - **Auditar la teoria contra el codigo antes de implementar** evita reescritura tardia. El cambio de PyTorch a Keras tiene coste cero porque el modelo aun no estaba escrito; si hubiera estado ya implementado, habria sido una semana de migracion en plena fase final
+  - **Distinguir docs vivos vs docs historicos:** un ADR `accepted` con nota `superseded` no se reescribe, se anota. Un README o CLAUDE.md sí. Un diario append-only sí mantiene el rastro, pero anade una sesion nueva con la rectificacion
+
 ## Reflexion critica (en construccion)
 
 ### Que ha aportado la IA hasta ahora

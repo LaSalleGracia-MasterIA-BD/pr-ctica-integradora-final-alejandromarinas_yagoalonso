@@ -119,6 +119,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/).
 - `DataCleaner`: reemplazada la window function con `monotonically_increasing_id` por `dropDuplicates(subset=...)` — mas idiomatico y sin no-determinismo entre particiones
 - `bootstrap.py`: skip selectivo (diff entre filenames locales y object_keys en MinIO) en vez de skip total si existe cualquier objeto en el bucket
 - `CSVIngester`: el log de ingesta ya no fuerza `df.count()` (eliminaba un action innecesario sobre el DataFrame)
+- **Deep Learning: PyTorch reemplazado por Keras/TensorFlow** tras auditar el temario del Master. La asignatura de Aprenentatge Automatic (Jordi, Bloque 6) usa exclusivamente `keras.Sequential`, `Conv2D`, `MaxPooling2D`, `Dropout`, `EarlyStopping` y normalizacion `pixels/255`. Ver ADR-003. Coste de migracion: cero (el modelo aun no estaba implementado). README, CLAUDE.md, backlog y lessons actualizados
 
 ### Fixed
 

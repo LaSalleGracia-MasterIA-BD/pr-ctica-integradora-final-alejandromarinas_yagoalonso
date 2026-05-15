@@ -17,7 +17,7 @@ Proyecto final del Master en AI & Big Data.
 | BBDD NoSQL | MongoDB 7 | ✅ Implementado |
 | Almacenamiento de objetos | MinIO (S3-compatible) | ✅ Implementado |
 | API REST | FastAPI + Uvicorn | ✅ Implementado |
-| Deep Learning | PyTorch | 🚧 Pendiente |
+| Deep Learning | Keras / TensorFlow (CNN: Conv2D + MaxPooling2D + Dropout + Dense, con EarlyStopping) | 🚧 Pendiente |
 | Dashboard | Streamlit | 🚧 Pendiente |
 | Infraestructura | Docker + Docker Compose | ✅ Implementado |
 
@@ -194,7 +194,7 @@ Artefactos en `specs/` y `design/`. Backlog en `tasks/backlog.md`. Decisiones te
 **Tests:** 125 verdes (98 unit del pipeline + 12 API + 14 E2E sobre criterios de aceptacion + 1 regresion).
 
 **Roadmap completo:** ver `tasks/backlog.md`. Pendientes principales:
-- Modelo de clasificacion de radiografias (PyTorch)
+- Modelo de clasificacion de radiografias (Keras/TensorFlow)
 - Dashboard de visualizacion (Streamlit)
 - Automatizaciones (alertas + informes; el watcher esta como modulo, no como servicio del compose)
 - Memoria tecnica + presentacion final
