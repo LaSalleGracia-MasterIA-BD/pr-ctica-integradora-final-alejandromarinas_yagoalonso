@@ -140,41 +140,38 @@ class MongoWriter:
         )
         return True
 
-    def start_pipeline_run(self, trigger_type: str = "manual") -> ObjectId:
-        doc = {
-            "trigger_type": trigger_type,
-            "started_at": datetime.now(timezone.utc),
-            "finished_at": None,
-            "status": "running",
-            "records_processed": 0,
-            "records_rejected": 0,
-            "images_processed": 0,
-            "error_message": None,
-        }
-        result = self.db.pipeline_runs.insert_one(doc)
-        logger.info("Pipeline run started: %s (trigger=%s)", result.inserted_id, trigger_type)
-        return result.inserted_id
-
-    def finish_pipeline_run(
+    def set_radiography_classification(
         self,
-        run_id: ObjectId,
-        status: str,
-        stats: dict[str, Any] | None = None,
-        error_message: str | None = None,
-    ) -> None:
-        update: dict[str, Any] = {
-            "status": status,
-            "finished_at": datetime.now(timezone.utc),
-        }
-        if stats:
-            update.update(stats)
-        if error_message is not None:
-            update["error_message"] = error_message
+        minio_object_key: str,
+        classification: dict[str, Any],
+    ) -> bool:
+        """Persist a classification result on a specific radiography subdoc.
 
-        self.db.pipeline_runs.update_one({"_id": run_id}, {"$set": update})
-        logger.info("Pipeline run finished: %s status=%s", run_id, status)
+        The signature takes only the `minio_object_key` because that is what
+        the HTTP endpoint receives. We do NOT require `patient_external_id`:
+        Mongo locates the right patient through the array filter on the key.
 
-    def write_rejected(self, records: list[dict], pipeline_run_id: ObjectId) -> int:
+        Returns `result.matched_count > 0` (NOT `modified_count`). Re-running
+        the same classification with an identical payload leaves the document
+        unchanged but is still a successful operation: `matched_count > 0`
+        distinguishes "no such radiography in any patient" (False → 404 at
+        the API layer) from "found and applied even if identical" (True → 200).
+        """
+        result = self.db.patients.update_one(
+            {"radiographies.minio_object_key": minio_object_key},
+            {
+                "$set": {
+                    "radiographies.$[r].classification": classification,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+            array_filters=[{"r.minio_object_key": minio_object_key}],
+        )
+        return result.matched_count > 0
+
+    def write_rejected(self, records: list[dict], pipeline_run_id: str) -> int:
+        """Persist rejected rows. `pipeline_run_id` is a string UUID coming
+        from SQLite (soft cross-DB reference; no FK enforcement). See ADR-004."""
         if not records:
             return 0
         now = datetime.now(timezone.utc)

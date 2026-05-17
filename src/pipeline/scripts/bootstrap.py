@@ -27,6 +27,11 @@ from src.pipeline.orchestrator import PipelineOrchestrator
 from src.pipeline.spark_session import get_spark_session
 from src.pipeline.storage.minio_client import get_minio_client_from_env
 from src.pipeline.storage.mongo_writer import get_mongo_writer_from_env
+from src.pipeline.storage.sql_engine import (
+    create_all_tables,
+    get_sql_engine_from_env,
+)
+from src.pipeline.storage.sql_writer import SqlWriter
 
 logger = get_logger(__name__)
 
@@ -58,6 +63,11 @@ def main() -> None:
         sum(1 for _ in images_dir.iterdir()),
     )
 
+    # Polyglot persistence (ADR-004): SQLite owns pipeline_runs +
+    # data_quality_summary. Bootstrap is the single owner of the DDL —
+    # everything downstream assumes the schema already exists.
+    _init_sql_schema()
+
     images_metadata = _sync_radiographies(images_dir)
     _run_etl_if_empty(patients_csv, admissions_csv)
     _persist_radiography_metadata(images_metadata)
@@ -70,6 +80,16 @@ def main() -> None:
         mongo.close()
 
     logger.info("=== Bootstrap complete. System is ready. ===")
+
+
+def _init_sql_schema() -> None:
+    """Create SQLite tables if they do not exist. Idempotent."""
+    engine = get_sql_engine_from_env()
+    try:
+        create_all_tables(engine)
+        logger.info("SQLite schema ready (pipeline_runs, data_quality_summary)")
+    finally:
+        engine.dispose()
 
 
 def _sync_radiographies(images_dir: Path) -> list[IngestedImage]:
@@ -137,9 +157,15 @@ def _run_etl_if_empty(patients_csv: Path, admissions_csv: Path) -> None:
 
     logger.info("MongoDB is empty, running full ETL on bundled fixtures...")
     spark = get_spark_session(app_name="hospital-bootstrap-etl", master="local[*]")
-    writer = get_mongo_writer_from_env()
+    mongo_writer = get_mongo_writer_from_env()
+    sql_engine = get_sql_engine_from_env()
+    sql_writer = SqlWriter(sql_engine)
     try:
-        orchestrator = PipelineOrchestrator(spark=spark, mongo_writer=writer)
+        orchestrator = PipelineOrchestrator(
+            spark=spark,
+            mongo_writer=mongo_writer,
+            sql_writer=sql_writer,
+        )
         result = orchestrator.run_from_files(
             patients_csv=patients_csv,
             admissions_csv=admissions_csv,
@@ -152,7 +178,8 @@ def _run_etl_if_empty(patients_csv: Path, admissions_csv: Path) -> None:
             result.run_id,
         )
     finally:
-        writer.close()
+        mongo_writer.close()
+        sql_writer.close()
         spark.stop()
 
 

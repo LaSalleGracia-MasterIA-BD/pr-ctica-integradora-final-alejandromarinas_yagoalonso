@@ -26,7 +26,6 @@ def writer():
 
 def _reset_db(w: MongoWriter) -> None:
     w.db.patients.drop()
-    w.db.pipeline_runs.drop()
     w.db.rejected_records.drop()
 
 
@@ -136,38 +135,22 @@ def test_bulk_upsert_patients_with_admissions_is_idempotent(writer: MongoWriter)
     assert len(ana["admissions"]) == 1
 
 
-def test_start_and_finish_pipeline_run(writer: MongoWriter):
-    run_id = writer.start_pipeline_run(trigger_type="manual")
-    assert run_id is not None
+def test_write_rejected_accepts_string_run_id(writer: MongoWriter):
+    """pipeline_run_id is a soft cross-DB reference to SQLite (string UUID).
 
-    running_doc = writer.db.pipeline_runs.find_one({"_id": run_id})
-    assert running_doc["status"] == "running"
-    assert running_doc["trigger_type"] == "manual"
-
-    writer.finish_pipeline_run(
-        run_id,
-        status="success",
-        stats={"records_processed": 1234, "records_rejected": 12, "images_processed": 56},
-    )
-
-    finished = writer.db.pipeline_runs.find_one({"_id": run_id})
-    assert finished["status"] == "success"
-    assert finished["records_processed"] == 1234
-    assert finished["records_rejected"] == 12
-    assert finished["finished_at"] is not None
-
-
-def test_write_rejected_stores_records_with_run_id(writer: MongoWriter):
-    run_id = writer.start_pipeline_run(trigger_type="manual")
+    The Mongo collection stores it as-is; no FK enforcement. See ADR-004.
+    """
+    run_id = "550e8400-e29b-41d4-a716-446655440000"  # uuid v4 string
     rejected = [
-        {"source_file": "patients.csv", "row_number": 42, "rejection_reason": "null name", "raw_data": {"name": ""}},
-        {"source_file": "patients.csv", "row_number": 87, "rejection_reason": "bad date", "raw_data": {"birth_date": "31/02/2020"}},
+        {"source_file": "patients.csv", "rejection_reason": "missing name", "raw_data": {"name": ""}},
+        {"source_file": "patients.csv", "rejection_reason": "invalid birth_date", "raw_data": {"birth_date": "31/02/2020"}},
     ]
     inserted = writer.write_rejected(rejected, run_id)
     assert inserted == 2
 
     docs = list(writer.db.rejected_records.find({"pipeline_run_id": run_id}))
     assert len(docs) == 2
+    assert all(isinstance(d["pipeline_run_id"], str) for d in docs)
     assert all(d["pipeline_run_id"] == run_id for d in docs)
 
 
@@ -182,3 +165,85 @@ def test_get_mongo_writer_from_env_uses_env_vars():
     w = get_mongo_writer_from_env(db_name=TEST_DB_NAME)
     assert w is not None
     w.close()
+
+
+# -----------------------------------------------------------------
+# Radiography classification (Feature 2: clasificacion-radiografias)
+# -----------------------------------------------------------------
+
+def _classification_payload(predicted_class: str = "Normal") -> dict:
+    from datetime import datetime, timezone
+    return {
+        "predicted_class": predicted_class,
+        "probabilities": {"Normal": 0.7, "Pneumonia": 0.2, "COVID-19": 0.1},
+        "predicted_at": datetime(2026, 5, 16, 12, 0, 0, tzinfo=timezone.utc),
+        "model_version": "test-v1.0",
+    }
+
+
+def test_set_classification_updates_specific_radiography(writer: MongoWriter):
+    writer.bulk_upsert_patients([{"external_id": "HOSP-CLS-1", "name": "Ana"}])
+    writer.add_radiography_to_patient("HOSP-CLS-1", {
+        "minio_object_key": "HOSP-CLS-1/xray1.png",
+        "original_filename": "xray1.png",
+    })
+    writer.add_radiography_to_patient("HOSP-CLS-1", {
+        "minio_object_key": "HOSP-CLS-1/xray2.png",
+        "original_filename": "xray2.png",
+    })
+
+    ok = writer.set_radiography_classification(
+        "HOSP-CLS-1/xray1.png", _classification_payload("COVID-19"),
+    )
+
+    assert ok is True
+    doc = writer.db.patients.find_one({"external_id": "HOSP-CLS-1"})
+    radios = {r["minio_object_key"]: r for r in doc["radiographies"]}
+    assert radios["HOSP-CLS-1/xray1.png"]["classification"]["predicted_class"] == "COVID-19"
+    # The other radiography is untouched
+    assert "classification" not in radios["HOSP-CLS-1/xray2.png"] or \
+           radios["HOSP-CLS-1/xray2.png"].get("classification") is None
+
+
+def test_set_classification_returns_false_for_unknown_key(writer: MongoWriter):
+    writer.bulk_upsert_patients([{"external_id": "HOSP-CLS-2", "name": "Bob"}])
+
+    ok = writer.set_radiography_classification(
+        "no/such/key.png", _classification_payload(),
+    )
+
+    assert ok is False
+
+
+def test_set_classification_is_idempotent_returns_true_on_identical_payload(
+    writer: MongoWriter,
+):
+    """matched_count > 0, not modified_count: identical re-runs must succeed."""
+    writer.bulk_upsert_patients([{"external_id": "HOSP-CLS-3", "name": "Eve"}])
+    writer.add_radiography_to_patient("HOSP-CLS-3", {
+        "minio_object_key": "HOSP-CLS-3/xray.png",
+    })
+    payload = _classification_payload("Pneumonia")
+    writer.set_radiography_classification("HOSP-CLS-3/xray.png", payload)
+
+    ok = writer.set_radiography_classification("HOSP-CLS-3/xray.png", payload)
+
+    assert ok is True  # would be False if we used modified_count
+
+
+def test_set_classification_overwrites_previous(writer: MongoWriter):
+    writer.bulk_upsert_patients([{"external_id": "HOSP-CLS-4", "name": "X"}])
+    writer.add_radiography_to_patient("HOSP-CLS-4", {
+        "minio_object_key": "HOSP-CLS-4/xray.png",
+    })
+
+    writer.set_radiography_classification(
+        "HOSP-CLS-4/xray.png", _classification_payload("Normal"),
+    )
+    writer.set_radiography_classification(
+        "HOSP-CLS-4/xray.png", _classification_payload("COVID-19"),
+    )
+
+    doc = writer.db.patients.find_one({"external_id": "HOSP-CLS-4"})
+    radio = doc["radiographies"][0]
+    assert radio["classification"]["predicted_class"] == "COVID-19"

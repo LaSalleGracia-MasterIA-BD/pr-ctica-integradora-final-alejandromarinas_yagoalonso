@@ -1,0 +1,64 @@
+{
+  "model_version": "v1.0-20260516-192647",
+  "trained_at": "2026-05-16T19:27:03.988764+00:00",
+  "classes": [
+    "Normal",
+    "Pneumonia",
+    "COVID-19"
+  ],
+  "input_shape": [
+    224,
+    224,
+    1
+  ],
+  "framework": "tensorflow",
+  "framework_version": "2.16.1",
+  "metrics": {
+    "accuracy": 0.8719471947194719,
+    "macro_f1": 0.8455698268009101,
+    "per_class": {
+      "Normal": {
+        "precision": 0.8973384030418251,
+        "recall": 0.9263984298331698,
+        "f1": 0.9116368903911154,
+        "support": 1019
+      },
+      "Pneumonia": {
+        "precision": 0.8289473684210527,
+        "recall": 0.9333333333333333,
+        "f1": 0.8780487804878049,
+        "support": 135
+      },
+      "COVID-19": {
+        "precision": 0.8070739549839229,
+        "recall": 0.6952908587257618,
+        "f1": 0.7470238095238095,
+        "support": 361
+      }
+    }
+  },
+  "training": {
+    "seed": 42,
+    "batch_size": 32,
+    "epochs_max": 35,
+    "epochs_run": 35,
+    "learning_rate": 0.0001,
+    "class_weight_mode": "sqrt",
+    "class_weight": {
+      "0": 0.5523157163848575,
+      "1": 1.5204306621585983,
+      "2": 0.9272536214565438
+    },
+    "dropout_conv": 0.3,
+    "dropout_dense": 0.3,
+    "early_stop_patience": 5,
+    "early_stop_min_delta": 0.001,
+    "split": "stratified-80-10-10",
+    "input_shape": [
+      224,
+      224,
+      1
+    ],
+    "architecture": "Conv2D(32)+Pool+Conv2D(64)+Pool+Conv2D(128)+Pool+Conv2D(128)+Pool+Dropout(0.3)+Flatten+Dense(64)+Dropout(0.3)+Dense(3,softmax)"
+  }
+}

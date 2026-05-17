@@ -427,6 +427,97 @@
   - **"Tener el codigo" != "tener la funcionalidad".** Un modulo con tests unitarios puede estar perfecto y aun asi NO cumplir el requisito si no esta cableado en produccion. El gap entre `src/pipeline/watcher.py` (escrito en T9) y un servicio Docker que lo arranca es una pieza pequeña pero critica que cambia "lo prometido funciona" por "lo prometido funciona de verdad"
   - **Decision rw vs ro en volumenes:** el contenedor `pipeline` (bootstrap) monta `./data` en `ro` porque solo lee. El `watcher` necesita `rw` en `./data/incoming` porque mueve a `processed/`. Mejor montar solo el subdirectorio necesario en cada servicio que abrir todo en rw
 
+### Sesion 24 — 2026-05-16: SQLite + SQLAlchemy como capa relacional complementaria (ADR-004)
+- **Objetivo:** Alinear el proyecto con el Bloque 7 del Master (SQLAlchemy + SQLite con Eric) sin tocar lo que ya funciona en Mongo/MinIO. Demostrar dominio del modelo relacional ademas del documental
+- **Prompts representativos:**
+  - "como ves esto?: MongoDB = NoSQL/documental, MinIO = object storage, SQLite/SQLAlchemy = almacenamiento relacional/tabular visto en clase, util para auditoria, metricas y dashboard"
+  - "Veo bien anadir SQLite/SQLAlchemy para demostrar almacenamiento relacional/tabular alineado con clase, pero no quiero mover todo lo operativo fuera de MongoDB. Rehaz el diseno asi: MongoDB mantiene patients, admissions embebidas, radiography metadata y rejected_records completos con raw_data. SQLite/SQLAlchemy se encarga de pipeline_runs y data_quality_summary. UUID propios en SQLite, no bson.ObjectId. KISS: dos tablas solo. Dashboard via API. Condicion: el bug de admissions huerfanas no se puede tapar"
+- **Resultado:**
+  - **Spec/design/tasks** completos para `sqlite-pipeline-metadata` (15 tareas), ADR-004 escrito justificando polyglot persistence
+  - **Infra SQL (`src/pipeline/storage/sql_engine.py` + `sql_models.py`):** WAL mode, `check_same_thread=False`, FK habilitadas, dos tablas con indices (`pipeline_runs` + `data_quality_summary`). UUID v4 string como PK, NO bson.ObjectId
+  - **`SqlWriter`:** start/finish pipeline run, write_quality_summary, ping. Idempotente y robusto si el run_id ya no existe (no crashea, loguea warning)
+  - **`QualitySummaryBuilder`:** funcion pura que agrega los counts por dimension. Cubre el caso `total=0` (rate=0.0, no NaN) y suma orphans en admissions.rejected
+  - **Refactor cross-layer:** `PipelineOrchestrator`, `PipelineLauncher`, `bootstrap.py`, `watcher_daemon.py` inyectan ambos writers; `MongoWriter` pierde `start_pipeline_run`/`finish_pipeline_run`; `write_rejected` acepta string UUID en vez de ObjectId
+  - **`SqlReader` + API:** `routers/pipeline.py` lee de SQLite para `/runs` y `/status`; nuevos endpoints `GET /api/v1/pipeline/quality-summary` y `/history?dimension=...`; modelo Pydantic `PipelineRun.id` migrado a string UUID
+  - **Tests:** 7 sql_engine + 9 sql_writer + 5 quality_summary + 11 sql_reader + tests E2E adaptados con nuevo test `test_orphans_appear_in_both_rejected_and_quality_summary` que verifica el bug fix de huerfanos en AMBOS almacenes
+  - **Verificacion end-to-end real:** `docker compose down -v && up` desde cero produce 4.745 patients, 1.692 rejected (264 patients + 1.428 admissions incl. 935 huerfanos). Las cifras cuadran exactamente: `SQL.admissions.total=9997 = valid 8569 + rejected 1428`, `SQL.admissions.rejected = Mongo rejected_records con source_file=admissions.csv`, `Mongo orphans=935 ⊂ SQL admissions.rejected=1428`. Persistencia verificada en `docker compose stop && start`
+- **Aciertos de la IA:**
+  - **Diseno polyglot bien delimitado:** cada dato vive donde su forma encaja (Mongo=documental con `raw_data` heterogeneo, SQL=tabular para auditoria/metricas, MinIO=binarios). No hay duplicacion de fuente de verdad
+  - **Soft cross-DB reference:** `rejected_records.pipeline_run_id` (Mongo) apunta a `pipeline_runs.id` (SQL) como string UUID. Sin FK enforcement entre engines, pero indices en ambos lados para join logico rapido
+  - **TDD estricto:** tests primero en cada tarea (T1 engine, T2 writer, T3 builder, T11 reader, T12 endpoints), implementacion despues
+  - **WAL mode + nota explicita:** el volumen `pipeline-db` se monta `rw` tambien en la API aunque solo lea, con comentario que explica el porque (sidecars `.wal`/`.shm`). Sin la nota, alguien lo "endurece" a `ro` en una revision y rompe la API
+- **Casos donde hubo que corregir:**
+  - **Primera propuesta de diseno demasiado ambiciosa:** la IA inicialmente propuso mover `rejected_records` a SQLite y usar `bson.ObjectId` como PK. Alejandro paro y aclaro la arquitectura correcta (Mongo mantiene rejected_records con raw_data heterogeneo; SQLite usa UUID v4 string, no ObjectId). Reescritura completa del diseno antes de implementar
+  - **Mount `:ro` en API rompio el arranque:** primer intento de levantar el stack dio `OperationalError: unable to open database file`. Causa: SQLite WAL crea ficheros sidecar y necesita escritura en el directorio aunque solo se hagan SELECT. Solucion: cambiar `pipeline-db:/app/data/db:ro` → `rw` en el servicio API, con comentario explicativo
+- **Leccion aprendida:**
+  - **"Anadir BD nueva" != "migrar todo a la nueva".** La tentacion inicial fue mover todo lo "estructurado" (rejected_records) a SQL para "tener mas BD relacional". El acierto es complementar, no migrar: cada dato en su almacen optimo
+  - **WAL mode + read-only mounts NO se llevan bien.** Si un servicio solo lee SQLite con WAL, el directorio aun debe ser writable (sidecars `.wal`/`.shm`). Alternativas: `journal_mode=DELETE` o connection URI `file:?mode=ro`. Documentado en `lessons.md`
+  - **PK natural de cada almacen, soft reference cruzada.** No forzar `bson.ObjectId` en SQL ni autoincrement en Mongo. Usa lo nativo y modela la referencia cruzada como string UUID en ambos lados — desacopla las capas
+
+### Sesion 25 — 2026-05-16: Feature 2 (clasificacion de radiografias)
+- **Objetivo:** Implementar el modelo de Deep Learning (Sana/Neumonia/COVID-19) sobre el COVID-19 Radiography Database, integrarlo via API REST y producir el reporte clinico que pesa en la nota
+- **Prompts representativos:**
+  - "lanza /spec clasificacion-radiografias"
+  - "Clasificación solo bajo petición vía API. No quiero acoplar bootstrap/watcher al modelo ML ahora"
+  - "No pongas accuracy >= 0.85 como criterio bloqueante. Quiero evaluar accuracy, macro-F1 y especialmente recall de COVID-19 y Pneumonia"
+  - "Cambia GlobalAveragePooling2D por Flatten en design y ADR-005. Queremos que la arquitectura siga literalmente el patrón del Bloque 6 de Jordi"
+  - "Cambia los endpoints para no meter el minio_object_key en path. Usa POST con body y GET con query"
+  - "el método debe devolver éxito con `matched_count > 0`, no con `modified_count > 0`"
+- **Resultado:**
+  - **Spec, design y 2 ADRs aprobados:** RNF-2 sin umbral bloqueante (recall clinico prevalece sobre accuracy); ADR-005 con CNN custom alineada literalmente con el Bloque 6 (Conv+Pool+Dropout+**Flatten**+Dense+softmax); ADR-006 con TF en imagen compartida
+  - **Modulo `src/ml/` completo:** dataset (discover + splits estratificados, descarta `Lung_Opacity`), preprocessing (mismo pipeline en train y serve, `InvalidImageError` para CB-3/CB-7, sin horizontal flip por semantica anatomica), model (arquitectura literal con `padding="same"` para shapes predecibles), evaluate (report.md con analisis clinico + metrics.json + 2 PNGs), train.py CLI (regla estricta train/val/test: val solo para callbacks, test solo para reporte final), predictor (thread-safe con `Lock`)
+  - **API:** `POST /api/v1/radiographies/classify` (body) y `GET /api/v1/radiographies/classification?key=...` (query). `MinIOClient.download_bytes`. `MongoWriter.set_radiography_classification` con `matched_count > 0`. `Radiography.classification` pasa de `str` a objeto Pydantic. `HealthResponse` gana `predictor_loaded: bool`
+  - **40 tests del modulo ML + 29 tests de API/Mongo extendidos, todos verdes (208/208 total con la suite anterior)**
+  - Entrenamiento real con 15.153 imagenes lanzado al final de la sesion
+- **Aciertos de la IA:**
+  - **TDD estricto cumplido:** un test antes de cada modulo, codigo despues. Catched errores como "test debe verificar que NO hay RandomFlip", "test debe verificar shapes intermedios con padding=same"
+  - **Trazabilidad mantenida hasta el ultimo detalle:** cada CA cubierto por al menos un test concreto
+  - **Anticipacion del bug clasico train-serve skew:** detectado en la fase de design y mitigado con una unica funcion `preprocess_for_inference` importada desde train y serve
+  - **Identificacion del problema thread-safety de Keras:** documentado en el design y resuelto con `threading.Lock` antes de que llegara a romper en produccion
+- **Casos donde hubo que corregir:**
+  - **Arquitectura inicial con GlobalAveragePooling2D**, Alejandro pidio cambiar a Flatten para alinear literalmente con el Bloque 6 del Master. Recalcule conteos de parametros: pase de ~500K a ~1.8M (Dense post-Flatten aporta ~1.6M) pero sigue bajo 50 MB
+  - **Endpoints con `{key:path}` rechazados** porque `minio_object_key` contiene `/` y complica clientes. Cambiados a body (POST) + query (GET). Mejor decision
+  - **Spec quedo desfasada respecto al design** tras los cambios de endpoints y test/val: tuve que back-syncear la spec con un changelog explicito de "design (back-sync)"
+  - **`set_radiography_classification` con `modified_count > 0`** era un bug sutil: re-clasificar la misma imagen con resultado identico daria False y devolveria 404 falsamente. Alejandro lo identifico y se cambio a `matched_count > 0`
+  - **`tensorflow-cpu==2.16.2`** no tiene wheel para ARM64 (Apple Silicon). Sustituido por `tensorflow==2.16.1` que si tiene
+  - **Docker daemon colgado** (VM Linux bloqueada tras ENOSPC). Detectado que el proceso vivia pero queries no respondian; mate todos los `com.docker.backend` y reabri Docker Desktop
+  - **Test E2E con dummy 1x1** del bootstrap: detectado por Alejandro durante review de tareas — las dummy serian rechazadas por CB-7 (< 32 px). Cambiado a fixture 64x64 generado al vuelo
+- **Leccion aprendida:**
+  - **El TDD desde criterios de aceptacion atrapa bugs antes de que entren en codigo.** El test "no debe haber RandomFlip" fuerza al diseno a justificar la omision y al codigo a cumplirla
+  - **"Anadir un campo `predicted_class` en lugar de `class`" es una decision tonta-pero-importante.** `class` es reservada de Python y obliga a `cls` en cada acceso; renombrar el campo persistido evita ruido eterno
+  - **Cuando la spec dice "test split", la spec debe explicar quien usa val.** El "regla estricta" en `train.py` (train→fit, val→callbacks, test→reporte) elimina la ambiguedad clasica de "que metricas reportamos"
+  - **Documentacion de la docker daemon: kill -9 todos los procesos `com.docker.backend` + `open -a Docker` + esperar 25s.** Suficiente para recuperar la VM cuando responde a `_ping` pero no a queries reales
+
+### Sesion 26 — 2026-05-16: T9 entrenamiento real + diagnostico del modelo degenerado
+- **Objetivo:** Entrenar el modelo sobre el dataset completo (15.153 imagenes), validar con los criterios clinicos y dejarlo cargado en la API
+- **Prompts representativos:**
+  - "ya lo tengo descargado en descargas el ultimo zip descargado"
+  - "No lances todavía el entrenamiento completo. Antes haz sanity checks rápidos: 1. Overfit tiny subset... 2. Guarda un batch visual... 3. Loguea class counts y mapping... 4. Comprueba que el `.keras` cargado por la API es el último entrenado..."
+  - "lanza el reentrenamiento"
+  - "reentrena con EPOCHS_MAX=35"
+- **Resultado:**
+  - Dataset descargado: 15.153 imagenes (Normal=10192, Pneumonia=1345, COVID-19=3616). `Lung_Opacity`=6012 descartadas. Splits estratificados 80/10/10: train=12123, val=1515, test=1515
+  - **Primer entrenamiento (v1, LR=1e-3, class_weight=balanced, dropout=0.5/0.3, 20 epochs): modelo degenerado**. Loss atascada en ~1.099 (ln(3) = clasificador uniforme). Macro-F1=0.27, recall Pneumonia=0, recall COVID-19=0. El modelo predecia "Normal" para todo (10192/15153=0.6726, casualmente igual a la "accuracy")
+  - **Sanity checks (`scripts/ml_diagnostics.py`):** mapping y splits OK; preprocesado OK (intensidades variadas, no degeneradas); modelo degenerado confirmado; **tiny overfit con LR=1e-4 y dropout reducido alcanzo 87% accuracy en 30 epochs sobre 30 imagenes** → confirmacion empirica de que el problema era de hiperparametros, NO bug
+  - **Segundo entrenamiento (v2, LR=1e-4, class_weight=sqrt, dropout=0.3/0.3, 20 epochs):** macro-F1=0.77, recall Normal=0.90, Pneumonia=0.89, COVID-19=0.61. Modelo aprende pero la curva NO estaba en plateau al cortar (val_acc subia linealmente)
+  - **Tercer entrenamiento (v3, misma config + EPOCHS_MAX=35): MODELO FINAL.** Accuracy=0.872, macro-F1=0.846, recall Normal=0.926, Pneumonia=0.933, COVID-19=0.695. Modelo de 21 MB commiteado al repo
+  - **Smoke test en vivo:** 3 imagenes reales (una de cada clase) clasificadas correctamente con confianzas 0.91 / 0.97 / 1.00. Latencia <100ms por inferencia
+- **Aciertos de la IA:**
+  - **Diagnostico correcto del modelo degenerado.** No fui a "reentrenar con otros params" sin entender; primero analice loss/val_acc/per-class metrics y deduje que la red predecia solo la clase mayoritaria
+  - **Implementacion sistematica de los 4 sanity checks** que pidio Alejandro como precondicion. Cada uno con criterio pass/fail claro, no "parece que va"
+  - **Parametrizar `build_model(dropout_conv, dropout_dense, learning_rate)` y `train.py`** con env vars en vez de hard-codear, facilitando experimentacion sin tocar codigo
+  - **Caffeinate persistente** desacoplado del proceso padre (`nohup ... & disown`) para que el Mac no se durmiera durante las ~3h del entrenamiento v3
+- **Casos donde hubo que corregir:**
+  - **El primer entrenamiento dio modelo degenerado**, no fui capaz de anticiparlo. Caer en LR=1e-3 con tantos parametros y class_weight=3.76 era predecible si lo hubiera pensado mas
+  - **El rebuild de la imagen Docker se me olvido** despues de cambiar `train.py`. Lance v2 con codigo viejo (defaults antiguos cogiendo class_weight=balanced en vez de sqrt). Detectado leyendo el log: la linea decia `Class weights: {...}` sin el modo, lo cual indicaba codigo antiguo. Mate y rebuildee
+  - **Alejandro me ahorro horas pidiendo sanity checks antes del reentrenamiento.** Yo iba a saltar directo a reentrenar con otros hiperparametros — si hubiera habido un bug real en preprocesado, me hubiera tirado 1h mas sin ver mejora
+- **Leccion aprendida:**
+  - **Loss atascada en ln(N) con N clases es el sintoma canonico de "modelo predice uniforme/clase mayoritaria"**. La proxima vez lo detecto en epoch 3
+  - **Tiny-overfit sanity check ANTES de cualquier entrenamiento serio.** Si una red no puede memorizar 30 imagenes en 30 epochs, hay un bug — no merece la pena entrenar 2h "a ver que pasa"
+  - **Class weights con factor > 3-4 desestabilizan el entrenamiento.** Cada batch con una muestra de la clase rara tira fuerte del gradiente, el batch siguiente lo cancela. `sqrt(balanced)` es un buen compromiso: compensa el desbalance sin oscilar
+  - **EarlyStopping no detectara una mejora lenta y monotona** si min_delta=0 (el default). Si la red mejora 0.0001 por epoch, no es plateau pero EarlyStopping puede creerlo. Poner `min_delta=0.001` evita falsos plateaus, pero hay que combinarlo con un epochs_max razonable porque si la curva sigue mejorando NO va a cortar
+  - **Cuando se cambia codigo en `src/` y se usa `docker compose run`, rebuild siempre.** Los containers reutilizan la imagen, no leen del filesystem del host
+
 ## Reflexion critica (en construccion)
 
 ### Que ha aportado la IA hasta ahora

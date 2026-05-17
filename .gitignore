@@ -19,6 +19,15 @@ data/models/*
 !data/processed/.gitkeep
 !data/models/.gitkeep
 
+# SQLite database files (live in the `pipeline-db` Docker named volume in
+# production; locally the directory is the mount point). Keep the .gitkeep
+# so the mount point exists, but never commit the actual .db / WAL sidecars.
+data/db/*.db
+data/db/*.db-wal
+data/db/*.db-shm
+data/db/*-journal
+!data/db/.gitkeep
+
 # Notebooks checkpoints
 .ipynb_checkpoints/
 
@@ -43,3 +52,14 @@ Thumbs.db
 *.pth
 *.onnx
 *.pkl
+
+# COVID-19 Radiography Database (Kaggle, ~1.5 GB). Se descarga manualmente
+# via docs/runbooks/download-radiography-dataset.md. NUNCA se commitea al repo.
+data/raw/covid_radiography/
+
+# Modelo entrenado y meta del clasificador de radiografias.
+# El bloque `data/models/*` arriba ignora todo en esa carpeta; aqui dejamos
+# excepciones para artefactos que SI queremos commitear si caben (< 50 MB,
+# RNF-4 de specs/clasificacion-radiografias.md).
+!data/models/*.keras
+!data/models/*.meta.json

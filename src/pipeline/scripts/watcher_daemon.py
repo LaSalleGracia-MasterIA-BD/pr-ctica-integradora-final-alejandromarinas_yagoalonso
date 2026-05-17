@@ -26,6 +26,7 @@ from src.pipeline.logging_config import get_logger
 from src.pipeline.orchestrator import PipelineOrchestrator
 from src.pipeline.spark_session import get_spark_session
 from src.pipeline.storage.mongo_writer import get_mongo_writer_from_env
+from src.pipeline.storage.sql_writer import get_sql_writer_from_env
 from src.pipeline.watcher import IncomingFilesWatcher
 
 logger = get_logger(__name__)
@@ -38,8 +39,13 @@ def main() -> None:
     INCOMING_DIR.mkdir(parents=True, exist_ok=True)
 
     spark = get_spark_session(app_name="hospital-watcher", master="local[*]")
-    writer = get_mongo_writer_from_env()
-    orchestrator = PipelineOrchestrator(spark=spark, mongo_writer=writer)
+    mongo_writer = get_mongo_writer_from_env()
+    sql_writer = get_sql_writer_from_env()
+    orchestrator = PipelineOrchestrator(
+        spark=spark,
+        mongo_writer=mongo_writer,
+        sql_writer=sql_writer,
+    )
 
     def on_ready(patients_csv: Path, admissions_csv: Path) -> None:
         logger.info(
@@ -75,7 +81,8 @@ def main() -> None:
         stop_event.wait()
     finally:
         watcher.stop()
-        writer.close()
+        mongo_writer.close()
+        sql_writer.close()
         spark.stop()
         logger.info("=== Hospital watcher daemon stopped ===")
 

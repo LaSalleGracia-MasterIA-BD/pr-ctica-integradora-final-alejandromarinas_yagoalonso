@@ -14,12 +14,16 @@ Proyecto final del Master en AI & Big Data.
 | Componente | Tecnologia | Estado |
 |---|---|---|
 | Pipeline de datos | PySpark 3.5.1 | ✅ Implementado |
-| BBDD NoSQL | MongoDB 7 | ✅ Implementado |
+| BBDD NoSQL (documental) | MongoDB 7 | ✅ Implementado |
+| BBDD relacional (metadatos pipeline) | SQLite + SQLAlchemy 2.0 | ✅ Implementado |
 | Almacenamiento de objetos | MinIO (S3-compatible) | ✅ Implementado |
 | API REST | FastAPI + Uvicorn | ✅ Implementado |
-| Deep Learning | Keras / TensorFlow (CNN: Conv2D + MaxPooling2D + Dropout + Dense, con EarlyStopping) | 🚧 Pendiente |
+| Deep Learning | Keras / TensorFlow 2.16 (CNN: Conv2D + MaxPooling2D + Dropout + Flatten + Dense + softmax, con EarlyStopping) — ver ADR-005 | ✅ Implementado |
 | Dashboard | Streamlit | 🚧 Pendiente |
 | Infraestructura | Docker + Docker Compose | ✅ Implementado |
+
+> **Polyglot persistence (ADR-004):** cada dato vive donde su forma encaja.
+> MongoDB es dueno de `patients` (con `admissions` y `radiographies` embebidas) y `rejected_records` con `raw_data` heterogeneo. SQLite es dueno de `pipeline_runs` (auditoria) y `data_quality_summary` (metricas). MinIO guarda los PNG.
 
 ## Requisitos previos
 
@@ -41,10 +45,12 @@ Con ese unico comando, el sistema queda listo en menos de 1 minuto:
 2. Se inicializa la base de datos `hospital` (colecciones e indices unicos)
 3. Se crean los buckets de MinIO (`radiographies`, `raw-backups`)
 4. El servicio `pipeline` ejecuta el bootstrap:
+   - Crea el schema de **SQLite** (`pipeline_runs` + `data_quality_summary`) en el volumen `pipeline-db`
    - Sincroniza las 17 radiografias de ejemplo (`data/raw/images/`) al bucket `radiographies`
-   - Si MongoDB esta vacio, ejecuta el **pipeline ETL completo** sobre los CSVs de ejemplo (`patients.csv` + `admissions.csv`) y deja **4.745 pacientes** y **8.569 admissions** procesados
+   - Si MongoDB esta vacio, ejecuta el **pipeline ETL completo** sobre los CSVs de ejemplo (`patients.csv` + `admissions.csv`) y deja **4.745 pacientes** y **8.569 admissions** procesados. Registra el run en SQLite con sus metricas de calidad
    - Verifica conectividad con MongoDB
-5. La **API REST** arranca en `localhost:8000` ya con datos servibles
+5. La **API REST** arranca en `localhost:8000` con datos servibles
+6. El servicio **watcher** se queda escuchando `data/incoming/`: dropear ahi `patients.csv` + `admissions.csv` dispara automaticamente el ETL y mueve los ficheros a `data/incoming/processed/`
 
 Cuando veas la linea `=== Bootstrap complete. System is ready. ===` el sistema esta listo.
 
@@ -86,6 +92,20 @@ curl http://localhost:8000/api/v1/pipeline/runs
 
 # Disparar el pipeline manualmente (re-procesa los CSVs)
 curl -X POST http://localhost:8000/api/v1/pipeline/trigger
+
+# Calidad de datos del ultimo run (una fila por dimension: patients, admissions)
+curl http://localhost:8000/api/v1/pipeline/quality-summary
+
+# Historico de calidad para una dimension concreta
+curl "http://localhost:8000/api/v1/pipeline/quality-summary/history?dimension=admissions&limit=10"
+
+# Clasificar una radiografia (devuelve clase + probabilidades y persiste en Mongo)
+curl -X POST http://localhost:8000/api/v1/radiographies/classify \
+     -H "Content-Type: application/json" \
+     -d '{"minio_object_key": "HOSP-000001/HOSP-000001_xray1.png"}'
+
+# Leer la clasificacion persistida sin re-inferir
+curl "http://localhost:8000/api/v1/radiographies/classification?key=HOSP-000001/HOSP-000001_xray1.png"
 ```
 
 ## Ejecutar los tests
@@ -94,13 +114,13 @@ curl -X POST http://localhost:8000/api/v1/pipeline/trigger
 docker compose run --rm --entrypoint "" pipeline pytest tests -v
 ```
 
-Suite de **125 tests** unitarios + de integracion contra MongoDB/MinIO reales + E2E sobre los 8 criterios de aceptacion de la spec.
+Suite de **230 tests** (208 unit + integracion contra MongoDB, MinIO, SQLite y TensorFlow reales + 22 E2E sobre los criterios de aceptacion del pipeline y de la feature de clasificacion). 1 test se salta cuando se ejecuta dentro del contenedor `pipeline` (el watcher E2E necesita rw sobre `data/incoming/`, y `pipeline` lo monta ro por diseno). Los tests E2E de clasificacion se saltan si la API reporta `predictor_loaded=false` (sin modelo entrenado en `data/models/`).
 
 ## Detener el sistema
 
 ```bash
 docker compose down        # Para los contenedores (conserva volumenes)
-docker compose down -v     # Para y borra TODOS los datos (MongoDB + MinIO)
+docker compose down -v     # Para y borra TODOS los volumenes: mongo-data, minio-data y pipeline-db (SQLite)
 ```
 
 ## Estructura del repositorio
@@ -118,28 +138,32 @@ docker compose down -v     # Para y borra TODOS los datos (MongoDB + MinIO)
 │   └── runbooks/
 │       └── download-radiography-dataset.md
 ├── src/
-│   ├── api/                       # FastAPI (main, routers, models, mongo_reader)
+│   ├── api/                       # FastAPI (main, routers, models, mongo_reader, sql_reader)
 │   ├── pipeline/                  # Pipeline ETL completo
 │   │   ├── ingesters/             # CSVIngester + ImageIngester
-│   │   ├── processors/            # DataValidator + DataCleaner + DataTransformer
-│   │   ├── storage/               # MongoWriter + MinIOClient
-│   │   ├── scripts/               # bootstrap, generadores de datos, watcher
-│   │   ├── orchestrator.py        # PipelineOrchestrator (T9)
-│   │   └── watcher.py             # IncomingFilesWatcher (T9)
-│   ├── ml/                        # Modelo clasificacion radiografias (pendiente)
+│   │   ├── processors/            # DataValidator + DataCleaner + DataTransformer + QualitySummaryBuilder
+│   │   ├── storage/               # MongoWriter + MinIOClient + SqlWriter + SqlEngine + modelos SQLAlchemy
+│   │   ├── scripts/               # bootstrap, generadores de datos, watcher_daemon
+│   │   ├── orchestrator.py        # PipelineOrchestrator (E→T→L, runs en SQL, rejected en Mongo)
+│   │   └── watcher.py             # IncomingFilesWatcher
+│   ├── ml/                        # Modelo clasificacion radiografias (Keras/TF, CNN — implementado)
 │   ├── dashboard/                 # Visualizacion (pendiente)
 │   └── automation/                # Alertas e informes (pendiente)
 ├── tests/
-│   ├── api/                       # 12 tests de la API
-│   └── pipeline/                  # 98 tests del pipeline
-├── data/raw/                      # Fixtures sinteticos committeados
-│   ├── patients.csv               # 5.150 filas (5.000 + duplicados)
-│   ├── admissions.csv             # 10.000 filas
-│   └── images/                    # 17 PNGs dummy
+│   ├── api/                       # Tests de la API (endpoints + readers)
+│   ├── pipeline/                  # Tests unitarios + integracion del pipeline
+│   └── e2e/                       # Tests E2E (CA-1..CA-8 + watcher + huerfanos)
+├── data/
+│   ├── raw/                       # Fixtures sinteticos committeados (read-only)
+│   │   ├── patients.csv           # 5.150 filas (5.000 + duplicados)
+│   │   ├── admissions.csv         # 10.000 filas
+│   │   └── images/                # 17 PNGs dummy
+│   ├── incoming/                  # Cola del watcher (rw)
+│   └── db/                        # Punto de montaje para `pipeline-db` (SQLite)
 ├── docker/                        # Scripts de inicializacion (Mongo, MinIO)
-├── docker-compose.yml             # 5 servicios: mongodb, minio, minio-init, pipeline, api
-├── Dockerfile.pipeline            # Imagen comun para pipeline + api
-├── requirements-pipeline.txt
+├── docker-compose.yml             # 6 servicios: mongodb, minio, minio-init, pipeline, api, watcher
+├── Dockerfile.pipeline            # Imagen comun para pipeline + api + watcher
+├── requirements-pipeline.txt      # Incluye PySpark + pymongo + minio + SQLAlchemy + FastAPI + watchdog
 └── pyproject.toml                 # Configuracion de pytest
 ```
 
@@ -191,10 +215,13 @@ Artefactos en `specs/` y `design/`. Backlog en `tasks/backlog.md`. Decisiones te
 
 **Pipeline de datos:** 12/12 tareas completadas (T1-T12). Ver `tasks/pipeline-datos.md` para el detalle.
 
-**Tests:** 125 verdes (98 unit del pipeline + 12 API + 14 E2E sobre criterios de aceptacion + 1 regresion).
+**Polyglot persistence (SQLite + SQLAlchemy):** 15/15 tareas completadas. Ver `tasks/sqlite-pipeline-metadata.md` y ADR-004.
+
+**Clasificacion de radiografias (Keras/TensorFlow):** 16/16 tareas completadas. Ver `tasks/clasificacion-radiografias.md`, ADR-005 y ADR-006. Modelo entrenado en `data/models/radiography_classifier.keras` (~21 MB, commiteado) + reporte clinico en `docs/model-evaluation/`. Metricas finales (test split de 1.515 imagenes): accuracy=0.872, macro-F1=0.846, recall Normal=0.93, Pneumonia=0.93, COVID-19=0.70.
+
+**Tests:** 208 verdes + 1 skip.
 
 **Roadmap completo:** ver `tasks/backlog.md`. Pendientes principales:
-- Modelo de clasificacion de radiografias (Keras/TensorFlow)
-- Dashboard de visualizacion (Streamlit)
-- Automatizaciones (alertas + informes; el watcher esta como modulo, no como servicio del compose)
+- Dashboard de visualizacion (Streamlit, consumira los endpoints `/pipeline/quality-summary` y `/radiographies/classification`)
+- Automatizaciones de alertas e informes (el watcher YA esta como servicio real en el compose; queda pendiente el flujo de alertas)
 - Memoria tecnica + presentacion final

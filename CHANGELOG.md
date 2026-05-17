@@ -7,6 +7,71 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Feature 2 — Clasificacion de radiografias (Keras/TensorFlow):**
+  Modelo CNN propio (~1.8M params, ~7-8 MB en disco) que clasifica
+  radiografias de torax en `Normal` / `Pneumonia` / `COVID-19`. Arquitectura
+  literal del Bloque 6 del Master (ADR-005): 4 bloques `Conv2D padding="same"
+  + MaxPool` (filters 32/64/128/128), Dropout 0.5, Flatten, Dense(64)+ReLU,
+  Dropout 0.3, Dense(3) + softmax. Input 224x224x1 grayscale. Sin transfer
+  learning ni horizontal flip (alteraria semantica anatomica).
+  - **Dataset:** COVID-19 Radiography Database (Kaggle). 15.153 imagenes
+    usadas (3.616 COVID + 10.192 Normal + 1.345 Viral Pneumonia).
+    `Lung_Opacity` se descarta (no encaja en clasificacion triple)
+  - **Split estratificado 80/10/10 con seed=42.** Regla estricta:
+    `train→fit`, `val→callbacks` (EarlyStopping, ModelCheckpoint),
+    `test→reporte final`. El modelo nunca ve test durante el entrenamiento
+  - **Modulo `src/ml/`:** `dataset.py` (discovery + splits), `preprocessing.py`
+    (mismo pipeline en train y serve, evita train-serve skew), `model.py`,
+    `evaluate.py`, `train.py` (CLI), `predictor.py` (thread-safe con Lock)
+  - **API:** `POST /api/v1/radiographies/classify` (body con
+    `minio_object_key`) → 200/404/422/503; `GET /api/v1/radiographies/classification?key=...`
+    → 200/404/422. Mongo persiste objeto con `predicted_class`, `probabilities`,
+    `predicted_at`, `model_version` (no string plano). Indice nuevo en
+    `radiographies.minio_object_key`. `MongoWriter.set_radiography_classification`
+    devuelve `matched_count > 0` (no `modified_count`) → idempotencia
+    correcta con payload identico
+  - **Predictor cargado al arrancar la API** (lifespan); si falta el
+    artefacto, la API arranca igualmente y los endpoints de classify
+    devuelven 503 (CB-4). `HealthResponse` gana `predictor_loaded: bool`
+  - **Reporte:** `docs/model-evaluation/{report.md,metrics.json,confusion_matrix.png,learning_curves.png}`
+    con accuracy, macro-F1, precision/recall/F1 por clase con foco en
+    recall COVID/Pneumonia, matriz de confusion 3x3, curvas de aprendizaje
+    y **analisis clinico cualitativo** (CA-3): los FN COVID son el error
+    mas grave (paciente contagioso clasificado como sano)
+  - **TensorFlow 2.16.1** + `scikit-learn` 1.5.0 + `matplotlib` 3.9.0 +
+    `pillow` 10.3.0 anadidos a la imagen `hospital-pipeline` compartida
+    (ADR-006: una sola imagen para todo el stack)
+  - **Refactor de volumenes Docker:** `./data:/app/data:ro` global se
+    descompone en submontajes especificos (`data/raw:ro`, `data/models:rw`
+    en pipeline / `:ro` en api, `pipeline-db:rw`). `.gitignore` excluye
+    `data/raw/covid_radiography/` (1.5 GB) y permite commitear
+    `data/models/*.keras` y `*.meta.json` si caben en 50 MB
+  - **Test E2E** con fixture 64x64 generado al vuelo (NO usa las dummy
+    1x1 del bootstrap porque las rechazaria CB-7 con 422). Skip limpio
+    si `GET /health` reporta `predictor_loaded=false`
+  - **Metricas finales (test split, 1.515 imagenes):**
+    - **Accuracy: 0.8719** (vs 0.6726 baseline degenerado en el primer intento)
+    - **Macro-F1: 0.8456** (vs 0.33 random)
+    - **Recall por clase:** Normal=0.926, Pneumonia=0.933, COVID-19=0.695
+    - **Precision por clase:** Normal=0.897, Pneumonia=0.829, COVID-19=0.807
+    - Modelo: 21 MB, 35 epochs (no llego a plateau, EarlyStopping no corto)
+    - Hiperparametros finales: lr=1e-4, class_weight=sqrt, dropout=(0.3, 0.3),
+      sin horizontal flip en augmentation, seed=42
+    - Limitacion documentada en el reporte clinico: 110/361 COVID-19 se
+      clasifican como Normal o Pneumonia (FN COVID 30%). El modelo se
+      entrega como **asistencia diagnostica**, no como diagnostico final
+  - **Sanity checks documentados en `scripts/ml_diagnostics.py`** (overfit
+    tiny subset, montage visual, mapping de clases, validacion del
+    artefacto). El primer entrenamiento dio un modelo degenerado (predecia
+    todo Normal); los sanity checks confirmaron que NO habia bug en
+    preprocesado/labels/modelo y que el problema era de hiperparametros
+    (LR=1e-3 demasiado alto + class_weight=3.76 demasiado agresivo). Tras
+    ajustar a LR=1e-4 + class_weight=sqrt el modelo aprendio bien
+- ADR-005: CNN custom desde cero, sin transfer learning (alineacion con
+  el Bloque 6 del Master)
+- ADR-006: TensorFlow en la imagen `hospital-pipeline` compartida (frente
+  a imagen `hospital-ml` separada)
+
 - Estructura inicial del proyecto SDD (specs, design, tasks, decisions, docs)
 - Backlog con features identificadas del enunciado
 - Spec, design y tasks aprobados del pipeline de datos (12 tareas)
@@ -112,6 +177,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- **Polyglot persistence: SQLite + SQLAlchemy anadido como capa relacional complementaria (ADR-004)**.
+  MongoDB sigue siendo dueno de `patients` (con `admissions` y `radiographies` embebidas) y `rejected_records` con `raw_data` completo. MinIO sigue siendo dueno de los PNG. SQLite estrena dos tablas: `pipeline_runs` (auditoria de cada ejecucion del ETL) y `data_quality_summary` (metricas agregadas por dimension). Motivacion: alineamiento con el Bloque 7 del Master (SQLAlchemy + SQLite usados en clase con Eric) y demostrar dominio del modelo relacional ademas del documental.
+
+  **Breaking changes:**
+  - Identificador del run en las respuestas de la API: antes campo `_id` (alias de Mongo, ObjectId de 24 hex), ahora campo `id` (clave plana de SQLAlchemy, UUID v4 de 36 chars con guiones). Afecta a `PipelineRun` (Pydantic), `GET /api/v1/pipeline/runs`, `GET /api/v1/pipeline/status` y al `run_id` que devuelve `POST /api/v1/pipeline/trigger`. La referencia cruzada `rejected_records.pipeline_run_id` en MongoDB tambien se guarda ahora como UUID string (soft cross-DB reference, sin FK enforcement)
+  - Los endpoints `/api/v1/pipeline/runs` y `/api/v1/pipeline/status` leen ahora de SQLite via `SqlReader` (antes de MongoDB)
+  - Nuevos endpoints: `GET /api/v1/pipeline/quality-summary` (snapshot por dimension del ultimo run) y `GET /api/v1/pipeline/quality-summary/history?dimension=...&limit=...&offset=...` (historico paginado con `total` real, count por dimension, no `len(items)` de la pagina)
+
+  El bug fix de admissions huerfanas se mantiene cubierto en ambos almacenes: el huerfano va a `rejected_records` (Mongo) Y se contabiliza en `data_quality_summary.admissions.rejected` (SQL). Volumen Docker named `pipeline-db` montado en pipeline+watcher+api, con WAL mode habilitado para concurrencia (montado `rw` tambien en API porque WAL necesita escribir sidecars `.wal`/`.shm`). Smoke real end-to-end: 4.745 patients, 1.692 rejected (264 patients + 1.428 admissions incl. 935 huerfanos), cuadre exacto entre Mongo y SQL. Persistencia verificada con `docker compose stop && start`; `docker compose down -v` borra los tres volumenes (`mongo-data`, `minio-data`, `pipeline-db`).
 - PostgreSQL reemplazado por MongoDB (NoSQL) tras detectar texto oculto en el enunciado
 - docker-compose y .env limpiados (variables sin consumidor eliminadas, redundancias eliminadas)
 - `ImageIngester`: campo `capture_date` renombrado a `ingested_at` (el nombre anterior era enganoso: guardaba la fecha de ingesta, no la de captura real de la radiografia)

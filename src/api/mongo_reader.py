@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 
-from pymongo import DESCENDING, MongoClient
+from pymongo import MongoClient
 
 
 class MongoReader:
@@ -78,30 +78,29 @@ class MongoReader:
         ]
         return list(self.db.patients.aggregate(pipeline))
 
-    # -- Pipeline runs ------------------------------------------------------
+    # NOTE: pipeline_runs reads moved to `src/api/sql_reader.py` (ADR-004).
 
-    def list_pipeline_runs(self, limit: int, offset: int) -> list[dict]:
-        cursor = (
-            self.db.pipeline_runs.find({})
-            .sort("started_at", DESCENDING)
-            .skip(offset)
-            .limit(limit)
-        )
-        return [_stringify_id(doc) for doc in cursor]
+    # -- Radiography classification ----------------------------------------
 
-    def latest_pipeline_run(self) -> dict | None:
-        doc = self.db.pipeline_runs.find_one(
-            {}, sort=[("started_at", DESCENDING)]
-        )
-        return _stringify_id(doc) if doc else None
+    def get_radiography_classification(self, minio_object_key: str) -> dict | None:
+        """Return the persisted classification for a radiography, or None.
 
-
-def _stringify_id(doc: dict | None) -> dict | None:
-    if doc is None:
-        return None
-    if "_id" in doc:
-        doc["_id"] = str(doc["_id"])
-    return doc
+        Used by GET /api/v1/radiographies/classification?key=... to serve
+        the cached result without re-inferring. None is returned both when
+        the key does not exist in any patient and when it exists but its
+        `classification` is null.
+        """
+        pipeline = [
+            {"$unwind": "$radiographies"},
+            {"$match": {"radiographies.minio_object_key": minio_object_key}},
+            {"$project": {"_id": 0, "classification": "$radiographies.classification"}},
+            {"$limit": 1},
+        ]
+        docs = list(self.db.patients.aggregate(pipeline))
+        if not docs:
+            return None
+        classification = docs[0].get("classification")
+        return classification if classification else None
 
 
 def get_mongo_reader_from_env(db_name: str | None = None) -> MongoReader:

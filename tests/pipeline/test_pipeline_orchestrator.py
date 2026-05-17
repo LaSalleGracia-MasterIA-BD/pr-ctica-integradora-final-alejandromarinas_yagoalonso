@@ -1,4 +1,11 @@
-"""Tests for PipelineOrchestrator: end-to-end coordination of the ETL flow."""
+"""Tests for PipelineOrchestrator: end-to-end coordination of the ETL flow.
+
+Polyglot persistence (ADR-004):
+  - pipeline_runs + data_quality_summary live in SQLite (queried via SqlWriter)
+  - patients + rejected_records live in MongoDB (queried via MongoWriter)
+
+These tests cover both sides of the orchestration.
+"""
 from __future__ import annotations
 
 import csv
@@ -7,10 +14,15 @@ from pathlib import Path
 import pytest
 
 pyspark = pytest.importorskip("pyspark", reason="PySpark not installed")
+sqlalchemy = pytest.importorskip("sqlalchemy", reason="SQLAlchemy not installed")
+
+from sqlalchemy import text
 
 from src.pipeline.orchestrator import PipelineOrchestrator
 from src.pipeline.spark_session import get_spark_session
 from src.pipeline.storage.mongo_writer import MongoWriter
+from src.pipeline.storage.sql_engine import create_all_tables, get_sql_engine_from_env
+from src.pipeline.storage.sql_writer import SqlWriter
 
 
 TEST_DB_NAME = "hospital_test_t9"
@@ -32,18 +44,29 @@ def mongo_writer():
         db_name=TEST_DB_NAME,
     )
     w.db.patients.drop()
-    w.db.pipeline_runs.drop()
     w.db.rejected_records.drop()
     yield w
     w.db.patients.drop()
-    w.db.pipeline_runs.drop()
     w.db.rejected_records.drop()
     w.close()
 
 
 @pytest.fixture
-def orchestrator(spark, mongo_writer) -> PipelineOrchestrator:
-    return PipelineOrchestrator(spark=spark, mongo_writer=mongo_writer)
+def sql_writer(tmp_path: Path, monkeypatch):
+    db_path = tmp_path / "test_orchestrator.db"
+    monkeypatch.setenv("SQLITE_PATH", str(db_path))
+    engine = get_sql_engine_from_env()
+    create_all_tables(engine)
+    writer = SqlWriter(engine)
+    yield writer
+    writer.close()
+
+
+@pytest.fixture
+def orchestrator(spark, mongo_writer, sql_writer) -> PipelineOrchestrator:
+    return PipelineOrchestrator(
+        spark=spark, mongo_writer=mongo_writer, sql_writer=sql_writer
+    )
 
 
 def _write_patients_csv(path: Path, rows: list[list[str]]) -> None:
@@ -63,6 +86,11 @@ def _write_admissions_csv(path: Path, rows: list[list[str]]) -> None:
         w = csv.writer(f)
         w.writerow(header)
         w.writerows(rows)
+
+
+def _select(engine, query: str, **params):
+    with engine.connect() as conn:
+        return conn.execute(text(query), params).all()
 
 
 def test_orchestrator_runs_full_etl_and_writes_to_mongodb(
@@ -90,6 +118,7 @@ def test_orchestrator_runs_full_etl_and_writes_to_mongodb(
     )
 
     assert result.status == "success"
+    assert isinstance(result.run_id, str)
     assert mongo_writer.db.patients.count_documents({}) == 2
 
     ana = mongo_writer.db.patients.find_one({"external_id": "HOSP-000001"})
@@ -101,7 +130,7 @@ def test_orchestrator_runs_full_etl_and_writes_to_mongodb(
     }
 
 
-def test_orchestrator_stores_rejected_rows(
+def test_orchestrator_stores_rejected_rows_in_mongo(
     orchestrator: PipelineOrchestrator, mongo_writer: MongoWriter, tmp_path: Path
 ):
     patients_csv = tmp_path / "patients.csv"
@@ -126,6 +155,8 @@ def test_orchestrator_stores_rejected_rows(
     reasons = {doc["rejection_reason"] for doc in rejected_docs}
     assert "missing name" in reasons
     assert "invalid birth_date" in reasons
+    # Soft cross-DB reference: stored as string UUID
+    assert all(isinstance(d["pipeline_run_id"], str) for d in rejected_docs)
 
 
 def test_orchestrator_is_idempotent_on_same_input(
@@ -150,8 +181,8 @@ def test_orchestrator_is_idempotent_on_same_input(
     assert len(ana["admissions"]) == 1
 
 
-def test_orchestrator_registers_pipeline_run_with_stats(
-    orchestrator: PipelineOrchestrator, mongo_writer: MongoWriter, tmp_path: Path
+def test_orchestrator_registers_pipeline_run_in_sqlite_with_stats(
+    orchestrator: PipelineOrchestrator, sql_writer: SqlWriter, tmp_path: Path
 ):
     patients_csv = tmp_path / "patients.csv"
     admissions_csv = tmp_path / "admissions.csv"
@@ -170,12 +201,57 @@ def test_orchestrator_registers_pipeline_run_with_stats(
         trigger_type="manual",
     )
 
-    run_doc = mongo_writer.db.pipeline_runs.find_one({"_id": result.run_id})
-    assert run_doc is not None
-    assert run_doc["status"] == "success"
-    assert run_doc["trigger_type"] == "manual"
-    assert run_doc["finished_at"] is not None
-    assert run_doc["records_processed"] >= 2
+    rows = _select(
+        sql_writer._engine,
+        "SELECT id, trigger_type, status, finished_at, records_processed "
+        "FROM pipeline_runs WHERE id=:id",
+        id=result.run_id,
+    )
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.status == "success"
+    assert row.trigger_type == "manual"
+    assert row.finished_at is not None
+    assert row.records_processed >= 2
+
+
+def test_orchestrator_persists_quality_summary_per_dimension(
+    orchestrator: PipelineOrchestrator, sql_writer: SqlWriter, tmp_path: Path
+):
+    """Every successful run must persist one row per dimension in data_quality_summary."""
+    patients_csv = tmp_path / "patients.csv"
+    admissions_csv = tmp_path / "admissions.csv"
+
+    _write_patients_csv(patients_csv, [
+        ["HOSP-000001", "Ana", "1980-05-12", "F", "A+"],
+        ["HOSP-000002", "", "1975-03-22", "M", "O-"],        # rejected
+    ])
+    _write_admissions_csv(admissions_csv, [
+        ["HOSP-000001", "2025-03-10", "", "UCI", "J18.9", "Pneumonia", "admitted"],
+        ["HOSP-999999", "2025-04-05", "", "UCI", "J18.9", "Pneumonia", "admitted"],  # orphan
+    ])
+
+    result = orchestrator.run_from_files(
+        patients_csv=patients_csv, admissions_csv=admissions_csv
+    )
+
+    rows = _select(
+        sql_writer._engine,
+        "SELECT dimension, total, valid, rejected, rejection_rate "
+        "FROM data_quality_summary WHERE pipeline_run_id=:rid "
+        "ORDER BY dimension",
+        rid=result.run_id,
+    )
+    by_dim = {r.dimension: r for r in rows}
+    assert "patients" in by_dim and "admissions" in by_dim
+
+    assert by_dim["patients"].total == 2
+    assert by_dim["patients"].rejected == 1
+
+    # admissions has 1 valid + 1 orphan rejection
+    assert by_dim["admissions"].total == 2
+    assert by_dim["admissions"].rejected == 1
+    assert by_dim["admissions"].valid == 1
 
 
 def test_orphan_admissions_are_rejected_with_clear_reason(
@@ -191,7 +267,7 @@ def test_orphan_admissions_are_rejected_with_clear_reason(
     ])
     _write_admissions_csv(admissions_csv, [
         ["HOSP-000001", "2025-03-10", "", "UCI", "J18.9", "Pneumonia", "admitted"],
-        # Format is valid (HOSP-NNNNNN) but the patient does not exist
+        # Format valid but patient does not exist
         ["HOSP-999999", "2025-04-05", "", "Urgencias", "I21.9", "MI", "admitted"],
     ])
 
@@ -207,14 +283,14 @@ def test_orphan_admissions_are_rejected_with_clear_reason(
     assert len(orphan_docs) == 1
     assert orphan_docs[0]["raw_data"]["patient_external_id"] == "HOSP-999999"
 
-    # The orphan admission must NOT be embedded in any patient
+    # Orphan must NOT be embedded in any patient
     ana = mongo_writer.db.patients.find_one({"external_id": "HOSP-000001"})
     assert len(ana["admissions"]) == 1
     assert ana["admissions"][0]["patient_external_id"] == "HOSP-000001"
 
 
 def test_stats_count_only_persisted_records_not_orphans(
-    orchestrator: PipelineOrchestrator, mongo_writer: MongoWriter, tmp_path: Path
+    orchestrator: PipelineOrchestrator, tmp_path: Path
 ):
     """records_processed must reflect what actually got persisted, not the raw input."""
     patients_csv = tmp_path / "patients.csv"
@@ -241,9 +317,9 @@ def test_stats_count_only_persisted_records_not_orphans(
 
 
 def test_orchestrator_marks_run_as_failed_on_exception(
-    orchestrator: PipelineOrchestrator, mongo_writer: MongoWriter, tmp_path: Path
+    orchestrator: PipelineOrchestrator, sql_writer: SqlWriter, tmp_path: Path
 ):
-    """CB-5: if a downstream step fails, the run must be flagged as failed."""
+    """CB-5: if a downstream step fails, the run must be flagged as failed in SQLite."""
     missing_csv = tmp_path / "does_not_exist.csv"
 
     with pytest.raises(FileNotFoundError):
@@ -252,8 +328,9 @@ def test_orchestrator_marks_run_as_failed_on_exception(
             admissions_csv=missing_csv,
         )
 
-    # The run should have been started and marked as failed
-    runs = list(mongo_writer.db.pipeline_runs.find({}))
-    failed = [r for r in runs if r["status"] == "failed"]
-    assert len(failed) >= 1
-    assert failed[-1]["error_message"] is not None
+    failed_rows = _select(
+        sql_writer._engine,
+        "SELECT id, status, error_message FROM pipeline_runs WHERE status='failed'",
+    )
+    assert len(failed_rows) >= 1
+    assert failed_rows[-1].error_message is not None

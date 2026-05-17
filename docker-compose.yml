@@ -63,7 +63,13 @@ services:
       minio-init:
         condition: service_completed_successfully
     volumes:
-      - ./data:/app/data:ro
+      # Submontajes especificos (ADR-005/006 + design clasificacion-radiografias).
+      # `data/raw` es read-only (fixtures versionados); `data/models` es rw para
+      # que `train.py` pueda escribir el artefacto del modelo y el reporte.
+      - ./data/raw:/app/data/raw:ro
+      - ./data/models:/app/data/models:rw
+      - ./docs/model-evaluation:/app/docs/model-evaluation:rw
+      - pipeline-db:/app/data/db:rw
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SPARK_APP_NAME: ${SPARK_APP_NAME:-hospital-pipeline}
@@ -77,6 +83,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
       MINIO_BUCKET_RADIOGRAPHIES: ${MINIO_BUCKET_RADIOGRAPHIES:-radiographies}
       MINIO_BUCKET_RAW_BACKUPS: ${MINIO_BUCKET_RAW_BACKUPS:-raw-backups}
+      SQLITE_PATH: ${SQLITE_PATH:-/app/data/db/hospital.db}
 
   api:
     image: hospital-pipeline:latest
@@ -98,8 +105,15 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
       MINIO_BUCKET_RADIOGRAPHIES: ${MINIO_BUCKET_RADIOGRAPHIES:-radiographies}
+      SQLITE_PATH: ${SQLITE_PATH:-/app/data/db/hospital.db}
     volumes:
-      - ./data:/app/data:ro
+      # Submontajes especificos. La API solo lee fixtures y el modelo
+      # entrenado; nunca los modifica. `data/models` se monta :ro.
+      - ./data/raw:/app/data/raw:ro
+      - ./data/models:/app/data/models:ro
+      # rw aunque la API solo lee: WAL mode crea ficheros sidecar (.wal/.shm)
+      # en el directorio de la base. Sin rw, SQLite falla al abrir el handle.
+      - pipeline-db:/app/data/db:rw
     command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health').read()"]
@@ -131,11 +145,14 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
       INCOMING_DIR: /app/data/incoming
+      SQLITE_PATH: ${SQLITE_PATH:-/app/data/db/hospital.db}
     volumes:
       # rw: el watcher mueve los ficheros procesados a incoming/processed/
       - ./data/incoming:/app/data/incoming:rw
+      - pipeline-db:/app/data/db:rw
     command: ["python", "-m", "src.pipeline.scripts.watcher_daemon"]
 
 volumes:
   mongo-data:
   minio-data:
+  pipeline-db:

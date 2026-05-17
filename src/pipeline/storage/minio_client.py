@@ -63,6 +63,21 @@ class MinIOClient:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         self._client.fget_object(bucket, key, str(file_path))
 
+    def download_bytes(self, bucket: str, key: str) -> bytes:
+        """Read an object entirely into memory.
+
+        Used by the classification endpoint, which needs the bytes for
+        in-memory preprocessing without round-tripping through the
+        filesystem. Propagates `S3Error` (e.g. `NoSuchKey`) unmodified
+        so the caller can map it to a 404.
+        """
+        response = self._client.get_object(bucket, key)
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+
     def exists(self, bucket: str, key: str) -> bool:
         try:
             self._client.stat_object(bucket, key)
