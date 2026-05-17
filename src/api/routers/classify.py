@@ -1,7 +1,8 @@
-"""Endpoints for radiography classification (Feature 2).
+"""Endpoints for radiography classification (Feature 2) + image proxy (Feature 4).
 
 POST /api/v1/radiographies/classify        — infer + persist
 GET  /api/v1/radiographies/classification   — read persisted result
+GET  /api/v1/radiographies/image            — proxy of PNG bytes from MinIO
 
 The MinIO key comes in the body (POST) or as a query param (GET) instead
 of a path param because it contains `/` (e.g. `HOSP-000001/xray1.png`)
@@ -12,7 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from minio.error import S3Error
 
 from src.api.models import (
@@ -131,3 +132,41 @@ def get_classification(
         predicted_at=doc["predicted_at"],
         model_version=doc["model_version"],
     )
+
+
+@router.get(
+    "/image",
+    summary="Proxy PNG bytes of a radiography from MinIO",
+    responses={
+        200: {"content": {"image/png": {}}},
+        404: {"description": "Object not found in MinIO"},
+        422: {"description": "key missing or empty"},
+        502: {"description": "Upstream object storage error"},
+    },
+)
+def get_radiography_image(
+    request: Request,
+    key: str = Query(..., min_length=1, description="MinIO object key"),
+) -> Response:
+    """Read-only proxy of MinIO object bytes for the dashboard.
+
+    NO toca MongoDB, NO clasifica. Existe para que el dashboard
+    (servicio aparte sin acceso directo a MinIO) pueda renderizar
+    la imagen seleccionada en la vista Clasificador.
+    """
+    minio_client = request.app.state.minio_client
+    bucket = _bucket(request)
+    try:
+        data = minio_client.download_bytes(bucket, key)
+    except S3Error as exc:
+        if exc.code in {"NoSuchKey", "NoSuchObject"}:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Radiography not found in MinIO: {key}",
+            ) from exc
+        logger.exception("Unexpected S3 error fetching %s/%s", bucket, key)
+        raise HTTPException(
+            status_code=502,
+            detail="Upstream object storage error",
+        ) from exc
+    return Response(content=data, media_type="image/png")

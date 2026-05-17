@@ -1,0 +1,30 @@
+# Dashboard image: Streamlit + httpx + plotly + pandas (no TF, no PySpark).
+# ADR-007: imagen Docker independiente del pipeline (~240 MB) que arranca
+# en <15s y se construye en <3min, frente a los ~2 GB de hospital-pipeline.
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Capa de dependencias (cambia poco → cache friendly)
+COPY requirements-dashboard.txt .
+RUN pip install --no-cache-dir -r requirements-dashboard.txt
+
+# Codigo + tests + config visual del tema
+COPY src/dashboard/ ./src/dashboard/
+COPY .streamlit/ ./.streamlit/
+COPY tests/dashboard/ ./tests/dashboard/
+COPY pyproject.toml ./
+
+ENV PYTHONPATH=/app
+EXPOSE 8501
+
+# Streamlit expone /_stcore/health para liveness checks
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health').read()" || exit 1
+
+CMD ["streamlit", "run", "src/dashboard/app.py", \
+     "--server.port=8501", \
+     "--server.address=0.0.0.0", \
+     "--server.headless=true", \
+     "--browser.gatherUsageStats=false"]

@@ -111,6 +111,11 @@ services:
       # entrenado; nunca los modifica. `data/models` se monta :ro.
       - ./data/raw:/app/data/raw:ro
       - ./data/models:/app/data/models:ro
+      # Reporte de evaluacion del modelo (RF-9 del dashboard): la API
+      # expone GET /api/v1/model/evaluation que devuelve metrics.json.
+      # :ro porque la API solo lee; el reporte lo escribe `pipeline` al
+      # entrenar.
+      - ./docs/model-evaluation:/app/docs/model-evaluation:ro
       # rw aunque la API solo lee: WAL mode crea ficheros sidecar (.wal/.shm)
       # en el directorio de la base. Sin rw, SQLite falla al abrir el handle.
       - pipeline-db:/app/data/db:rw
@@ -151,6 +156,23 @@ services:
       - ./data/incoming:/app/data/incoming:rw
       - pipeline-db:/app/data/db:rw
     command: ["python", "-m", "src.pipeline.scripts.watcher_daemon"]
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    image: hospital-dashboard:latest
+    container_name: hospital-dashboard
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
+    environment:
+      API_BASE_URL: http://api:8000
+      API_TIMEOUT_SECONDS: "10"
+      DASHBOARD_CACHE_TTL: "10"
+    restart: unless-stopped
 
 volumes:
   mongo-data:

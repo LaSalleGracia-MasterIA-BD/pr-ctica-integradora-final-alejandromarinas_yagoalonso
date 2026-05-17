@@ -52,6 +52,12 @@ Thumbs.db
 # futuras iteraciones.
 .local-refs/
 
+# Artefactos de inspeccion del dashboard con Playwright MCP (logs +
+# snapshots .yml) y screenshots tomados durante la revision de UI.
+# Solo sirven en local mientras se inspecciona; no aportan valor en el repo.
+.playwright-mcp/
+dashboard-*.png
+
 # Model weights (too large for git)
 *.h5
 *.pt

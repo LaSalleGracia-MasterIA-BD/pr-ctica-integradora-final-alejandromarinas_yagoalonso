@@ -19,7 +19,7 @@ Proyecto final del Master en AI & Big Data.
 | Almacenamiento de objetos | MinIO (S3-compatible) | ✅ Implementado |
 | API REST | FastAPI + Uvicorn | ✅ Implementado |
 | Deep Learning | Keras / TensorFlow 2.16 (CNN: Conv2D + MaxPooling2D + Dropout + Flatten + Dense + softmax, con EarlyStopping) — ver ADR-005 | ✅ Implementado |
-| Dashboard | Streamlit | 🚧 Pendiente |
+| Dashboard | Streamlit 1.36 + Plotly 5.22 + Pandas 2.2 (imagen Docker independiente ~240 MB) — ver ADR-007 | ✅ Implementado |
 | Infraestructura | Docker + Docker Compose | ✅ Implementado |
 
 > **Polyglot persistence (ADR-004):** cada dato vive donde su forma encaja.
@@ -28,7 +28,7 @@ Proyecto final del Master en AI & Big Data.
 ## Requisitos previos
 
 - Docker Desktop (o Docker Engine + Docker Compose v2)
-- Puertos libres: `8000` (API), `27017` (MongoDB), `9000` y `9001` (MinIO)
+- Puertos libres: `8000` (API), `8501` (Dashboard Streamlit), `27017` (MongoDB), `9000` y `9001` (MinIO)
 - ~4 GB de RAM libres (PySpark en JVM)
 
 ## Arranque
@@ -48,9 +48,11 @@ Con ese unico comando, el sistema queda listo en menos de 1 minuto:
    - Crea el schema de **SQLite** (`pipeline_runs` + `data_quality_summary`) en el volumen `pipeline-db`
    - Sincroniza las 17 radiografias de ejemplo (`data/raw/images/`) al bucket `radiographies`
    - Si MongoDB esta vacio, ejecuta el **pipeline ETL completo** sobre los CSVs de ejemplo (`patients.csv` + `admissions.csv`) y deja **4.745 pacientes** y **8.569 admissions** procesados. Registra el run en SQLite con sus metricas de calidad
+   - Genera una **radiografia sintetica de demo** (`HOSP-DEMO-001`, fixture tecnico — no es una radiografia real) para que la vista Clasificador del dashboard tenga al menos una imagen clasificable out-of-the-box. Para una demo con valor clinico ante profesores, sustituirla por una imagen real del dataset siguiendo `docs/runbooks/use-real-radiograph-for-demo.md` (`data/raw/images-demo/README.md`)
    - Verifica conectividad con MongoDB
-5. La **API REST** arranca en `localhost:8000` con datos servibles
-6. El servicio **watcher** se queda escuchando `data/incoming/`: dropear ahi `patients.csv` + `admissions.csv` dispara automaticamente el ETL y mueve los ficheros a `data/incoming/processed/`
+5. La **API REST** arranca en `localhost:8000` con datos servibles (incluyendo dos endpoints nuevos para el dashboard: `GET /radiographies/image?key=...` y `GET /model/evaluation`)
+6. El **Dashboard Streamlit** arranca en `localhost:8501` consumiendo la API
+7. El servicio **watcher** se queda escuchando `data/incoming/`: dropear ahi `patients.csv` + `admissions.csv` dispara automaticamente el ETL y mueve los ficheros a `data/incoming/processed/`
 
 Cuando veas la linea `=== Bootstrap complete. System is ready. ===` el sistema esta listo.
 
@@ -60,6 +62,7 @@ El bootstrap es **idempotente**: re-ejecutar `docker compose up` no vuelve a pro
 
 | Servicio | URL | Credenciales |
 |---|---|---|
+| **Dashboard** (Streamlit) | `http://localhost:8501` | sin auth (dev) |
 | **API REST** | `http://localhost:8000` | sin auth (dev) |
 | Docs interactivas (Swagger) | `http://localhost:8000/docs` | — |
 | MongoDB | `mongodb://localhost:27017` (BD `hospital`) | sin auth (dev) |
@@ -114,7 +117,17 @@ curl "http://localhost:8000/api/v1/radiographies/classification?key=HOSP-000001/
 docker compose run --rm --entrypoint "" pipeline pytest tests -v
 ```
 
-Suite de **230 tests** (208 unit + integracion contra MongoDB, MinIO, SQLite y TensorFlow reales + 22 E2E sobre los criterios de aceptacion del pipeline y de la feature de clasificacion). 1 test se salta cuando se ejecuta dentro del contenedor `pipeline` (el watcher E2E necesita rw sobre `data/incoming/`, y `pipeline` lo monta ro por diseno). Los tests E2E de clasificacion se saltan si la API reporta `predictor_loaded=false` (sin modelo entrenado en `data/models/`).
+Suite de **275 tests** distribuidos:
+- **218** unit + integracion en `hospital-pipeline` (incluye los 10 nuevos
+  para `GET /radiographies/image` y `GET /model/evaluation`)
+- **33** unit en `hospital-dashboard` (`ApiClient` con `httpx.MockTransport`,
+  `error_banner`, `system_status`)
+- **24** E2E con stack vivo (incluye smoke del dashboard healthcheck)
+
+1 test se salta cuando se ejecuta dentro del contenedor `pipeline` (el
+watcher E2E necesita rw sobre `data/incoming/`). Los tests E2E de
+clasificacion se saltan si la API reporta `predictor_loaded=false`
+(sin modelo entrenado en `data/models/`).
 
 ## Detener el sistema
 
@@ -222,6 +235,8 @@ Artefactos en `specs/` y `design/`. Backlog en `tasks/backlog.md`. Decisiones te
 **Tests:** 208 verdes + 1 skip.
 
 **Roadmap completo:** ver `tasks/backlog.md`. Pendientes principales:
-- Dashboard de visualizacion (Streamlit, consumira los endpoints `/pipeline/quality-summary` y `/radiographies/classification`)
+- ~~Dashboard de visualizacion~~ ✅ **Implementado** (Streamlit en
+  `http://localhost:8501`, 5 vistas + barra persistente de estado del
+  sistema, ver `specs/dashboard.md`, `design/dashboard.md`, ADR-007)
 - Automatizaciones de alertas e informes (el watcher YA esta como servicio real en el compose; queda pendiente el flujo de alertas)
 - Memoria tecnica + presentacion final

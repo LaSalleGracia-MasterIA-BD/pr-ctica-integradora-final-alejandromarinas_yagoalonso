@@ -7,6 +7,52 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Feature 4 — Dashboard de visualizacion (Streamlit, puerto 8501):**
+  centro de control hospitalario que consume exclusivamente la API REST
+  (sin acceso directo a MongoDB/SQLite/MinIO). Ver ADR-007.
+  - **5 vistas**: Overview (cards + ultimo run + strip de evaluacion +
+    auto-refresh 30s), Calidad de datos (snapshot + historico
+    rejection_rate por dimension con Plotly), Pacientes (lista
+    paginada server-side + detalle con admissions y radiografias
+    embebidos), Clasificador (dropdown ordenado con HOSP-DEMO-001
+    primero + imagen + clasificar + sub-seccion de evaluacion detallada
+    con matriz de confusion heatmap), Pipeline runs (tabla paginada +
+    detalle de fallos)
+  - **Barra persistente de estado del sistema** en el sidebar (chips
+    API + Modelo + Ultimo run) visible desde cualquier vista
+  - **2 endpoints API nuevos**:
+    `GET /api/v1/radiographies/image?key=...` (proxy de bytes PNG de
+    MinIO para que el dashboard renderice radiografias siendo API-only)
+    y `GET /api/v1/model/evaluation` (lee `metrics.json` y lo devuelve
+    como JSON; 503 si falta)
+  - **Imagen Docker `hospital-dashboard:latest` independiente** (~240
+    MB sin TF/PySpark/Java/Pillow), construye en ~50s, arranca en
+    <15s. Tema visual via `.streamlit/config.toml` (paleta sobria
+    Linear-like, primaryColor `#2563EB`, sin emojis, sin CSS complejo)
+  - **`HOSP-DEMO-001`**: el bootstrap genera una radiografia sintetica
+    256x256 (numpy + Pillow + ImageDraw) y la sube al bucket. Mitiga
+    CB-7 (las 17 dummy del bootstrap son 1x1 y la API las rechaza).
+    Origen/licencia documentados en `data/raw/images-demo/README.md`
+  - **Manejo de errores explicito** (`ApiError(kind, status, detail)`
+    + `components/error_banner.py`): network → "API no disponible";
+    422 en /classify → "Imagen demasiado pequena"; 503 en /classify
+    vs /model/evaluation son **dos senales distintas** (modelo no
+    cargado vs reporte ausente)
+  - **Cache `st.cache_data(ttl=10s)`** en todas las queries GET,
+    `ttl=60s` en `/model/evaluation` (las metricas no cambian hasta
+    reentrenar); POST `/classify` no se cachea
+  - **57 tests nuevos**: 10 unitarios para los 2 endpoints API +
+    15 unitarios del `ApiClient` (con `httpx.MockTransport`, sin red) +
+    12 unitarios del `error_banner` + 6 unitarios del `system_status` +
+    2 E2E del dashboard. **Total proyecto: 275 tests verdes** (218
+    pipeline + integration + 33 dashboard + 24 E2E)
+  - Smoke real verificado: las 5 vistas responden 200, `HOSP-DEMO-001`
+    se clasifica como "Normal" con probabilidad 0.95 (la imagen
+    sintetica no tiene patron clinico real, el modelo solo demuestra
+    el flujo end-to-end). CB-1 verificado: con `docker compose stop
+    api`, el dashboard sigue respondiendo `200 OK` y los chips del
+    sidebar pasan a rojo
+
 - **Feature 2 — Clasificacion de radiografias (Keras/TensorFlow):**
   Modelo CNN propio (~1.8M params, ~7-8 MB en disco) que clasifica
   radiografias de torax en `Normal` / `Pneumonia` / `COVID-19`. Arquitectura

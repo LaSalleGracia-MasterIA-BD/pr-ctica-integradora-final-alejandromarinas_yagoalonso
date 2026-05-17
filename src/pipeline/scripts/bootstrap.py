@@ -16,6 +16,7 @@ actually needed, so warm restarts are fast.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 from src.pipeline.ingesters.image_ingester import (
@@ -71,6 +72,13 @@ def main() -> None:
     images_metadata = _sync_radiographies(images_dir)
     _run_etl_if_empty(patients_csv, admissions_csv)
     _persist_radiography_metadata(images_metadata)
+    # Feature 4 (dashboard) T17: pre-cargar 1 radiografia de demo
+    # `HOSP-DEMO-001` para que la vista Clasificador del dashboard tenga
+    # al menos una imagen >= 32 px clasificable out-of-the-box (las 17
+    # dummy del bootstrap son 1x1 y la API las rechaza con 422).
+    # Origen/licencia: imagen sintetica generada con numpy. Ver
+    # data/raw/images-demo/README.md
+    _seed_demo_radiograph()
 
     mongo = get_mongo_writer_from_env()
     try:
@@ -218,6 +226,92 @@ def _persist_radiography_metadata(images: list[IngestedImage]) -> None:
             "Radiography metadata in MongoDB: %d attached to patients, %d orphans",
             attached,
             orphans,
+        )
+    finally:
+        writer.close()
+
+
+DEMO_PATIENT_ID = "HOSP-DEMO-001"
+DEMO_RADIOGRAPHY_KEY = "HOSP-DEMO-001/HOSP-DEMO-001_xray1.png"
+
+
+def _generate_demo_radiograph_bytes(seed: int = 42) -> bytes:
+    """Generate a synthetic 256x256 grayscale PNG.
+
+    Soft vertical gradient + gaussian noise + two darker ellipses that
+    vaguely suggest lungs. NOT a real radiograph — purely there so the
+    Classifier view of the dashboard has at least one image of >=32 px
+    available out-of-the-box. See `data/raw/images-demo/README.md`.
+    """
+    import io
+
+    import numpy as np
+    from PIL import Image, ImageDraw
+
+    rng = np.random.default_rng(seed)
+    size = 256
+    # Vertical gradient (darker top, lighter bottom): mimics typical X-ray exposure
+    gradient = np.tile(np.linspace(60, 200, size, dtype=np.float32), (size, 1)).T
+    # Gaussian noise to look "filmic" rather than flat
+    noise = rng.normal(0.0, 12.0, size=(size, size)).astype(np.float32)
+    arr = np.clip(gradient + noise, 0, 255).astype(np.uint8)
+
+    img = Image.fromarray(arr, mode="L")
+    # Two darker ellipses that suggest lungs (decorative, no clinical value)
+    draw = ImageDraw.Draw(img)
+    draw.ellipse((40, 70, 110, 200), fill=80)
+    draw.ellipse((146, 70, 216, 200), fill=80)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _seed_demo_radiograph() -> None:
+    """Upload the demo PNG to MinIO + register the demo patient in MongoDB.
+
+    Idempotent: re-runs upload (MinIO overwrites by key) and use
+    `add_radiography_to_patient` which is also idempotent on
+    `minio_object_key`.
+    """
+    minio = get_minio_client_from_env()
+    minio.ensure_bucket(IMAGES_BUCKET)
+    png_bytes = _generate_demo_radiograph_bytes(seed=42)
+    minio.upload_bytes(
+        IMAGES_BUCKET, DEMO_RADIOGRAPHY_KEY, png_bytes, content_type="image/png",
+    )
+    logger.info(
+        "Demo radiograph synthesised + uploaded to %s/%s (%d bytes)",
+        IMAGES_BUCKET, DEMO_RADIOGRAPHY_KEY, len(png_bytes),
+    )
+
+    writer = get_mongo_writer_from_env()
+    try:
+        # Ensure the demo patient exists
+        writer.bulk_upsert_patients([
+            {
+                "external_id": DEMO_PATIENT_ID,
+                "name": "Demo Dashboard",
+                "birth_date": "1980-01-01",
+                "age": 45,
+                "gender": "F",
+                "blood_type": "A+",
+            }
+        ])
+        # Attach the radiograph (idempotent)
+        writer.add_radiography_to_patient(
+            DEMO_PATIENT_ID,
+            {
+                "minio_object_key": DEMO_RADIOGRAPHY_KEY,
+                "original_filename": "HOSP-DEMO-001_xray1.png",
+                "file_size_bytes": len(png_bytes),
+                "ingested_at": datetime.now(timezone.utc).isoformat(),
+                "classification": None,
+            },
+        )
+        logger.info(
+            "Demo patient %s registered with radiography %s",
+            DEMO_PATIENT_ID, DEMO_RADIOGRAPHY_KEY,
         )
     finally:
         writer.close()

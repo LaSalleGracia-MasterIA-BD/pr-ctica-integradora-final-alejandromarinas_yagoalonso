@@ -518,6 +518,31 @@
   - **EarlyStopping no detectara una mejora lenta y monotona** si min_delta=0 (el default). Si la red mejora 0.0001 por epoch, no es plateau pero EarlyStopping puede creerlo. Poner `min_delta=0.001` evita falsos plateaus, pero hay que combinarlo con un epochs_max razonable porque si la curva sigue mejorando NO va a cortar
   - **Cuando se cambia codigo en `src/` y se usa `docker compose run`, rebuild siempre.** Los containers reutilizan la imagen, no leen del filesystem del host
 
+### Sesion 27 — 2026-05-17: Dashboard Streamlit (feature 4) implementado en una sesion
+- **Objetivo:** Implementar las 16 + T17 tareas del dashboard usando como fuente de verdad la documentacion final del equipo (specs/design/tasks/ADR-007 + guia de implementacion local)
+- **Prompts representativos:**
+  - "implementa el dashboard usando como fuente de verdad..."
+  - "Guardrails: dashboard API-only, Streamlit puro, sin Pillow, sin cards.py, sin boton de lanzar pipeline..."
+  - "Ejecuta tests por bloques y avisame si aparece una contradiccion con spec/design/tasks"
+- **Resultado:**
+  - **Fase 1 (API):** 2 endpoints nuevos (`GET /radiographies/image?key=...` + `GET /model/evaluation`) con 10 tests unitarios. Refactor minimo: mount nuevo en docker-compose (`./docs/model-evaluation:/app/docs/model-evaluation:ro` en api), wire del nuevo router en `main.py`. T17 nueva: bootstrap genera `HOSP-DEMO-001` con imagen sintetica 256x256 (numpy + Pillow + ImageDraw) — elimina el problema CB-7 (dummy 1x1) sin licencia externa
+  - **Fase 2 (andamio):** imagen Docker independiente `hospital-dashboard:latest` con `Dockerfile.dashboard` ligero (~240 MB, build 52s, arranque <15s — todo dentro de RNF-5). Tema Streamlit sobrio via `.streamlit/config.toml` (primaryColor `#2563EB`, sin emojis, sin CSS complejo). `ApiClient` con `(data, error: ApiError)` tuple-style, mapeo HTTP→kind. `error_banner` + `system_status` (chips persistentes en sidebar). Entrypoint con `st.navigation` + `render_system_status` en `with st.sidebar`. 33 tests unitarios verdes
+  - **Fase 3 (vistas):** Overview con `@st.fragment(run_every=30)` para auto-refresh de cards + ultimo run + strip RF-7a de evaluacion fuera del fragment (ttl=60s); Calidad con `plotly.express.line` del historico de rejection_rate; Pacientes con paginacion server-side + acordeones para admissions/radiografias; Clasificador con dropdown (`HOSP-DEMO-001` primero) + imagen + bar chart de probabilidades + RF-7b detalle (`plotly.express.imshow` heatmap matriz confusion); Runs con tabla + expanders para errores
+  - **Fase 4 (cierre):** 24 tests E2E verdes (incluye 2 nuevos del dashboard healthcheck). CB-1 verificado en vivo (parar API → dashboard sobrevive, chips a rojo). Smoke: `HOSP-DEMO-001` clasificada con confianza 0.95 en Normal (esperado: imagen sintetica sin patron clinico). **Total proyecto: 275 tests verdes**
+- **Aciertos de la IA:**
+  - **Ejecucion fiel al plan**: cero deriva sobre `specs/dashboard.md` y `tasks/dashboard.md`. No invente vistas extra ni endpoints adicionales fuera de los documentados
+  - **Guardrails respetados al 100%:** zero importacion de `pymongo`/`minio`/`sqlite3` en `src/dashboard/`. Verificado por inspeccion de imports
+  - **TDD con `httpx.MockTransport`** para el `ApiClient`: 15 tests que no tocan red y cubren happy path + cada `kind` de `ApiError`. Mucho mas rapido (0.25s) y deterministico que tests E2E
+  - **Fixture demo (T17) con sintesis propia** en lugar de imagen del Kaggle: elimina dudas de licencia y cumple su funcion (mostrar el flujo end-to-end). `data/raw/images-demo/README.md` documenta el porque
+  - **`predictor_loaded` vs `/model/evaluation` mantenidas como dos senales independientes** en toda la pila (api_client, error_banner con contexts, vista Overview separando el chip Modelo del strip Evaluacion, vista Classifier idem con sub-seccion al final)
+- **Casos donde hubo que corregir:** ninguno destacable. La documentacion estaba muy detallada y la guia de implementacion local clarificaba cada decision cerrada (5 vistas, sin Pillow, sin `cards.py`, etc.)
+- **Leccion aprendida:**
+  - **Cuando la spec/design/tasks/ADR/prompt son consistentes y detallados, la implementacion fluye sin preguntas.** Cero contradicciones reales detectadas en toda la sesion. El esfuerzo extra de iterar con Claude Design en el plan ANTES de implementar se paga con creces: lo implementado encaja a la primera
+  - **`st.fragment(run_every=N)` permite auto-refresh limitado a un bloque** sin recargar la pagina entera. Util para Overview (cards "vivas") sin marear al usuario en otras vistas
+  - **`st.cache_data(ttl=10s)` con clave `_base_url`** sirve para "una funcion de modulo cacheada por sesion" sin pasarse `ApiClient` (que no es hashable). Hack util porque la url unica identifica al cliente
+  - **`unsafe_allow_html=True` con CSS inline minimo (una linea por chip)** es aceptable para badges de estado. Mas que eso (multiples reglas, animaciones) NO — se mantiene Streamlit estandar
+  - **Imagen Docker ligera vs reutilizar la del pipeline:** la separacion es deciciva. 240 MB vs 2 GB, arranque <15s vs >20s, builds independientes. Sin esto, RNF-5 no se cumple
+
 ## Reflexion critica (en construccion)
 
 ### Que ha aportado la IA hasta ahora
