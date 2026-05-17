@@ -31,7 +31,7 @@ estan acopladas:
 **Streamlit 1.36** en un servicio Docker **independiente**
 (`hospital-dashboard:latest`) con `Dockerfile.dashboard` propio,
 construido sobre `python:3.11-slim` y con
-`requirements-dashboard.txt` minimo (~250 MB de imagen final frente
+`requirements-dashboard.txt` minimo (~240 MB de imagen final frente
 a los ~2 GB de `hospital-pipeline:latest`).
 
 El servicio escucha en el puerto 8501 (default de Streamlit) y
@@ -59,7 +59,7 @@ Python. La spec no pide UX premium, pide demo funcional.
 
 | Opcion | Pros | Contras |
 |--------|------|---------|
-| **Imagen independiente (elegida)** | Imagen base 250 MB (sin TF, sin PySpark, sin Java); arranque <15s; build <2 min; el dashboard no se acopla al ciclo de rebuild del pipeline cada vez que cambia ML; cumple RNF-5 holgadamente | Otro Dockerfile mas; duplica `python:3.11-slim` en disco si Docker no comparte capas (en la practica lo hace) |
+| **Imagen independiente (elegida)** | Imagen base 240 MB (sin TF, sin PySpark, sin Java, sin Pillow); arranque <15s; build <2 min; el dashboard no se acopla al ciclo de rebuild del pipeline cada vez que cambia ML; cumple RNF-5 holgadamente | Otro Dockerfile mas; duplica `python:3.11-slim` en disco si Docker no comparte capas (en la practica lo hace) |
 | Reutilizar `hospital-pipeline:latest` | Una sola imagen para todo el stack; cero archivos nuevos | Imagen de 2 GB para servir 5 vistas simples; arranque >20s porque streamlit espera a que importemos lo necesario (y el container ya cargo TF antes); cada vez que se reentrena ML y se rebuilda la imagen, el dashboard se "rebuilda" tambien sin razon |
 | Imagen `node:20-alpine` + dashboard JS | Inmejorable peso/perf para servir HTML | Saca todo el stack de Python — no aplica si elegimos Streamlit |
 
@@ -85,17 +85,24 @@ lineas total).
 - (+) **Cero acoplamiento con el resto del pipeline**: el dashboard
   vive en su propia imagen, su propio requirements, su propio
   Dockerfile
+- (+) **Encaja con el encuadre de producto "Centro de Control
+  Hospitalario"**: un unico `docker compose up` levanta pipeline +
+  API + watcher + dashboard, y la barra persistente de estado del
+  sistema en el sidebar hace visible la salud del stack desde
+  cualquier vista
 
 **Negativas:**
 - (-) **UI "Streamlit-y"**: el evaluador puede notar que es una demo
   notebook-like, no una app web "de producto". Mitigacion:
-  `st.set_page_config(page_title=..., layout="wide")` + paleta
-  sobria + cero emojis (convencion ASCII del repo) da una imagen
-  razonablemente profesional para un proyecto academico
+  `st.set_page_config(page_title=..., layout="wide")` +
+  `.streamlit/config.toml` con paleta sobria (primaryColor `#2563EB`,
+  fondo blanco) + cero emojis (convencion ASCII del repo) da una
+  imagen razonablemente profesional para un proyecto academico
 - (-) **Re-ejecucion del script en cada interaccion**: cualquier
   click recarga el script entero. Mitigacion: `st.cache_data(ttl=10s)`
-  en todas las queries GET; los POST (classify) se sirven con
-  `st.spinner` para que el usuario vea progreso
+  en todas las queries GET (`ttl=60s` en `/model/evaluation`); los
+  POST (classify) se sirven con `st.spinner` para que el usuario vea
+  progreso
 - (-) **Mantener dos imagenes Docker en el repo**: cada cambio en
   python version o pillow obliga a actualizar ambas. Mitigacion:
   esta entrega no requiere mantenimiento continuo; el coste real

@@ -7,7 +7,7 @@
 App **Streamlit** servida como un servicio Docker independiente
 (`hospital-dashboard`) que consume exclusivamente la API REST. La
 imagen base es ligera (`python:3.11-slim` + streamlit + httpx +
-plotly + pandas + pillow, ~250 MB) y se construye con un Dockerfile
+plotly + pandas, ~240 MB) y se construye con un Dockerfile
 propio (`Dockerfile.dashboard`), no reutiliza
 `hospital-pipeline:latest` (que pesa ~2 GB por PySpark + TensorFlow).
 
@@ -28,18 +28,22 @@ con ADR propio):
 2. **Cliente HTTP `httpx` sync con `st.cache_data(ttl=...)`**
    alrededor de cada query a la API. Streamlit re-ejecuta el script
    en cada interaccion; sin cache se bombardearia la API en cada
-   click. TTL corto (5-10s en Overview/Runs) para no servir datos
-   stale en una demo
+   click. TTL corto (5-10s en Overview/Runs, 60s en `/model/evaluation`
+   porque no cambia hasta reentrenar) para no servir datos stale en
+   una demo
 3. **Auto-refresh nativo con `st.fragment(run_every=30)`**
-   (Streamlit 1.33+) en la vista Overview. Sin dependencia extra,
-   no bloquea otras vistas
+   (Streamlit 1.33+) en la vista Overview, solo en el bloque de
+   cards + ultimo run (el strip de Evaluacion queda fuera del
+   fragment, cacheado 60s). Sin dependencia extra, no bloquea otras
+   vistas
 4. **Layout multi-pagina con `st.navigation`** (Streamlit 1.30+):
    sidebar nativa con las 5 vistas, sin hacks de session_state
 5. **Cliente API encapsulado** en `src/dashboard/api_client.py`:
    una sola clase con metodos tipados que devuelve dicts. Las vistas
    NO hablan con `httpx` directamente. Beneficio: tests unitarios
-   del cliente mockean `httpx`, las vistas se prueban contra un
-   `FakeApiClient`
+   del cliente mockean `httpx` via `httpx.MockTransport`. Las vistas
+   Streamlit no se testean unitariamente (cubierto en el smoke E2E
+   manual, T15)
 6. **Manejo de errores centralizado:** cada query devuelve
    `(data, error: ApiError | None)`. Las vistas pintan banner de
    error si `error is not None`, contenido en otro caso. NO se
@@ -53,6 +57,12 @@ con ADR propio):
    que el endpoint `/model/evaluation` pueda leer `metrics.json`.
    Hoy ese directorio solo se monta en `pipeline` (rw, para que
    `train.py` escriba)
+9. **Barra persistente de estado del sistema en el footer del
+   sidebar** (`components/system_status.py`). 3 chips simples (API,
+   Modelo, Ultimo run) renderizados con `st.markdown` minimo, sin
+   CSS complejo. Comparte la cache de `/health` + `/pipeline/status`
+   con el resto de vistas. Encaja con el encuadre "Centro de Control
+   Hospitalario"
 
 ## Trazabilidad spec → componentes
 
@@ -64,7 +74,8 @@ con ADR propio):
 | RF-4 (Clasificador) | `views/classifier.py` + `ApiClient.list_radiographies(limit,offset)` (poblar dropdown), `image_bytes(key)` (consume RF-8), `classify(key)` | `src/dashboard/views/classifier.py` |
 | RF-5 (Runs) | `views/runs.py` + `ApiClient.list_runs(limit, offset)` | `src/dashboard/views/runs.py` |
 | RF-6 (config) | `config.py` lee `API_BASE_URL` (default `http://api:8000`) | `src/dashboard/config.py` |
-| RF-7 (Evaluacion modelo) | sub-seccion en `views/overview.py` + `ApiClient.model_evaluation()` (consume RF-9) | `src/dashboard/views/overview.py` |
+| RF-7a (resumen evaluacion) | strip de 2 metricas en `views/overview.py` (accuracy + macro-F1 + model_version) usando `ApiClient.model_evaluation()` cacheado `ttl=60s` | `src/dashboard/views/overview.py` |
+| RF-7b (detalle evaluacion) | sub-seccion al final de `views/classifier.py` (recall por clase + matriz confusion heatmap) usando **la misma llamada cacheada** `ApiClient.model_evaluation()` | `src/dashboard/views/classifier.py` |
 | RF-8 (endpoint imagen) | `routers/classify.py` gana `GET /radiographies/image` | `src/api/routers/classify.py`, `src/pipeline/storage/minio_client.py` (reusa `download_bytes`) |
 | RF-9 (endpoint evaluation) | nuevo router `routers/model.py` | `src/api/routers/model.py`, `src/api/main.py` (wire), `docker-compose.yml` (mount nuevo) |
 | RNF-1 (Docker service) | `Dockerfile.dashboard` + servicio `dashboard` en compose | `Dockerfile.dashboard`, `docker-compose.yml` |
@@ -74,24 +85,28 @@ con ADR propio):
 | RNF-5 (build <3min, arranque <15s) | imagen ligera sin TF (ADR-007) | `Dockerfile.dashboard`, `requirements-dashboard.txt` |
 | RNF-6 (navegador moderno) | Streamlit funciona en Chrome/Firefox/Safari recientes | (cumplido por el framework) |
 | RNF-7 (refresh manual + auto opcional) | boton `st.button("Recargar")` en cada vista + `st.fragment(run_every=30)` solo en Overview | views/* |
-| CB-1 (API caida) | `ApiClient` captura `httpx.RequestError` → `ApiError(kind="network")` | `api_client.py` |
+| CB-1 (API caida) | `ApiClient` captura `httpx.RequestError` → `ApiError(kind="network")` + barra persistente del sidebar pasa chips a rojo/ambar | `api_client.py`, `components/system_status.py` |
 | CB-2 (5xx puntual) | `ApiError(kind="server", status=5xx, detail=...)` | `api_client.py` |
 | CB-3 (sin datos) | vistas pintan "Sin datos" si lista vacia, no tabla vacia silente | views/* |
-| CB-4 (modelo no cargado / evaluation no disponible) | Dos señales distintas: `predictor_loaded=false` de `/health` → Overview indicador rojo + Classifier deshabilita boton; `/model/evaluation` 503 → sub-seccion Evaluation muestra "Reporte de evaluacion no disponible". Pueden estar desacopladas | views/overview.py, views/classifier.py, api_client.py |
+| CB-4 (modelo no cargado / evaluation no disponible) | Dos senales independientes: `predictor_loaded=false` de `/health` → Overview chip rojo + Classifier deshabilita boton + barra persistente chip Modelo rojo; `/model/evaluation` 503 → Overview strip + Classifier sub-seccion muestran "Reporte no disponible". Pueden estar desacopladas | views/overview.py, views/classifier.py, components/system_status.py, api_client.py |
 | CB-5 (radiografia 404 en image) | `views/classifier.py` muestra "Imagen no disponible en MinIO" | views/classifier.py |
 | CB-6 (API lenta) | `st.spinner("Cargando…")` envolviendo cada query | views/* |
-| CB-7 (dummy 1x1 rechazada con 422) | `views/classifier.py` muestra mensaje claro + permite reintentar sin recargar | views/classifier.py |
+| CB-7 (dummy 1x1 rechazada con 422) | `views/classifier.py` muestra mensaje claro + permite reintentar sin recargar. Mitigado tambien por T17 (pre-carga radiografia de demo `HOSP-DEMO-001`) | views/classifier.py |
 
 ## Componentes
 
 ### `src/dashboard/app.py` (nuevo) — entrypoint
 - **Responsabilidad:** registrar las 5 paginas con `st.navigation`,
   configurar layout (`st.set_page_config`), inicializar el cliente
-  API en `st.session_state`
+  API en `st.session_state`, renderizar la barra persistente de
+  estado del sistema en el footer del sidebar
 - **Requisitos que cubre:** Layout general
 - **Detalle:**
   - `st.set_page_config(page_title="Hospital laSalle", layout="wide")` (sin `page_icon` — el repo mantiene la convencion ASCII y evita ruido)
   - `st.navigation([overview_page, quality_page, patients_page, classifier_page, runs_page]).run()`
+  - Tras `run()`, en bloque `with st.sidebar:` llamar
+    `render_system_status(client)` para que los 3 chips se vean
+    desde cualquier vista
 
 ### `src/dashboard/config.py` (nuevo)
 - **Responsabilidad:** leer env vars y exponer constantes
@@ -106,7 +121,7 @@ con ADR propio):
   Centraliza manejo de errores, timeouts, y conversion a estructuras
   tipadas (dicts simples por simplicidad — no Pydantic, la API ya
   valida en su lado)
-- **Requisitos que cubre:** RF-1..RF-5, RF-7, CB-1..CB-6
+- **Requisitos que cubre:** RF-1..RF-5, RF-7a, RF-7b, CB-1..CB-6
 - **Interfaz:**
   ```
   @dataclass(frozen=True)
@@ -147,8 +162,9 @@ con ADR propio):
   | 4xx (otros) | `server` con status | malo del cliente |
   | 5xx | `server` con status | malo del servidor |
 - **Caching:** los metodos GET se decoran fuera (en las vistas) con
-  `st.cache_data(ttl=CACHE_TTL_SECONDS)`. POST `classify` no se
-  cachea
+  `st.cache_data(ttl=CACHE_TTL_SECONDS)`. `model_evaluation()` usa
+  `ttl=60s` (las metricas no cambian hasta reentrenar). POST
+  `classify` no se cachea
 - **Sin estado interno:** se construye una vez por sesion de
   Streamlit, almacenada en `st.session_state["api_client"]`
 
@@ -164,36 +180,62 @@ con ADR propio):
   | `not_found` | "Sin datos disponibles." |
   | `validation` (en /classify) | "Imagen demasiado pequena o invalida. Usa una radiografia real de >= 32x32 px." |
   | `validation` (otros) | "Parametros invalidos: {detail}" |
-  | `unavailable` | "El modelo de clasificacion no esta cargado en este despliegue." |
+  | `unavailable` (en /classify) | "El modelo de clasificacion no esta cargado en este despliegue." |
+  | `unavailable` (en /model/evaluation) | "Reporte de evaluacion no disponible (modelo nunca entrenado o `metrics.json` ausente)." |
 
-### `src/dashboard/components/cards.py` (nuevo)
-- **Responsabilidad:** card de metrica (numero grande + label) y card
-  de estado (verde/rojo/amarillo)
-- **Uso:** vista Overview principalmente
+### `src/dashboard/components/system_status.py` (nuevo)
+- **Responsabilidad:** barra persistente en el footer del sidebar
+  con 3 chips de estado del sistema, visible desde TODAS las paginas:
+  - **Chip API** — verde si `/health` responde 200, rojo si falla red
+  - **Chip Modelo** — verde si `predictor_loaded=true`, rojo si false,
+    ambar si `/health` falla red (estado desconocido)
+  - **Chip Ultimo run** — verde si `status="success"`, rojo si
+    `"failed"`, ambar si `"running"` o no hay runs
+- **Requisitos que cubre:** RF-1 (visibilidad permanente del estado),
+  RF-6 (encuadre "Centro de Control")
+- **Implementacion:** funcion `render_system_status(api_client)` que
+  se llama desde `app.py` dentro de `with st.sidebar:` despues del
+  `st.navigation(...).run()`. Usa `st.cache_data(ttl=10s)` para
+  compartir la llamada a `/health` con todas las vistas y NO
+  duplicarla.
+- **Renderizado:** `st.markdown` minimo con `<span>` de color (max 3
+  lineas de CSS inline). NO requiere CSS custom complejo. Estetica
+  alineada con el resto del dashboard (azul `#2563EB` + verde
+  `#15803D` + rojo `#DC2626` + ambar `#B45309`)
+- **NO bloquea**: si `/health` o `/pipeline/status` fallan, pinta
+  chips en estado "desconocido" (ambar) en vez de romper. El error
+  completo se ensena dentro de la vista correspondiente, no en la
+  barra
 
 ### `src/dashboard/views/overview.py` (nuevo)
 - **Responsabilidad:** vista de inicio
-- **Requisitos:** RF-1, RF-7, RNF-7 (auto-refresh)
+- **Requisitos:** RF-1, RF-7a, RNF-7 (auto-refresh)
 - **Estructura visual:**
   ```
   Hospital laSalle — Resumen general
   ─────────────────────────────────────────────────────────
-  [card Patients]  [card Admissions]  [card Radiografias]  [card Modelo]
+  [metric Patients]  [metric Admissions]  [metric Radiografias]  [metric Modelo]
   ─────────────────────────────────────────────────────────
   Ultimo pipeline run:
     status: success | trigger: bootstrap | started: 2026-05-16 ...
     records_processed: 13314 | records_rejected: 1692
+    (si status=failed: error_message expandible)
   ─────────────────────────────────────────────────────────
-  Evaluacion del modelo (test split, modelo v1.0-...):
-    accuracy: 0.872 | macro-F1: 0.846
-    [tabla recall por clase]
-    [matriz de confusion 3x3 como heatmap plotly (px.imshow)]
+  Evaluacion del modelo (resumen — detalle en Clasificador):
+    [metric Accuracy]     [metric Macro-F1]    model_version: v1.0-...
+    (si /model/evaluation devuelve 503: "Reporte no disponible")
   ─────────────────────────────────────────────────────────
   [Boton "Recargar"]    (auto-refresh cada 30s activo)
   ```
-- **Logica:** `@st.fragment(run_every=30)` envolviendo el bloque de
-  cards + ultimo run; el bloque de evaluation se renderiza fuera del
-  fragment (no cambia)
+- **Logica:**
+  - 4 cards + bloque "Ultimo run" dentro de
+    `@st.fragment(run_every=30)` para auto-refresh
+  - Strip de Evaluacion (RF-7a) **fuera** del fragment, cacheado
+    `ttl=60s` (las metricas no cambian hasta reentrenar)
+  - Strip estrictamente minimo: 2 `st.metric` (accuracy + macro-F1)
+    + `model_version`. NO tabla, NO matriz, NO grafico. El detalle
+    completo (recall por clase, matriz de confusion) vive en
+    Clasificador (RF-7b)
 
 ### `src/dashboard/views/quality.py` (nuevo)
 - **Responsabilidad:** vista de calidad de datos
@@ -213,29 +255,39 @@ con ADR propio):
 - **Estructura visual:**
   - Tabla paginada (`limit=20`, controles "<<", ">>" en sidebar)
   - Sidebar / input: `external_id` para ir directo a un paciente
-  - Click en fila de tabla = abre detalle abajo (o pestaña expandible)
+  - Click en fila de tabla = abre detalle abajo (o pestana expandible)
   - Detalle: campos basicos + acordeon "Admissions" + acordeon "Radiografias"
 - **Paginacion server-side:** `ApiClient.list_patients(limit=20, offset=current_page*20)`,
   el `total` viene del response y se usa para mostrar "Pagina X de Y"
 
 ### `src/dashboard/views/classifier.py` (nuevo)
-- **Responsabilidad:** clasificador interactivo
-- **Requisitos:** RF-4, CB-4, CB-5, CB-7
+- **Responsabilidad:** clasificador interactivo + detalle de
+  evaluacion del modelo (RF-7b)
+- **Requisitos:** RF-4, RF-7b, CB-4, CB-5, CB-7
 - **Estructura visual:**
   ```
   Clasificador de radiografias
   ─────────────────────────────────────────────────────────
-  Selecciona una radiografia:
-    [dropdown con keys disponibles]    (poblado desde la lista de patients)
+  1) Selecciona una radiografia:
+     [dropdown con keys disponibles, poblado desde GET /radiographies]
   ─────────────────────────────────────────────────────────
-  [imagen mostrada en grande]    ← GET /radiographies/image?key=...
+  2) Vista previa:
+     [imagen mostrada en grande]   ← GET /radiographies/image?key=...
+     [Boton "Clasificar"]
 
-  [Boton "Clasificar"]
+  3) Resultado (si hay):
+     Clase predicha: COVID-19    (con badge de color por clase)
+     Probabilidades: [grafico horizontal bars]
+     Model version: v1.0-...    Predicted at: ...
   ─────────────────────────────────────────────────────────
-  Resultado (si hay):
-    Clase predicha: COVID-19    (con badge de color por clase)
-    Probabilidades: [grafico horizontal bars]
-    Model version: v1.0-...    Predicted at: ...
+  4) Evaluacion del modelo (detalle, cargada al entrar en la vista):
+     accuracy: 0.872   |   macro-F1: 0.846   (opcional, contextual)
+     Recall por clase:
+       Normal      0.93
+       Pneumonia   0.93
+       COVID-19    0.70   ← destacado (recall clinicamente critico)
+     [matriz de confusion 3x3 como heatmap (plotly.express.imshow)]
+     Model version: v1.0-...
   ```
 - **Poblado del dropdown:** primera carga llama
   `ApiClient.list_radiographies(limit=500, offset=0)` contra el
@@ -244,9 +296,9 @@ con ADR propio):
   `classification`). Es mas ligero y mas correcto que iterar
   `list_patients` extrayendo radiografias embebidas: cubre cualquier
   radiografia del bucket sin importar a que paciente pertenece, sin
-  depender de la paginacion de pacientes. (Si el dataset crece por
-  encima de 500 imagenes, anadir filtro de busqueda por substring
-  o paginacion en el propio dropdown)
+  depender de la paginacion de pacientes. Si T17 esta aplicada, la
+  radiografia `HOSP-DEMO-001/...` se ordena como primera opcion del
+  dropdown
 - **Si `predictor_loaded=false`** (verificado al cargar la vista):
   - Boton "Clasificar" deshabilitado
   - Banner `unavailable` arriba
@@ -255,6 +307,13 @@ con ADR propio):
   - Banner `validation` debajo del boton
   - Boton se queda habilitado para que el usuario cambie de imagen
   - El estado del dropdown NO se resetea
+- **Sub-seccion 4 (RF-7b):** usa `ApiClient.model_evaluation()`
+  cacheado `ttl=60s` (misma llamada que el strip de Overview, NO se
+  duplica):
+  - 200 → renderiza recall por clase + heatmap
+  - 503 → mensaje "Reporte de evaluacion no disponible (modelo nunca
+    entrenado o `metrics.json` ausente)" sin bloquear el resto de la
+    vista
 
 ### `src/dashboard/views/runs.py` (nuevo)
 - **Responsabilidad:** vista de pipeline runs
@@ -313,20 +372,7 @@ con ADR propio):
 - **Errores:**
   - 503 si **el fichero `metrics.json` no existe**. Ojo: esto NO es
     lo mismo que `predictor_loaded=false`. Son senales distintas
-    aunque relacionadas:
-    - `predictor_loaded=false` (de `/health`) → la API no puede
-      ejecutar inferencia (falta el `.keras` o falla al cargar)
-    - `/model/evaluation` 503 → no hay reporte de evaluacion para
-      mostrar (falta `metrics.json`)
-    - **Casos posibles:** modelo cargado pero alguien borro
-      `metrics.json` (raro pero posible: `/health` dice cargado,
-      `/model/evaluation` da 503). O modelo no cargado pero hay
-      `metrics.json` de un entrenamiento previo (las metricas son
-      validas, simplemente no se puede inferir).
-    - El dashboard debe leer ambas senales por separado: el
-      indicador rojo/verde del modelo en Overview viene de
-      `predictor_loaded`; el bloque "Evaluacion del modelo" se
-      muestra/oculta segun el response de `/model/evaluation`
+    aunque relacionadas (ver tabla CB-4 del spec).
   - 500 si el JSON esta corrupto (no deberia pasar en operacion normal)
 - **Wire en `main.py`:** `app.include_router(model_router.router)`
 
@@ -339,6 +385,7 @@ con ADR propio):
   COPY requirements-dashboard.txt .
   RUN pip install --no-cache-dir -r requirements-dashboard.txt
   COPY src/dashboard/ ./src/dashboard/
+  COPY .streamlit/ ./.streamlit/
   ENV PYTHONPATH=/app
   EXPOSE 8501
   HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=5 \
@@ -351,13 +398,38 @@ con ADR propio):
 - `httpx==0.27.0` (mismo que la API)
 - `plotly==5.22.0` (graficos interactivos, ya en temario del Master)
 - `pandas==2.2.2` (tablas + alimentacion de plotly)
-- `pillow==10.3.0` (decodificar imagen para `st.image`)
+
+**Sin Pillow:** `st.image` acepta `bytes` directamente para PNG; no
+necesitamos `Pillow` porque NO hacemos resize ni transform en el
+dashboard. Quita ~10 MB de imagen Docker y una dependencia.
 
 **Por que Plotly (no Altair):** el temario del Master cubre pandas,
 matplotlib y plotly. Altair no se ha justificado en clase. Plotly da
 interactividad (zoom, hover, leyenda) que en Streamlit se integra
 con `st.plotly_chart`. Matplotlib se reserva para reportes offline
 del modelo (ya en uso por `src/ml/evaluate.py`).
+
+### `.streamlit/config.toml` (nuevo)
+Tema visual sobrio, fondo claro, azul como acento, alineado con la
+referencia "Centro de Control Hospitalario":
+
+```toml
+[theme]
+base = "light"
+primaryColor = "#2563EB"           # azul accent
+backgroundColor = "#FFFFFF"         # fondo principal blanco
+secondaryBackgroundColor = "#F5F7FA"  # cards / sidebar
+textColor = "#0F172A"               # casi negro, neutro
+font = "sans serif"
+
+[server]
+headless = true
+```
+
+No se necesita CSS custom complejo. Cualquier ajuste fino (e.g.
+ocultar el header de "Made with Streamlit" o el "Deploy" button) se
+hace via opciones de tema o `st.markdown` minimo, no via HTML/CSS
+injection.
 
 ### `docker-compose.yml` — modificaciones
 - **Servicio nuevo `dashboard`:**
@@ -433,37 +505,43 @@ Todos los endpoints actuales (`/patients`, `/admissions`,
 | Termino | Definicion | NO significa |
 |---------|-----------|--------------|
 | Vista | Una de las 5 paginas del dashboard (Overview, Calidad, Pacientes, Clasificador, Runs) | Endpoint REST |
-| Card | Widget de metrica grande (numero + label) en Overview | Tarjeta de paciente |
+| Strip de evaluacion (RF-7a) | 2 metricas pequenas (accuracy + macro-F1) en Overview | Sub-seccion detallada |
+| Sub-seccion de evaluacion (RF-7b) | Bloque con recall por clase + matriz de confusion en Clasificador | Strip minimo |
 | Auto-refresh | Re-ejecucion automatica de un fragment cada N segundos | Recarga completa del navegador |
 | Banner de error | Componente visual rojo/amarillo arriba de la vista cuando hay `ApiError` | Modal o dialog |
+| Chip de estado | Item de la barra persistente del sidebar (API/Modelo/Ultimo run) | Card de Overview |
 
 ## Trade-offs
 
 | Decision | Alternativa descartada | Razon |
 |----------|----------------------|-------|
 | **Streamlit** | Plotly Dash, Reflex, React/Next.js, HTML+JS | ADR-007: Python-only, comunidad amplia en demos academicas, sintaxis declarativa breve, levanta en <15s |
-| **Imagen Docker independiente** (`hospital-dashboard`) | Reutilizar `hospital-pipeline:latest` (con TF) | ADR-007: imagen base 250 MB vs 2 GB. Arranque <15s vs >20s (TF tarda en importar). Sin acoplar el dashboard al ciclo de rebuild del pipeline cada vez que cambia ML |
+| **Imagen Docker independiente** (`hospital-dashboard`) | Reutilizar `hospital-pipeline:latest` (con TF) | ADR-007: imagen base 240 MB vs 2 GB. Arranque <15s vs >20s (TF tarda en importar). Sin acoplar el dashboard al ciclo de rebuild del pipeline cada vez que cambia ML |
 | **Cliente HTTP `httpx` sync** | `requests` o `httpx` async | httpx ya esta en el ecosistema (la API lo usa), sync es lo natural para Streamlit (que es sync), evita complicarse con `asyncio` en cada vista |
-| **`st.cache_data(ttl=10s)`** en queries GET | Sin cache | Streamlit re-ejecuta el script en cada interaccion del usuario (click, scroll, cambio de pagina). Sin cache se bombardearia la API con la misma query 5 veces en 2 segundos |
-| **TTL corto (10s) vs largo (60s+)** | TTL >60s | Demo en vivo: el evaluador no debe ver datos stale al cambiar de vista. 10s mantiene la vista "viva" sin sobrecargar |
-| **Cliente API encapsulado en clase** | Funciones sueltas | Tests unitarios mockean `httpx` una sola vez; las vistas se testean con `FakeApiClient` |
+| **`st.cache_data(ttl=10s)`** en queries GET (60s para `/model/evaluation`) | Sin cache | Streamlit re-ejecuta el script en cada interaccion del usuario. Sin cache se bombardearia la API. TTL largo en evaluation porque las metricas no cambian hasta reentrenar |
+| **TTL corto (10s) vs largo (60s+)** en queries calientes | TTL >60s | Demo en vivo: el evaluador no debe ver datos stale al cambiar de vista. 10s mantiene la vista "viva" sin sobrecargar |
+| **RF-7 dividida en RF-7a (Overview) + RF-7b (Clasificador)** | RF-7 unica en Overview o unica en Clasificador | Overview gana "vista de salud rapida" sin sobrecargarse. Clasificador gana detalle junto a la demo de inferencia. Misma llamada cacheada — no se duplica trabajo |
+| **Cliente API encapsulado en clase** | Funciones sueltas | Tests unitarios mockean `httpx` via `httpx.MockTransport` una sola vez |
 | **Endpoint `/radiographies/image` con query param** | `{key:path}` | Coherente con `/classify` y `/classification` (key contiene `/`). Documentado en lessons.md el 16-may |
 | **Endpoint `/model/evaluation` que lee `metrics.json`** | Calcular metricas on-the-fly en cada peticion | Las metricas son del modelo entrenado, no cambian hasta que se reentrena. Calcular cada vez requiere todo el test split en memoria — caro y absurdo |
 | **`metrics.json` montado `:ro` en API** | Endpoint que delega a `pipeline` por red interna | Mas simple: API lee el fichero local. El mount es trivial; la "delegacion" inventaria un patron innecesario |
 | **5 vistas separadas con `st.navigation`** | Una sola vista con tabs (`st.tabs`) | navigation es nativo Streamlit 1.30+, sidebar moderno, URLs distintas (futura mejora: deeplink). tabs todo en una pagina seria un solo script gigante |
 | **Dropdown para elegir radiografia (no upload)** | Drag&drop / upload | Fuera del alcance segun spec (requiere endpoint nuevo en API que no haremos) |
-| **Idioma castellano** | Bilingüe | Spec lo fija. Demo en castellano |
+| **Idioma castellano** | Bilingue | Spec lo fija. Demo en castellano |
 | **Manual + auto-refresh 30s solo en Overview** | Auto en todas las vistas | Auto en Pacientes/Classifier seria mareante (cambia la tabla mientras navegas). En Overview tiene sentido para una pantalla de "control" |
+| **Barra persistente de estado del sistema en sidebar** | Solo mostrar estado dentro de Overview | Encuadre "Centro de Control Hospitalario": el evaluador ve la salud del sistema desde cualquier pagina. Coste minimo: 1 componente + 1 llamada cacheada compartida |
+| **Sin Pillow** en `requirements-dashboard.txt` | Anadir `pillow` por defecto | `st.image` acepta bytes PNG directamente; no hacemos resize ni transform. Quita ~10 MB de imagen Docker |
+| **Sin `components/cards.py`** | Wrapper de `st.metric` con parametro `color` | `st.metric` ya hace exactamente eso. Wrapper no aporta nada |
 
 ## Plan de tests (resumen — detalle en /tareas)
 
 | Nivel | Archivo | Que valida |
 |-------|---------|------------|
-| Unit | `tests/dashboard/test_api_client.py` (nuevo) | Mock de httpx: cada metodo devuelve `(data, None)` en 200, `(None, ApiError(kind=...))` en cada cogido de status. Sin red |
-| Unit | `tests/dashboard/test_error_banner.py` (nuevo) | Snapshot de los textos por kind |
+| Unit | `tests/dashboard/test_api_client.py` (nuevo) | Mock de httpx (via `httpx.MockTransport`): cada metodo devuelve `(data, None)` en 200, `(None, ApiError(kind=...))` en cada codigo de status. Sin red |
+| Unit | `tests/dashboard/test_error_banner.py` (nuevo) | Snapshot de los textos por `kind` |
 | Unit | `tests/api/test_image_endpoint.py` (nuevo) | 200 con bytes, 404 sin key, 422 sin parametro, content-type image/png |
 | Unit | `tests/api/test_model_evaluation_endpoint.py` (nuevo) | 200 con JSON, 503 si fichero no existe, 500 si JSON corrupto |
-| Integ | (no aplica unit) | Las vistas Streamlit son dificiles de testear unitariamente; se prueban manualmente en T15-equivalente del implementador |
+| Integ | (no aplica unit) | Las vistas Streamlit son dificiles de testear unitariamente; se prueban manualmente en T15 |
 | E2E | `tests/e2e/test_dashboard_smoke.py` (nuevo, opcional) | Con `httpx`, comprobar que el endpoint `/_stcore/health` responde 200 cuando `docker compose up` esta levantado |
 
 ## Inicializacion y arranque
@@ -471,7 +549,9 @@ Todos los endpoints actuales (`/patients`, `/admissions`,
 1. `docker compose up` levanta servicios en este orden:
    - `mongodb`, `minio` (healthchecks)
    - `pipeline` (bootstrap ETL one-shot, escribe en `data/models/` si
-     se reentrena, escribe en `docs/model-evaluation/` si se reentrena)
+     se reentrena, escribe en `docs/model-evaluation/` si se reentrena.
+     Si T17 esta aplicada: sube tambien la radiografia de demo y
+     registra `HOSP-DEMO-001` en Mongo)
    - `api` (espera a que `pipeline` complete; carga el predictor;
      monta `docs/model-evaluation:ro`)
    - `watcher` (long-running)
@@ -479,6 +559,9 @@ Todos los endpoints actuales (`/patients`, `/admissions`,
 2. El dashboard arranca:
    - lee `API_BASE_URL` del env (default `http://api:8000`)
    - inicializa `ApiClient` en `st.session_state`
+   - registra las 5 paginas con `st.navigation`
+   - renderiza la barra persistente de estado del sistema en el
+     footer del sidebar
    - servidor disponible en `http://localhost:${DASHBOARD_PORT:-8501}`
 3. El healthcheck del compose mira `/_stcore/health` cada 10s
 
@@ -486,11 +569,12 @@ Todos los endpoints actuales (`/patients`, `/admissions`,
 
 1. **`metrics.json` puede no existir** en deploys nuevos (modelo nunca
    entrenado). Mitigacion: endpoint `/model/evaluation` devuelve 503;
-   dashboard pinta "Modelo no cargado" en la sub-seccion (CB-4)
+   dashboard pinta "Modelo no cargado" en Overview strip y en
+   Clasificador sub-seccion (CB-4)
 2. **Streamlit re-ejecuta el script en cada interaccion** — si una
    vista tarda en cargar, el usuario percibe lentitud. Mitigacion:
-   `st.cache_data(ttl=10s)` en todos los GET; `st.spinner` para los
-   POST (que no se cachean)
+   `st.cache_data(ttl=10s)` en todos los GET (`ttl=60s` en
+   `model_evaluation`); `st.spinner` para los POST (que no se cachean)
 3. **Imagen del PNG puede ser grande** si el dataset crece — hoy las
    reales son ~30 KB, las dummy son ~70 bytes. Sin riesgo de OOM
 4. **`st.fragment(run_every=...)` requiere Streamlit >= 1.33.**
@@ -499,18 +583,19 @@ Todos los endpoints actuales (`/patients`, `/admissions`,
 5. **Manejo de threading en Streamlit:** httpx sync llamado desde el
    thread principal de Streamlit es seguro. No hay race conditions
 6. **El dropdown del clasificador llama a `list_radiographies(limit=500)`**
-   en cada render — son ~500 filas planas (un dict pequeño por
+   en cada render — son ~500 filas planas (un dict pequeno por
    radiografia, no documentos enteros de pacientes). El response es
    ligero (~50-100 KB para las 17 + futuras). Mitigacion: cache
    `ttl=60s` en esa query concreta. Si crece >500 imagenes anadir
    filtro de busqueda + paginacion en el dropdown
-7. **CB-7 (dummy 1x1):** las 17 dummy son las que aparecen primero
-   en el dropdown (HOSP-000001..HOSP-000009). Un evaluador podria
-   elegir una y ver el error. Mitigacion: orden alfabetico inverso
-   o filtro por tamano si el endpoint lo permite (no lo hace);
-   mejor: anadir un texto "Tip: las 17 radiografias dummy son 1x1
-   y se rechazan. Para una demo real, sube una imagen al bucket
-   antes" en la vista del clasificador
+7. **CB-7 (dummy 1x1) y demo del clasificador:** las 17 dummy son las
+   que aparecen primero en el dropdown (HOSP-000001..HOSP-000009). Un
+   evaluador podria elegir una y ver el error 422. **Mitigacion
+   primaria (aplicada): pre-cargar 1 radiografia de demo al bootstrap
+   bajo `HOSP-DEMO-001` (tarea T17)** — el dropdown la ordena al
+   principio y la demo funciona out-of-the-box. Mitigacion secundaria
+   (si T17 falla): el manejo de 422 mantiene el boton habilitado para
+   reintentar con otra imagen
 
 ## Decisiones registradas como ADR
 

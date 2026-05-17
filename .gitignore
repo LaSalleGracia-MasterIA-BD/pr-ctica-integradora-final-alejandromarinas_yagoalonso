@@ -46,6 +46,12 @@ Thumbs.db
 .env
 .env.local
 
+# Referencias locales (prompts auxiliares, drafts, notas de trabajo).
+# Nunca llegan al repo. Ejemplo: guia de implementacion local generada
+# durante la fase de diseño, que se guarda como contexto local para
+# futuras iteraciones.
+.local-refs/
+
 # Model weights (too large for git)
 *.h5
 *.pt
