@@ -63,6 +63,8 @@ if err is not None:
 items = data.get("items", []) if data else []
 total = data.get("total", 0) if data else 0
 
+selected_external_id: str | None = None
+
 if not items:
     st.info("Sin pacientes en esta pagina.")
 else:
@@ -78,26 +80,41 @@ else:
             "radiografias": len(p.get("radiographies") or []),
         })
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    # Tabla con seleccion de fila (Streamlit 1.30+). Al pulsar una fila,
+    # `event.selection.rows` contiene su indice; usamos eso para abrir
+    # el detalle automaticamente (RF-3, sin input manual).
+    event = st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="patients_table",
+    )
+    selected_rows = event.selection.rows if event and event.selection else []
+    if selected_rows:
+        idx = selected_rows[0]
+        selected_external_id = rows[idx]["external_id"]
+
     last_page = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
-    st.caption(f"Total: {total:,} pacientes — pagina {int(page)} de {last_page}")
+    st.caption(
+        f"Total: {total:,} pacientes — pagina {int(page)} de {last_page}. "
+        "Haz click en una fila para ver el detalle del paciente."
+    )
 
 
 # --- Detalle ---
 st.markdown("---")
-st.subheader("Detalle de un paciente")
-default_id = items[0].get("external_id", "") if items else ""
-external_id_input = st.text_input(
-    "external_id",
-    value=default_id,
-    help="P. ej. HOSP-000001",
-)
+st.subheader("Detalle del paciente seleccionado")
 
-if external_id_input:
-    detail, det_err = _cached_patient(api.base_url, external_id_input.strip())
+if not selected_external_id:
+    st.info("Selecciona un paciente en la tabla para ver su detalle.")
+else:
+    detail, det_err = _cached_patient(api.base_url, selected_external_id)
     if det_err is not None:
         if det_err.kind == "not_found":
-            st.info(f"No existe el paciente `{external_id_input}`.")
+            st.info(f"No existe el paciente `{selected_external_id}`.")
         else:
             show_api_error(det_err, context="")
     elif detail:

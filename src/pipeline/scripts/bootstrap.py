@@ -79,6 +79,14 @@ def main() -> None:
     # Origen/licencia: imagen sintetica generada con numpy. Ver
     # data/raw/images-demo/README.md
     _seed_demo_radiograph()
+    # Si el dataset real del COVID-19 Radiography Database esta descargado
+    # localmente, registrar 6 imagenes reales (2 por clase) como
+    # HOSP-PRES-001..006 para que la demo del Clasificador tenga
+    # radiografias reales clasificables. Si NO esta descargado: skip
+    # silencioso. Las imagenes NO se commitean — solo se copian en
+    # runtime si el dataset existe en el host. Ver
+    # docs/runbooks/use-real-radiograph-for-demo.md
+    _seed_presentation_radiographs()
 
     mongo = get_mongo_writer_from_env()
     try:
@@ -312,6 +320,79 @@ def _seed_demo_radiograph() -> None:
         logger.info(
             "Demo patient %s registered with radiography %s",
             DEMO_PATIENT_ID, DEMO_RADIOGRAPHY_KEY,
+        )
+    finally:
+        writer.close()
+
+
+# ----------------------------------------------------------------------
+# Feature 4 — radiografias reales de demo (HOSP-PRES-*)
+# ----------------------------------------------------------------------
+
+KAGGLE_DATASET_ROOT = Path(
+    "/app/data/raw/covid_radiography/COVID-19_Radiography_Dataset"
+)
+
+# 6 imagenes, 2 por clase. La key codifica el paciente; la "true class"
+# vive en el comentario y en el nombre del fichero. NO usamos
+# HOSP-DEMO-* (reservado para sinteticas).
+PRESENTATION_IMAGES: list[tuple[str, str, str]] = [
+    # (patient_external_id, raw_filename, true_class — solo informativo)
+    ("HOSP-PRES-001", "COVID/images/COVID-1.png",            "COVID-19"),
+    ("HOSP-PRES-002", "COVID/images/COVID-2.png",            "COVID-19"),
+    ("HOSP-PRES-003", "Normal/images/Normal-1.png",          "Normal"),
+    ("HOSP-PRES-004", "Normal/images/Normal-2.png",          "Normal"),
+    ("HOSP-PRES-005", "Viral Pneumonia/images/Viral Pneumonia-1.png", "Pneumonia"),
+    ("HOSP-PRES-006", "Viral Pneumonia/images/Viral Pneumonia-2.png", "Pneumonia"),
+]
+
+
+def _seed_presentation_radiographs() -> None:
+    """Idempotent: solo se ejecuta si el dataset esta descargado."""
+    if not KAGGLE_DATASET_ROOT.exists():
+        logger.info(
+            "Presentation radiographs: dataset NO descargado en %s. "
+            "Skip. Para demo con imagenes reales, ver "
+            "docs/runbooks/use-real-radiograph-for-demo.md",
+            KAGGLE_DATASET_ROOT,
+        )
+        return
+
+    minio = get_minio_client_from_env()
+    minio.ensure_bucket(IMAGES_BUCKET)
+    writer = get_mongo_writer_from_env()
+    try:
+        uploaded = 0
+        skipped = 0
+        for patient_id, raw_path, true_class in PRESENTATION_IMAGES:
+            src = KAGGLE_DATASET_ROOT / raw_path
+            if not src.exists():
+                logger.warning(
+                    "Presentation image missing on disk: %s. Skip", src,
+                )
+                skipped += 1
+                continue
+            object_key = f"{patient_id}/{src.name}"
+            minio.upload_file(IMAGES_BUCKET, object_key, src)
+            writer.bulk_upsert_patients([{
+                "external_id": patient_id,
+                "name": f"Demo Presentacion ({true_class})",
+                "birth_date": "1980-01-01",
+                "age": 45,
+                "gender": "M",
+                "blood_type": "A+",
+            }])
+            writer.add_radiography_to_patient(patient_id, {
+                "minio_object_key": object_key,
+                "original_filename": src.name,
+                "file_size_bytes": src.stat().st_size,
+                "ingested_at": datetime.now(timezone.utc).isoformat(),
+                "classification": None,
+            })
+            uploaded += 1
+        logger.info(
+            "Presentation radiographs: %d registradas (HOSP-PRES-*), %d skipped",
+            uploaded, skipped,
         )
     finally:
         writer.close()

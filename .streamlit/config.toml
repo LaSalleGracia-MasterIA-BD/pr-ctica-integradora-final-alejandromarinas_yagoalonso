@@ -18,3 +18,10 @@ fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false
+
+[client]
+# Oculta el menu "Deploy" y otros controles de despliegue de Streamlit
+# Cloud — irrelevantes para una demo academica. Soportado desde
+# Streamlit 1.18+. Mantiene visible el menu de ayuda.
+toolbarMode = "minimal"
+showSidebarNavigation = true

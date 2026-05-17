@@ -29,6 +29,14 @@ api: ApiClient = st.session_state["api_client"]
 
 
 DEMO_KEY_PREFIX = "HOSP-DEMO-"
+PRES_KEY_PREFIX = "HOSP-PRES-"
+
+# Umbral por bytes para considerar una radiografia "clasificable" por
+# el modelo (CB-7): las dummy 1x1 pesan ~67 bytes y la API las rechaza
+# con 422. Una sintetica real (HOSP-DEMO) pesa ~40 KB y una del dataset
+# Kaggle ~20-30 KB. Con 1024 bytes nos quedamos solo con las utiles
+# y dejamos margen para PNGs pequenos validos en el futuro.
+MIN_CLASSIFIABLE_BYTES = 1024
 
 # Texto que se muestra DEBAJO de la imagen cuando la radiografia
 # seleccionada es una sintetica generada por el bootstrap (no real).
@@ -42,6 +50,27 @@ SYNTHETIC_DEMO_NOTE = (
 def _is_synthetic_demo(key: str) -> bool:
     """True si la key pertenece al subset de imagenes sinteticas de demo."""
     return key.startswith(DEMO_KEY_PREFIX)
+
+
+def _is_presentation(key: str) -> bool:
+    """True si la key pertenece a HOSP-PRES-* (radiografias reales para demo)."""
+    return key.startswith(PRES_KEY_PREFIX)
+
+
+def _is_classifiable(item: dict) -> bool:
+    """Heuristica por bytes: dummy 1x1 ~67 B, validas >= ~20 KB."""
+    size = item.get("file_size_bytes") or 0
+    return size >= MIN_CLASSIFIABLE_BYTES
+
+
+def _sort_key(item: dict) -> tuple[int, str]:
+    """Orden del dropdown: HOSP-PRES-* primero, luego HOSP-DEMO-*, luego resto."""
+    key = item.get("minio_object_key", "")
+    if _is_presentation(key):
+        return (0, key)
+    if _is_synthetic_demo(key):
+        return (1, key)
+    return (2, key)
 
 
 @st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
@@ -66,12 +95,19 @@ def _cached_model_evaluation(_base_url: str):
     return api.model_evaluation()
 
 
-def _order_keys_for_dropdown(items: list[dict]) -> list[str]:
-    """Demo keys (HOSP-DEMO-*) al principio, resto en orden alfabetico."""
-    keys = [it.get("minio_object_key") for it in items if it.get("minio_object_key")]
-    demo = sorted(k for k in keys if k.startswith(DEMO_KEY_PREFIX))
-    other = sorted(k for k in keys if not k.startswith(DEMO_KEY_PREFIX))
-    return demo + other
+def _order_keys_for_dropdown(items: list[dict], include_unclassifiable: bool) -> list[str]:
+    """Lista de keys para el dropdown, filtrada y ordenada.
+
+    Por defecto excluye las que el modelo rechaza (file_size_bytes < umbral).
+    Orden: HOSP-PRES-* (reales) → HOSP-DEMO-* (sinteticas) → resto.
+    """
+    visible = [
+        it for it in items
+        if it.get("minio_object_key")
+        and (include_unclassifiable or _is_classifiable(it))
+    ]
+    visible.sort(key=_sort_key)
+    return [it["minio_object_key"] for it in visible]
 
 
 # ---------------------------------------------------------------------------
@@ -86,27 +122,54 @@ st.caption(
 )
 
 
-# 1. Cargar dropdown
+# 1. Cargar lista de radiografias
 radios_data, radios_err = _cached_radiographies(api.base_url)
 if radios_err is not None:
     show_api_error(radios_err, context="")
     st.stop()
 
 items = (radios_data or {}).get("items", [])
-keys = _order_keys_for_dropdown(items)
-if not keys:
+if not items:
     st.info("Sin radiografias en el sistema todavia.")
     st.stop()
 
 
-# 2. Tip sobre las dummy 1x1
-st.markdown(
-    "**Tip:** las 17 radiografias `HOSP-000xxx` del bootstrap son "
-    "imagenes dummy 1x1 que el modelo rechaza (CB-7). Para la demo, "
-    "elige una `HOSP-DEMO-*` (imagen **sintetica** de demo — no es una "
-    "radiografia real) o sube una radiografia real al bucket siguiendo "
-    "`docs/runbooks/use-real-radiograph-for-demo.md`."
+# 2. Toggle para mostrar las dummy no clasificables (oculto por defecto)
+show_unclassifiable = st.checkbox(
+    "Mostrar imagenes no clasificables",
+    value=False,
+    help=(
+        "Si lo activas, el dropdown incluye tambien las 17 dummy 1x1 "
+        "del bootstrap. El modelo las rechaza con 422 (caso borde CB-7); "
+        "util si quieres VER el mensaje de rechazo."
+    ),
 )
+
+keys = _order_keys_for_dropdown(items, include_unclassifiable=show_unclassifiable)
+if not keys:
+    st.warning(
+        "Sin radiografias clasificables. Activa 'Mostrar imagenes no "
+        "clasificables' para ver las dummy o anade radiografias reales "
+        "siguiendo `docs/runbooks/use-real-radiograph-for-demo.md`."
+    )
+    st.stop()
+
+
+# 3. Tip contextual segun lo que hay disponible
+n_pres = sum(1 for k in keys if _is_presentation(k))
+n_demo = sum(1 for k in keys if _is_synthetic_demo(k))
+if n_pres > 0:
+    st.caption(
+        f"**Tip:** dropdown ordenado con {n_pres} radiografias reales "
+        f"(`HOSP-PRES-*`) primero, luego la sintetica `HOSP-DEMO-001`. "
+        f"Usa las HOSP-PRES-* para la demo clinica."
+    )
+elif n_demo > 0:
+    st.caption(
+        "**Tip:** solo hay imagenes sinteticas de demo (`HOSP-DEMO-*`). "
+        "Para subir radiografias reales (HOSP-PRES-*) sigue "
+        "`docs/runbooks/use-real-radiograph-for-demo.md`."
+    )
 
 selected_key = st.selectbox("Radiografia", options=keys, index=0)
 
