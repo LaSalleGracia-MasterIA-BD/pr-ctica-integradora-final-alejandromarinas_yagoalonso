@@ -10,7 +10,7 @@
 | T1 | API: nuevo endpoint `GET /api/v1/radiographies/image?key=...` en `src/api/routers/classify.py` (mismo router, familia radiografies). Usa `MinIOClient.download_bytes` que ya existe. Devuelve `Response(media_type="image/png")`. Errores: 422 key vacia (Query validation), 404 NoSuchKey, 502 otro S3Error. NO toca Mongo ni clasifica. Tests: `tests/api/test_image_endpoint.py` con 200 (bytes correctos + Content-Type), 404 (key inexistente), 422 (sin key). MinIO mockeado o usando bucket de test | RF-8, CB-5 | — | S | done |
 | T2 | API: nuevo router `src/api/routers/model.py` con `GET /api/v1/model/evaluation`. Lee `MODEL_EVALUATION_PATH` (default `/app/docs/model-evaluation/metrics.json`), devuelve el JSON. 503 si fichero no existe, 500 si JSON corrupto. Wire en `src/api/main.py` (`app.include_router(model_router.router)`). Modificar `docker-compose.yml`: anadir mount `./docs/model-evaluation:/app/docs/model-evaluation:ro` al servicio `api`. Tests `tests/api/test_model_evaluation_endpoint.py`: 200 con JSON valido, 503 si fichero ausente (monkeypatch del path), 500 si JSON corrupto | RF-9, CB-4 | — | S | done |
 | T3 | Verificacion del endpoint plano `GET /api/v1/radiographies?limit=...&offset=...` ya existente. Comprobar que devuelve los campos que el dropdown del clasificador necesita: `minio_object_key`, `patient_external_id`, `original_filename`, `classification`. Si falta alguno, completar `MongoReader.list_radiographies` para que los incluya. Smoke con curl contra el stack real | RF-4 | — | S | done |
-| T4 | `requirements-dashboard.txt` con `streamlit==1.36.0`, `httpx==0.27.0`, `plotly==5.22.0`, `pandas==2.2.2`. **SIN pillow** (`st.image` acepta bytes PNG directamente). Smoke local: `python -c "import streamlit, httpx, plotly, pandas; print(...)"` | RNF-1 | — | S | done |
+| T4 | `requirements-dashboard.txt` con `streamlit==1.39.0` (upgrade desde 1.36 para tener `st.fragment` estable), `httpx==0.27.0`, `plotly==5.22.0`, `pandas==2.2.2`. **SIN pillow** (`st.image` acepta bytes PNG directamente). Smoke local: `python -c "import streamlit, httpx, plotly, pandas; print(...)"` | RNF-1 | — | S | done |
 | T5 | `Dockerfile.dashboard` base `python:3.11-slim`, copia `requirements-dashboard.txt` + `src/dashboard/` + `.streamlit/`, expone 8501, healthcheck contra `/_stcore/health`, CMD `streamlit run src/dashboard/app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true`. Crear `.streamlit/config.toml` con tema (primaryColor `#2563EB`, bg `#FFFFFF`, secondaryBg `#F5F7FA`, text `#0F172A`, font sans-serif). Anadir servicio `dashboard` a `docker-compose.yml` con depends_on `api: service_healthy`, env `API_BASE_URL=http://api:8000`, puerto 8501. Smoke: `docker compose build dashboard` < 3 min, `docker compose up -d dashboard` levanta y `curl localhost:8501/_stcore/health` responde 200 < 15s (RNF-5) | RNF-1, RNF-5, RNF-6 | T4 | M | done |
 | T6 | `src/dashboard/__init__.py` + `src/dashboard/config.py`. Constantes desde env: `API_BASE_URL` (default `http://api:8000`), `API_TIMEOUT_SECONDS` (default 10), `CACHE_TTL_SECONDS` (default 10). Test trivial de defaults | RF-6 | — | S | done |
 | T7 | `src/dashboard/api_client.py`: clase `ApiClient(base_url, timeout)` + dataclass `ApiError(kind, status, detail, raw)` + helper `_handle_response`. Metodos GET: health, count_{patients,admissions,radiographies}, list_patients, get_patient, list_radiographies, latest_pipeline_run, list_runs, latest_quality_summary, quality_summary_history(dimension,limit,offset), get_classification, model_evaluation, image_bytes. Metodo POST: classify. **Mapping HTTP→kind:** network (httpx.RequestError), not_found (404), validation (422), unavailable (503), server (5xx u otro 4xx). Tests `tests/dashboard/test_api_client.py` con `httpx.MockTransport`: caso happy + cada kind de error | RF-1..RF-5, RF-7a, RF-7b, CB-1, CB-2, CB-4 | T6 | M | done |
@@ -19,10 +19,10 @@
 | T10 | `src/dashboard/views/overview.py`: 4 `st.metric` (patients, admissions, radiografias, modelo cargado) + bloque "Ultimo pipeline run" (status, trigger_type, started_at, processed, rejected, error_message expandible si failed). El bloque "cards + ultimo run" va dentro de `@st.fragment(run_every=30)` para auto-refresh. **Strip minimo de Evaluacion abajo (RF-7a):** 2 `st.metric` (accuracy + macro-F1) + `model_version`, **fuera del fragment**, cacheado `ttl=60s` (las metricas no cambian hasta reentrenar). Si `/model/evaluation` devuelve 503, muestra "Reporte no disponible" en su lugar. Boton "Recargar" manual. **NO incluye recall por clase ni matriz de confusion** (eso vive en T13) | RF-1, RF-7a, CB-3, CB-4, RNF-7 | T9 | M | done |
 | T11 | `src/dashboard/views/quality.py`: tabla con dimension/total/valid/rejected/rejection_rate desde `latest_quality_summary` + grafico `plotly.express.line` del historico de rejection_rate por dimension (consume `quality_summary_history` para cada dimension). Boton "Recargar" | RF-2 | T9 | M | done |
 | T12 | `src/dashboard/views/patients.py`: input "Pagina" + tabla paginada (limit=20) usando `list_patients` con `offset = (pagina-1)*20`. Click en fila / input `external_id` muestra detalle: campos basicos + acordeon admissions (con diagnosis_category) + acordeon radiografias (con classification si la tiene). Boton "Recargar" | RF-3, CB-3 | T9 | M | done |
-| T13 | `src/dashboard/views/classifier.py`: dropdown poblado con `list_radiographies(limit=500, offset=0)` (NO list_patients), `st.image` con bytes de `image_bytes(key)` (consume RF-8), boton "Clasificar" que llama a `classify(key)`. Si T17 esta aplicada, ordenar `HOSP-DEMO-001/...` como primera opcion del dropdown. Manejo separado de: 422 CB-7 (mensaje + boton sigue habilitado), 503 desde `/health` CB-4 (boton deshabilitado + warning), 404 imagen CB-5, success (clase + barras horizontales de probabilidades + model_version + predicted_at). **Al final de la vista**, sub-seccion "Evaluacion del modelo — detalle" (RF-7b) via la misma `model_evaluation()` cacheada que usa Overview: tabla recall por clase (destacando recall COVID-19) + heatmap matriz confusion (`plotly.express.imshow`, `color_continuous_scale="Blues"`). NO repite accuracy + macro-F1 grandes (ya estan en Overview); puede mostrarlos pequenos como contexto si encaja. Si 503: "Reporte de evaluacion no disponible" sin bloquear el resto de la vista | RF-4, RF-7b, CB-4, CB-5, CB-7 | T9 | L | done |
+| T13 | `src/dashboard/views/classifier.py`: dropdown poblado con `list_radiographies(limit=500, offset=0)` (NO list_patients), `st.image` con bytes de `image_bytes(key)` (consume RF-8), boton "Clasificar" que llama a `classify(key)`. Orden del dropdown: `HOSP-PRES-*` primero (reales, si existen), luego `HOSP-DEMO-*` (sintetica), luego resto. Las dummy 1x1 ocultas por defecto via heuristica `MIN_CLASSIFIABLE_BYTES = 1024`, accesibles solo activando el toggle "Mostrar imagenes no clasificables". Manejo separado de: 422 CB-7 (mensaje + boton sigue habilitado), 503 desde `/health` CB-4 (boton deshabilitado + warning), 404 imagen CB-5, success (clase + barras horizontales de probabilidades + model_version + predicted_at). **Al final de la vista**, sub-seccion "Evaluacion del modelo — detalle" (RF-7b) via la misma `model_evaluation()` cacheada que usa Overview: tabla recall por clase (destacando recall COVID-19) + heatmap matriz confusion (`plotly.express.imshow`, `color_continuous_scale="Blues"`). NO repite accuracy + macro-F1 grandes (ya estan en Overview); puede mostrarlos pequenos como contexto si encaja. Si 503: "Reporte de evaluacion no disponible" sin bloquear el resto de la vista | RF-4, RF-7b, CB-4, CB-5, CB-7 | T9 | L | done |
 | T14 | `src/dashboard/views/runs.py`: tabla paginada (limit=20) con `list_runs`, columnas started_at / trigger_type / status (badge color por status) / records_processed / records_rejected / error_message (truncado a 100 chars, expandible con `st.expander` si hay error). Boton "Recargar" | RF-5, CB-3 | T9 | S | done |
-| T17 | Pre-cargar 1 radiografia de demo durante el bootstrap para que la demo del Clasificador funcione out-of-the-box sin depender de subir manualmente una imagen y sin tropezar con las dummy 1x1. **El origen y la licencia de la imagen quedan documentados en `data/raw/images-demo/README.md` + comentario inline en `bootstrap.py`** (requisito no negociable). Recomendacion: opcion (b) imagen generada sinteticamente con `numpy` + `imageio` (256x256 PNG, ruido gaussiano + simulacion tosca de torax), porque elimina cualquier duda de copyright; el modelo devolvera una clase arbitraria pero la demo ensena el flujo end-to-end (que es lo que se quiere demostrar). Si se prefiere opcion (a) imagen real del Kaggle COVID-19 Radiography Database, **commitearla solo si la licencia (CC BY 4.0 segun Kaggle) lo permite y citarla explicitamente** en `data/raw/images-demo/README.md`. El bootstrap (`src/pipeline/scripts/bootstrap.py`) sube la imagen al bucket bajo la key `HOSP-DEMO-001/HOSP-DEMO-001_xray1.png` y registra un paciente `HOSP-DEMO-001` con esa radiografia embebida. El dropdown del Clasificador la ordena al principio | Demo robusta | T1, T2 | S | done |
-| T15 | Smoke E2E real con stack vivo: `docker compose down -v && docker compose up -d`. Esperar a que `dashboard` este healthy. Abrir `http://localhost:8501` en navegador y validar manualmente las 5 vistas: (1) Overview muestra counts + ultimo run + strip de evaluacion (accuracy + macro-F1); (2) Quality muestra rejection_rate; (3) Patients pagina y detalle de HOSP-000001 funciona; (4) Classifier: elegir `HOSP-DEMO-001` y verificar prediccion + probabilidades + sub-seccion de evaluacion detallada al final; luego elegir una dummy y verificar mensaje CB-7; (5) Runs muestra el run del bootstrap. Smoke contra CB-1: `docker compose stop api` y verificar que las 5 vistas muestran "API no disponible" + los 3 chips del sidebar pasan a rojo/ambar sin crashear. Volver a `docker compose start api`. Opcionalmente test `tests/e2e/test_dashboard_smoke.py` con `httpx.get("http://localhost:8501/_stcore/health")` | CA-1..CA-11 | T1, T2, T3, T10, T11, T12, T13, T14, T17 | S | done |
+| T17 | Pre-cargar al menos una radiografia clasificable durante el bootstrap para que la demo del Clasificador funcione out-of-the-box sin depender de subir manualmente una imagen y sin tropezar con las dummy 1x1. **El origen y la licencia de cualquier imagen quedan documentados en `data/raw/images-demo/README.md` + comentario inline en `bootstrap.py`**: para imagenes del dataset COVID-19 Radiography Database **se verifica y se cita la licencia exacta publicada por el proveedor; no se asume licencia generica**. Opcion elegida: imagen sintetica `HOSP-DEMO-001` generada con `numpy` + Pillow (256x256, gradiente + elipses, libre de copyright externo) subida al bucket bajo `HOSP-DEMO-001/HOSP-DEMO-001_xray1.png`. Si el dataset Kaggle esta presente en local, el bootstrap **ademas** registra hasta 6 `HOSP-PRES-001..006` reales del dataset (2 por clase). Orden actual del dropdown del Clasificador: **`HOSP-PRES-*` primero (si existen), luego `HOSP-DEMO-001` (sintetica, banner amarillo en la UI), luego resto**. Las dummy 1x1 quedan **ocultas por defecto** (heuristica `MIN_CLASSIFIABLE_BYTES = 1024` en el dashboard) y solo aparecen al activar el toggle "Mostrar imagenes no clasificables" | Demo robusta | T1, T2 | S | done |
+| T15 | Smoke E2E real con stack vivo: `docker compose down -v && docker compose up -d`. Esperar a que `dashboard` este healthy. Abrir `http://localhost:8501` en navegador y validar manualmente las 5 vistas: (1) Overview muestra counts + ultimo run + strip de evaluacion (accuracy + macro-F1); (2) Quality muestra rejection_rate; (3) Patients pagina y detalle de HOSP-000001 funciona; (4) Classifier: por defecto el dropdown muestra `HOSP-PRES-*` primero (si el dataset Kaggle esta presente) y `HOSP-DEMO-001` despues, **sin** las dummy 1x1. Elegir la primera opcion clasificable y verificar prediccion + probabilidades + sub-seccion de evaluacion detallada al final. Para probar CB-7, **activar el toggle "Mostrar imagenes no clasificables"** -> seleccionar una dummy 1x1 -> verificar mensaje CB-7 sin crash; (5) Runs muestra el run del bootstrap. Smoke contra CB-1: `docker compose stop api` y verificar que las 5 vistas muestran "API no disponible" + chip API en rojo y chips Modelo/Ultimo run en gris (estado desconocido) sin crashear. Volver a `docker compose start api`. Opcionalmente test `tests/e2e/test_dashboard_smoke.py` con `httpx.get("http://localhost:8501/_stcore/health")` | CA-1..CA-11 | T1, T2, T3, T10, T11, T12, T13, T14, T17 | S | done |
 | T16 | Documentacion viva: `CHANGELOG.md` entrada Added (dashboard + 2 endpoints nuevos + radiografia demo); `README.md` (tabla stack con Streamlit ✓, nueva URL `http://localhost:8501`, mencion al puerto 8501 en "Requisitos previos", actualizar conteo de tests si hay nuevos); `docs/diario-ia.md` sesion nueva; `tasks/lessons.md` con lo aprendido del dashboard (st.cache_data, st.fragment, evaluacion como dos senales independientes vs predictor_loaded, RF-7 dividida en dos superficies, etc); `tasks/backlog.md` feature 4 a `done`; `tasks/dashboard.md` marcar T1-T17 como `done` | — | T15 | S | done |
 
 Tamanos: S (< 1h) | M (1-4h) | L (> 4h, considerar dividir)
@@ -89,7 +89,7 @@ Estados: pending | in-progress | done | blocked
 ### T4: `requirements-dashboard.txt`
 - Crear `requirements-dashboard.txt`:
   ```
-  streamlit==1.36.0
+  streamlit==1.39.0
   httpx==0.27.0
   plotly==5.22.0
   pandas==2.2.2
@@ -277,7 +277,7 @@ Estados: pending | in-progress | done | blocked
 
 ### T13: `views/classifier.py`
 - `list_radiographies(limit=500, offset=0)` (cached) → lista de keys
-- Si T17 aplicada, mover `HOSP-DEMO-001/...` al principio del dropdown
+- Orden del dropdown: `HOSP-PRES-*` primero (reales, si existen), luego `HOSP-DEMO-*` (sintetica, banner amarillo), luego resto. Las dummy 1x1 quedan ocultas por defecto via heuristica `MIN_CLASSIFIABLE_BYTES = 1024` y solo aparecen con toggle
 - `st.selectbox("Radiografia", keys)`
 - `image_bytes(key)` → `st.image(bytes, use_column_width=True)`
 - Si `health.predictor_loaded == False`: warning + boton deshabilitado
@@ -308,72 +308,71 @@ Estados: pending | in-progress | done | blocked
 - Para los failed, `st.expander("Ver error")` con `error_message`
 - Boton "Recargar"
 
-### T17: Pre-cargar radiografia de demo (aprobada, con licencia documentada)
+### T17: Pre-cargar radiografias de demo (resuelta, con licencia documentada)
 
-**Paso 1 — Decidir origen y documentar licencia.** Crear
-`data/raw/images-demo/README.md` con uno de estos dos bloques:
+**Decision aplicada en la entrega**: opcion sintetica como fixture
+tecnico siempre disponible + radiografias reales `HOSP-PRES-*`
+opcionales si el dataset Kaggle esta presente en local. La regla
+sobre licencia es **no asumir nunca una licencia generica para
+imagenes del dataset**: cualquier imagen real procedente del COVID-19
+Radiography Database se documenta citando los terminos exactos
+publicados por su proveedor en `data/raw/images-demo/README.md`.
 
-- **Opción A — Imagen real del dataset Kaggle (recomendado solo si licencia compatible):**
-  ```
-  # Radiografía de demo
+**Paso 1 — Documentar origen y licencia.**
+`data/raw/images-demo/README.md` describe:
 
-  Fichero: HOSP-DEMO-001_xray1.png
-  Origen: COVID-19 Radiography Database (Kaggle)
-    https://www.kaggle.com/datasets/tawsifurrahman/covid19-radiography-database
-  Licencia: CC BY 4.0 (verificar en la página del dataset antes de commitear)
-  Cita: M.E.H. Chowdhury et al., "Can AI help in screening Viral and COVID-19
-    pneumonia?", IEEE Access, 2020.
-  Uso en este repo: pre-cargada al bucket MinIO durante el bootstrap
-    para que la demo del Clasificador funcione out-of-the-box. NO se
-    usa para entrenar ni evaluar; solo como input de inferencia en la demo.
-  ```
+- **`HOSP-DEMO-001` (sintetica, fixture tecnico):** PNG 256x256
+  generada con `numpy` + Pillow + ImageDraw (gradiente + dos elipses
+  oscuras simulando torax). Sin copyright externo, libre uso dentro
+  del proyecto. Etiquetada en la UI como **NO clinica** (banner
+  amarillo al seleccionarla en el Clasificador).
+- **`HOSP-PRES-001..006` (reales del dataset, opcionales):** subset
+  de 6 imagenes (2 por clase) del COVID-19 Radiography Database. El
+  bootstrap las copia al bucket **solo si existen localmente** en
+  `data/raw/covid_radiography/`. **NO se commitean al repo.** Antes
+  de difundir capturas o resultados fuera de la demo, verificar y
+  citar la licencia exacta publicada por el proveedor del dataset
+  (Kaggle u origen original); **no asumir licencia generica**.
 
-- **Opción B — Imagen sintética (más segura, recomendada por defecto):**
-  ```
-  # Radiografía de demo
+**Paso 2 — Generador sintetico.** `src/pipeline/scripts/bootstrap.py`
+contiene la funcion `_generate_demo_radiograph` que genera la imagen
+al vuelo durante `docker compose up`. Determinista. 256x256 (>=32 px
+-> no la rechaza la API con 422).
 
-  Fichero: HOSP-DEMO-001_xray1.png
-  Origen: generada sintéticamente con `src/pipeline/scripts/generate_demo_xray.py`
-    (numpy + imageio: 256x256, ruido gaussiano + máscara elíptica simulando tórax).
-  Licencia: propia del proyecto (no requiere atribución externa).
-  Uso en este repo: input del clasificador en la demo. El modelo
-    devolverá una clase arbitraria; el propósito es demostrar el
-    flujo end-to-end (selección → inferencia → resultado), NO precisión clínica.
-  ```
+**Paso 3 — Bootstrap.** `bootstrap.py`:
+- Sube `HOSP-DEMO-001/HOSP-DEMO-001_xray1.png` al bucket
+  `radiographies` y registra paciente `HOSP-DEMO-001` con la
+  radiografia embebida (sin `classification`).
+- Si `data/raw/covid_radiography/COVID-19_Radiography_Dataset/`
+  existe, registra ademas `HOSP-PRES-001..006` (2 por clase).
+- Idempotente.
 
-**Paso 2 — Si opción B, crear el generador.**
-`src/pipeline/scripts/generate_demo_xray.py` con un `main()` que
-escribe `data/raw/images-demo/HOSP-DEMO-001_xray1.png`. Determinista
-con `--seed 42`. Imagen 256x256 (>=32 px → no se rechaza con 422).
+**Paso 4 — Dropdown del Clasificador.** Orden actual:
+**`HOSP-PRES-*` (reales) primero, luego `HOSP-DEMO-*` (sintetica),
+luego resto**. Las dummy 1x1 quedan **ocultas por defecto** y solo
+aparecen al activar el toggle "Mostrar imagenes no clasificables"
+(para probar CB-7 explicitamente).
 
-**Paso 3 — Bootstrap.** Modificar `src/pipeline/scripts/bootstrap.py`:
-- Comentario inline citando `data/raw/images-demo/README.md`.
-- Subir la imagen al bucket bajo la key
-  `HOSP-DEMO-001/HOSP-DEMO-001_xray1.png`.
-- Registrar paciente `HOSP-DEMO-001` (nombre "Paciente Demo", edad
-  ficticia, género N/A) con la radiografía embebida (sin
-  `classification`).
-- Idempotente: si ya existe, no duplicar.
+**Paso 5 — Verificacion.** Tras `docker compose down -v && up`,
+abrir el Clasificador. Sin dataset descargado: el dropdown muestra
+`HOSP-DEMO-001` arriba (con su banner amarillo). Con dataset
+descargado: el dropdown muestra primero las `HOSP-PRES-*` reales y
+`HOSP-DEMO-001` queda detras. En ambos casos, "Clasificar" devuelve
+clase + probabilidades sin error 422.
 
-**Paso 4 — Dropdown del Clasificador.** Ordenar para que
-`HOSP-DEMO-001/...` aparezca como primera opción.
-
-**Paso 5 — Verificación.** Tras `docker compose down -v && up`,
-abrir el Clasificador, seleccionar la radiografía de demo, pulsar
-"Clasificar" → devuelve clase + probabilidades sin error 422.
-
-**Por qué la licencia es no negociable**: el repo es entregable de
-Máster y queda público en GitHub; cualquier asset con copyright
-ambiguo debe estar explícitamente justificado.
+**Por que la licencia importa**: el repo es entregable de Master y
+queda publico en GitHub; cualquier asset con copyright ambiguo debe
+estar explicitamente justificado y citado tal como lo publica el
+autor original, no con licencias asumidas.
 
 ### T15: Smoke real end-to-end
 - `docker compose down -v && docker compose up -d`
 - Esperar healthchecks (max 60s)
 - Validar manualmente las 5 vistas en `http://localhost:8501`
 - **Overview**: counts + ultimo run + strip de evaluacion con accuracy + macro-F1
-- **Classifier**: probar con `HOSP-DEMO-001` (T17) → resultado limpio + sub-seccion detallada de evaluacion al final. Probar con dummy 1x1 → mensaje CB-7
+- **Classifier**: por defecto el dropdown muestra `HOSP-PRES-*` primero (si el dataset Kaggle esta presente) y `HOSP-DEMO-001` despues, **sin** las dummy 1x1. Elegir la primera opcion clasificable -> resultado limpio + sub-seccion detallada de evaluacion al final. Para probar CB-7, **activar el toggle "Mostrar imagenes no clasificables"** -> seleccionar una dummy 1x1 -> verificar mensaje CB-7 sin crash y que el boton "Clasificar" sigue habilitado para reintentar
 - **Sidebar**: 3 chips en verde
-- `docker compose stop api` → 5 vistas con "API no disponible" + 3 chips rojo/ambar limpiamente
+- `docker compose stop api` → 5 vistas con "API no disponible" + chip API en rojo y chips Modelo/Ultimo run en gris (estado desconocido) sin crashear
 - `docker compose start api` → vuelve a funcionar
 - Test opcional `tests/e2e/test_dashboard_smoke.py`:
   ```python
@@ -451,10 +450,13 @@ smoke (T15). Reservar ~2-3h enfocadas.
 - **T13 (Clasificador) es el riesgo mayor**: integra mas tipos de
   error que el resto + la sub-seccion detallada de RF-7b. Si CB-7
   falla en demo, queda feo. Mitigacion: test manual exhaustivo con
-  `HOSP-DEMO-001` (T17) Y una dummy 1x1 antes del commit
+  `HOSP-DEMO-001` (T17) Y, activando el toggle "Mostrar imagenes no
+  clasificables", una dummy 1x1 para CB-7 antes del commit
 - **T17 con licencia no negociable**: el repo es publico, no puede
-  llevar imagenes con copyright ambiguo. Opcion B (imagen sintetica)
-  es la opcion segura por defecto
+  llevar imagenes con copyright ambiguo. La opcion sintetica
+  (`HOSP-DEMO-001`) es la opcion segura por defecto; las
+  `HOSP-PRES-*` reales se aceptan solo con licencia verificada y
+  citada tal cual la publica el proveedor del dataset
 - **T5 puede fallar por puerto ocupado** (8501 lo usa Streamlit por
   defecto en otros proyectos). Mitigacion: env var `DASHBOARD_PORT`
   documentada en `.env.example`

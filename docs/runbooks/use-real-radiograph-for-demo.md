@@ -16,10 +16,11 @@
   Pillow) para que el dashboard funcione out-of-the-box sin pedir
   descarga del dataset ni asumir nada sobre su licencia. Es **fixture
   tecnico, no demo clinica**. Ver `data/raw/images-demo/README.md`.
-- El dataset real pesa ~1.5 GB y NO se commitea al repo (`.gitignore`).
-  Su origen y licencia exactos son los que indique el proveedor desde
-  donde se haya descargado; consultar `docs/runbooks/download-radiography-dataset.md`
-  para la fuente concreta usada por este proyecto.
+- El dataset real pesa ~0.9 GB en la version local utilizada y NO se
+  commitea al repo (`.gitignore`). Su origen y licencia exactos son
+  los que indique el proveedor desde donde se haya descargado;
+  consultar `docs/runbooks/download-radiography-dataset.md` para la
+  fuente concreta usada por este proyecto.
 
 ## Prerequisitos
 
@@ -94,9 +95,9 @@ PY
 
 1. Abre `http://localhost:8501/classifier`
 2. En el dropdown debe aparecer `HOSP-PRES-001/COVID-1.png` (o el
-   nombre que hayas elegido). Como el orden alfabetico pone primero
-   `HOSP-DEMO-*` y luego `HOSP-PRES-*`, la real queda en segundo
-   bloque
+   nombre que hayas elegido). El orden del dropdown prioriza las
+   imagenes reales (`HOSP-PRES-*` van primero) y deja `HOSP-DEMO-001`
+   detras, asi que la real aparece arriba del listado
 3. Selecciona la imagen real. **Confirma que NO aparece la advertencia
    amarilla** de "imagen sintetica de demo" (esa solo sale para keys
    `HOSP-DEMO-*`)
@@ -125,7 +126,7 @@ done
   pasa con las del COVID-19 Radiography Database (todas son 299x299),
   pero por si acaso.
 - **No tienes el dataset descargado**: tienes 5-15 min de descarga +
-  ~1.5 GB de disco antes de poder hacer demo real. Considera la
+  ~0.9 GB de disco antes de poder hacer demo real. Considera la
   sintetica solo si el evaluador acepta la advertencia.
 
 ## Notas eticas

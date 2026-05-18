@@ -543,23 +543,39 @@
   - **`unsafe_allow_html=True` con CSS inline minimo (una linea por chip)** es aceptable para badges de estado. Mas que eso (multiples reglas, animaciones) NO — se mantiene Streamlit estandar
   - **Imagen Docker ligera vs reutilizar la del pipeline:** la separacion es deciciva. 240 MB vs 2 GB, arranque <15s vs >20s, builds independientes. Sin esto, RNF-5 no se cumple
 
-## Reflexion critica (en construccion)
+### Sesion 28 — 2026-05-18: Memoria tecnica + cierre documental
+- **Objetivo:** Redactar `docs/memoria-tecnica.md` (17 capitulos, ~26 paginas equivalentes PDF) y dejar la documentacion viva del repo coherente con el estado real del sistema.
+- **Resultado:** Memoria en estado *borrador* con caps 1-17 (resumen, contexto, arquitectura, datos, pipeline, modelo, API, dashboard, ADRs, operacion, testing, resultados, limitaciones, etica/legal, IA+SDD, conclusiones, anexos). Actualizados ademas: README (Streamlit 1.39, 7 servicios, 275 tests, dashboard implementado), `tasks/backlog.md` (8/9/10 a done con referencia a la memoria), `tasks/dashboard.md` (T4: streamlit==1.39.0), `data/raw/images-demo/README.md` y dos runbooks (orden real del dropdown HOSP-PRES-* primero, tamano dataset ~0.9 GB).
+- **Aciertos de la IA:** redaccion fluida de capitulos largos a partir de specs/design/ADRs ya existentes; deteccion rapida del bloque a corregir cuando Alejandro senalo imprecisiones (auditorias no versionadas, chips dashboard, 1.5 GB -> 0.9 GB, test split "se ve una sola vez", SQLite "cubre" vs "refuerza").
+- **Casos donde hubo que corregir:**
+  - Afirmar la existencia de ficheros de auditoria versionados sin verificar -> Alejandro pide suavizar y eliminar la cifra "4 auditorias".
+  - Decir que el test split "se ve una sola vez" cuando hubo evaluaciones v2/v3 -> redactar de forma honesta (test separado en codigo; decisiones de hiperparametros guiadas por validation, no por test).
+  - Afirmar que los tres chips pasan a rojo cuando cae la API. La realidad de `system_status.py`: API rojo, los otros dos gris/desconocido.
+  - Justificar SQLite como "cubre" el requisito de >=2 almacenes. Mongo+MinIO ya cumplia; SQLite *refuerza* anadiendo capa relacional.
+- **Leccion aprendida:** Antes de afirmar la existencia de ficheros (progress/, runbooks, etc.) o cifras puntuales (tamano dataset), verificar con `ls`/`du`/`grep` en lugar de citar de memoria. Las inexactitudes pequenas suman ruido y minan la credibilidad del documento completo.
 
-### Que ha aportado la IA hasta ahora
-- **Velocidad de planificacion:** Lo que llevaria dias de redaccion de specs y diseño se ha hecho en horas con calidad profesional
-- **Trazabilidad:** La IA ha mantenido rigurosamente la trazabilidad requisito → componente → tarea → test
-- **Deteccion de issues:** Capacidad de analisis multimodal + extraccion de texto para detectar contenido oculto en el enunciado
-- **Generacion de scaffolding:** Estructura SDD completa con un solo comando
+## Reflexion critica
+
+### Que ha aportado la IA
+
+- **Velocidad de planificacion**: lo que llevaria dias de redaccion de specs y diseno se ha hecho en horas con calidad profesional. Tambien aplica a la propia memoria tecnica: 13.000 palabras coherentes redactadas en una sesion a partir de artefactos vivos del repo.
+- **Trazabilidad**: la IA ha mantenido rigurosamente la trazabilidad requisito -> componente -> tarea -> test, y al redactar la memoria ha podido reconstruir esa trazabilidad sin reinventar nada porque las specs, designs y ADRs estaban frescos y bien escritos.
+- **Deteccion de issues**: capacidad de analisis multimodal + extraccion de texto para detectar contenido oculto en el enunciado del Master (la pista "NoSQL sobre todo" que motivo ADR-002).
+- **Generacion de scaffolding**: estructura SDD completa con un solo comando.
 
 ### Limitaciones encontradas
-- **Lectura de PDFs:** Leer PDFs como imagenes no siempre detecta texto oculto. Hay que complementar con extraccion de texto plano
-- **Auto-commits del hook:** Generan ruido en el historial y requieren squash manual periodico
-- **Decisiones de negocio:** La IA propone opciones pero no decide por si sola — requiere input humano constante
 
-### Estimacion de impacto en productividad (preliminar)
-- **Tiempo ahorrado hasta ahora:** ~1 dia de planificacion completa (specs + designs + tasks + infra base)
-- **Calidad del codigo:** Alta — sigue convenciones SDD, trazabilidad completa, commits semanticos
-- **Trabajo humano requerido:** Decisiones de producto, aprobacion de fases, verificacion manual
+- **Lectura de PDFs**: leer PDFs como imagenes no siempre detecta texto oculto. Hay que complementar con extraccion de texto plano.
+- **Auto-commits del hook**: generan ruido en el historial y requieren squash manual periodico.
+- **Decisiones de negocio**: la IA propone opciones pero no decide por si sola — requiere input humano constante.
+- **Tendencia a afirmar sin verificar**: la IA tiende a citar ficheros, cifras o estados que "deberian estar ahi" sin comprobarlos. Mitigado con la regla "verifica antes de afirmar" del CLAUDE.md global, pero hay que reforzarla en cada sesion documental.
+- **Sycophancy ante el propio output**: un mismo asistente rara vez cuestiona el codigo o el texto que acaba de generar. Mitigado con revision tecnica del equipo y contraste contra la spec en features grandes.
+
+### Estimacion de impacto en productividad
+
+- **Tiempo ahorrado**: del orden de varios dias-persona en redaccion (specs + designs + tasks + ADRs + memoria tecnica final) y otro tanto en scaffolding de codigo (routers FastAPI, schemas Pydantic, tests con MockTransport, vistas Streamlit). En lo de pipeline y modelo el ahorro es medio-alto: el dominio requiere mas iteracion humana (hiperparametros, sanity checks).
+- **Calidad del codigo / documentacion**: aceptable como punto de partida; requiere revision humana siempre y, en features criticas, revision cruzada con otro proveedor.
+- **Trabajo humano requerido**: cierre de dudas en specs, decisiones de producto, depuracion de hiperparametros del modelo, redaccion final cualitativa, pruebas manuales en la UI, juicio sobre que afirmar y que matizar.
 
 ## Ejemplos de prompts efectivos vs inefectivos
 

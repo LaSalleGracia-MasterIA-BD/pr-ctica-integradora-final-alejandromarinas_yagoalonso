@@ -19,7 +19,7 @@ Proyecto final del Master en AI & Big Data.
 | Almacenamiento de objetos | MinIO (S3-compatible) | ✅ Implementado |
 | API REST | FastAPI + Uvicorn | ✅ Implementado |
 | Deep Learning | Keras / TensorFlow 2.16 (CNN: Conv2D + MaxPooling2D + Dropout + Flatten + Dense + softmax, con EarlyStopping) — ver ADR-005 | ✅ Implementado |
-| Dashboard | Streamlit 1.36 + Plotly 5.22 + Pandas 2.2 (imagen Docker independiente ~240 MB) — ver ADR-007 | ✅ Implementado |
+| Dashboard | Streamlit 1.39 + Plotly 5.22 + Pandas 2.2 (imagen Docker independiente ~240 MB) — ver ADR-007 | ✅ Implementado |
 | Infraestructura | Docker + Docker Compose | ✅ Implementado |
 
 > **Polyglot persistence (ADR-004):** cada dato vive donde su forma encaja.
@@ -160,7 +160,7 @@ docker compose down -v     # Para y borra TODOS los volumenes: mongo-data, minio
 │   │   ├── orchestrator.py        # PipelineOrchestrator (E→T→L, runs en SQL, rejected en Mongo)
 │   │   └── watcher.py             # IncomingFilesWatcher
 │   ├── ml/                        # Modelo clasificacion radiografias (Keras/TF, CNN — implementado)
-│   ├── dashboard/                 # Visualizacion (pendiente)
+│   ├── dashboard/                 # Visualizacion Streamlit (implementado, ver ADR-007)
 │   └── automation/                # Alertas e informes (pendiente)
 ├── tests/
 │   ├── api/                       # Tests de la API (endpoints + readers)
@@ -174,7 +174,7 @@ docker compose down -v     # Para y borra TODOS los volumenes: mongo-data, minio
 │   ├── incoming/                  # Cola del watcher (rw)
 │   └── db/                        # Punto de montaje para `pipeline-db` (SQLite)
 ├── docker/                        # Scripts de inicializacion (Mongo, MinIO)
-├── docker-compose.yml             # 6 servicios: mongodb, minio, minio-init, pipeline, api, watcher
+├── docker-compose.yml             # 7 servicios: mongodb, minio, minio-init, pipeline, api, watcher, dashboard
 ├── Dockerfile.pipeline            # Imagen comun para pipeline + api + watcher
 ├── requirements-pipeline.txt      # Incluye PySpark + pymongo + minio + SQLAlchemy + FastAPI + watchdog
 └── pyproject.toml                 # Configuracion de pytest
@@ -232,11 +232,12 @@ Artefactos en `specs/` y `design/`. Backlog en `tasks/backlog.md`. Decisiones te
 
 **Clasificacion de radiografias (Keras/TensorFlow):** 16/16 tareas completadas. Ver `tasks/clasificacion-radiografias.md`, ADR-005 y ADR-006. Modelo entrenado en `data/models/radiography_classifier.keras` (~21 MB, commiteado) + reporte clinico en `docs/model-evaluation/`. Metricas finales (test split de 1.515 imagenes): accuracy=0.872, macro-F1=0.846, recall Normal=0.93, Pneumonia=0.93, COVID-19=0.70.
 
-**Tests:** 208 verdes + 1 skip.
+**Tests:** 275 verdes + 1 skip.
 
 **Roadmap completo:** ver `tasks/backlog.md`. Pendientes principales:
 - ~~Dashboard de visualizacion~~ ✅ **Implementado** (Streamlit en
   `http://localhost:8501`, 5 vistas + barra persistente de estado del
   sistema, ver `specs/dashboard.md`, `design/dashboard.md`, ADR-007)
 - Automatizaciones de alertas e informes (el watcher YA esta como servicio real en el compose; queda pendiente el flujo de alertas)
-- Memoria tecnica + presentacion final
+- ~~Memoria tecnica~~ ✅ **Borrador integrado** en `docs/memoria-tecnica.md` (incluye etica/legal y reflexion critica como capitulos 13-14)
+- Presentacion final

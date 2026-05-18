@@ -19,7 +19,8 @@ radiografia del paciente `HOSP-DEMO-001`.
 Su unico proposito es **tecnico**: que la vista **Clasificador** del
 dashboard (`http://localhost:8501`) tenga al menos una radiografia
 clasificable out-of-the-box, sin pedir al evaluador que descargue el
-dataset (~1.5 GB) ni asumir nada sobre su licencia.
+dataset (~0.9 GB en la version local utilizada) ni asumir nada sobre
+su licencia.
 
 ## Para una demo con valor clinico
 
@@ -29,9 +30,9 @@ bajo otra key (p. ej. `HOSP-PRES-001/...`). El origen y la licencia
 exactos son los que indique el proveedor desde el que descargues:
 consultar `docs/runbooks/download-radiography-dataset.md` para la
 fuente concreta usada en este proyecto y citarla tal cual. En el
-dropdown del Clasificador la real aparece ordenada despues de
-`HOSP-DEMO-*`, y al seleccionarla **NO** salta el banner de
-advertencia sintetica.
+dropdown del Clasificador las imagenes reales **`HOSP-PRES-*` aparecen
+primero**, y `HOSP-DEMO-001` queda detras: al seleccionar una
+`HOSP-PRES-*` **NO** salta el banner de advertencia sintetica.
 
 ## Origen y licencia
 
@@ -62,10 +63,13 @@ advertencia sintetica.
 ## Como se prueba
 
 Tras `docker compose up`, la imagen aparece en el dropdown del
-Clasificador como `HOSP-DEMO-001/HOSP-DEMO-001_xray1.png`, ordenada
-al principio. Al pulsar "Clasificar", el modelo devuelve una clase
-arbitraria con sus probabilidades — el flujo funciona aunque la
-prediccion no tenga sentido clinico para esta imagen sintetica.
+Clasificador como `HOSP-DEMO-001/HOSP-DEMO-001_xray1.png`. Cuando no
+hay `HOSP-PRES-*` cargadas, es la primera opcion seleccionable; si el
+dataset Kaggle esta presente localmente y el bootstrap registra las
+`HOSP-PRES-*`, estas se anteponen y `HOSP-DEMO-001` queda detras. Al
+pulsar "Clasificar", el modelo devuelve una clase arbitraria con sus
+probabilidades — el flujo funciona aunque la prediccion no tenga
+sentido clinico para esta imagen sintetica.
 
 ## Si quieres usar una radiografia real para la demo
 
@@ -73,7 +77,8 @@ prediccion no tenga sentido clinico para esta imagen sintetica.
 2. Sube manualmente una imagen al bucket via `docker compose exec ...`
    o `mc cp`.
 3. Inserta un paciente en MongoDB que la referencie.
-4. La radiografia real aparecera en el dropdown junto a `HOSP-DEMO-001`.
+4. La radiografia real aparecera en el dropdown **antes** que
+   `HOSP-DEMO-001` (las `HOSP-PRES-*` se priorizan en el orden).
 
 No documentamos ese flujo aqui porque es opcional y especifico del
 evaluador.

@@ -26,7 +26,7 @@
    mkdir -p data/raw/covid_radiography
    ```
 
-3. Descargar el dataset (~1 GB comprimido, ~1.5 GB descomprimido):
+3. Descargar el dataset (en la version local utilizada ocupa ~0.9 GB descomprimido; verifica el tamano que indique el proveedor en el momento de la descarga):
    ```bash
    cd data/raw/covid_radiography
    kaggle datasets download -d tawsifurrahman/covid19-radiography-database
