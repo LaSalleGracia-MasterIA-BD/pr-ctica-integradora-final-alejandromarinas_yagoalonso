@@ -142,14 +142,17 @@ docker compose down -v     # Para y borra TODOS los volumenes: mongo-data, minio
 ├── specs/                         # Especificaciones por feature (SDD)
 ├── design/                        # Arquitectura por feature
 ├── decisions/                     # ADRs (decisiones tecnicas)
+├── sdd/                           # Indice explicativo del flujo SDD y trazabilidad
 ├── tasks/
 │   ├── backlog.md                 # Roadmap del proyecto completo
 │   ├── pipeline-datos.md          # Tareas T1-T12 del pipeline
 │   └── lessons.md                 # Patrones a evitar / decisiones / cosas que funcionan
 ├── docs/
+│   ├── memoria-tecnica.md         # Memoria tecnica final del proyecto (17 capitulos)
 │   ├── diario-ia.md               # Diario de desarrollo con IA (entregable obligatorio)
-│   └── runbooks/
-│       └── download-radiography-dataset.md
+│   ├── model-evaluation/          # Reporte clinico del modelo (metricas, matriz, curvas)
+│   ├── presentation/              # Slides reveal.js + fallback Markdown offline
+│   └── runbooks/                  # Procedimientos operativos (descarga, demo real, presentacion)
 ├── src/
 │   ├── api/                       # FastAPI (main, routers, models, mongo_reader, sql_reader)
 │   ├── pipeline/                  # Pipeline ETL completo
@@ -224,6 +227,11 @@ Desarrollo dirigido por especificacion (SDD). Cada feature pasa por:
 
 Artefactos en `specs/` y `design/`. Backlog en `tasks/backlog.md`. Decisiones tecnicas en `decisions/` (ADRs).
 
+La carpeta `sdd/` resume el flujo usado y enlaza la evidencia principal:
+`sdd/README.md`, `sdd/flujo.md`, `sdd/trazabilidad.md` y
+`sdd/agentes-y-herramientas.md` (skills aplicadas, templates instanciados,
+roles cubiertos y reglas operativas).
+
 ## Estado del proyecto
 
 **Pipeline de datos:** 12/12 tareas completadas (T1-T12). Ver `tasks/pipeline-datos.md` para el detalle.
@@ -239,5 +247,5 @@ Artefactos en `specs/` y `design/`. Backlog en `tasks/backlog.md`. Decisiones te
   `http://localhost:8501`, 5 vistas + barra persistente de estado del
   sistema, ver `specs/dashboard.md`, `design/dashboard.md`, ADR-007)
 - Automatizaciones de alertas e informes (el watcher YA esta como servicio real en el compose; queda pendiente el flujo de alertas)
-- ~~Memoria tecnica~~ ✅ **Borrador integrado** en `docs/memoria-tecnica.md` (incluye etica/legal y reflexion critica como capitulos 13-14)
-- Presentacion final
+- ~~Memoria tecnica~~ ✅ **Versión final** en `docs/memoria-tecnica.md` (17 capitulos, incluye etica/legal y reflexion critica como capitulos 13-14)
+- ~~Presentacion final~~ ✅ **Completada** en `docs/presentation/` (13 slides reveal.js + fallback Markdown offline + guion en notas del presentador + preflight y plan B)
