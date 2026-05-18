@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sistema Inteligente de Soporte Hospitalario — laSalle Health Center</title>
+
+  <!-- reveal.js core + tema sobrio -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+
+  <style>
+    :root {
+      --r-main-color: #0F172A;
+      --r-link-color: #2563EB;
+      --r-selection-background-color: #2563EB;
+      --r-heading-color: #0F172A;
+      --r-background-color: #FFFFFF;
+    }
+    .reveal { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #0F172A; }
+    .reveal h1 { font-size: 2.1em; font-weight: 700; margin-bottom: 0.3em; color: #0F172A; }
+    .reveal h2 { font-size: 1.5em; font-weight: 600; margin-bottom: 0.5em; color: #0F172A; }
+    .reveal h3 { font-size: 1.15em; font-weight: 600; color: #2563EB; }
+    .reveal section { font-size: 30px; }
+    .reveal ul, .reveal ol { display: block; }
+    .reveal li { margin-bottom: 0.4em; }
+
+    .subtitle { color: #64748B; font-size: 0.7em; margin-top: -0.5em; }
+    .footer-meta { position: absolute; bottom: 24px; left: 24px; font-size: 14px; color: #94A3B8; }
+
+    .chip { display: inline-block; padding: 4px 14px; border-radius: 14px; background: #F1F5F9; color: #0F172A; margin: 4px; font-size: 0.75em; font-weight: 500; }
+    .chip-green { background: #15803D; color: #FFFFFF; }
+    .chip-red { background: #DC2626; color: #FFFFFF; }
+    .chip-amber { background: #D97706; color: #FFFFFF; }
+    .chip-blue { background: #2563EB; color: #FFFFFF; }
+
+    .small { font-size: 0.7em; color: #64748B; }
+    .tiny { font-size: 0.55em; color: #64748B; }
+    .accent { color: #2563EB; font-weight: 600; }
+    .danger { color: #DC2626; font-weight: 600; }
+    .good { color: #15803D; font-weight: 600; }
+
+    .demo-button {
+      display: inline-block;
+      padding: 28px 56px;
+      background: #2563EB;
+      color: #FFFFFF !important;
+      border-radius: 16px;
+      font-size: 1.2em;
+      font-weight: 700;
+      text-decoration: none;
+      margin-top: 28px;
+      box-shadow: 0 10px 30px rgba(37, 99, 235, 0.35);
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .demo-button:hover {
+      background: #1D4ED8;
+      transform: translateY(-2px);
+      box-shadow: 0 14px 36px rgba(37, 99, 235, 0.45);
+    }
+    .demo-secondary {
+      display: inline-block;
+      margin: 18px 8px 0 8px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      background: #F1F5F9;
+      color: #0F172A !important;
+      text-decoration: none;
+      font-size: 0.55em;
+      font-weight: 500;
+    }
+    .demo-secondary:hover { background: #E2E8F0; }
+
+    .reveal table { font-size: 0.7em; margin: 0.5em auto; border-collapse: collapse; }
+    .reveal th, .reveal td { border-bottom: 1px solid #E2E8F0; padding: 6px 12px; text-align: left; }
+    .reveal th { background: #F8FAFC; color: #0F172A; font-weight: 600; }
+
+    .reveal pre { font-size: 0.55em; box-shadow: none; }
+    .reveal code { background: #F1F5F9; padding: 1px 6px; border-radius: 4px; font-size: 0.85em; color: #0F172A; }
+    .reveal pre code { background: #1E293B; color: #E2E8F0; padding: 16px; border-radius: 8px; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; text-align: left; }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; text-align: left; }
+    .four-col { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; text-align: left; }
+    .card { background: #F8FAFC; border-left: 4px solid #2563EB; padding: 14px 18px; border-radius: 6px; }
+    .card h3 { margin: 0 0 6px 0; }
+    .card p { margin: 0; font-size: 0.7em; color: #475569; }
+
+    .arch-diagram { font-family: 'Menlo', 'Consolas', monospace; font-size: 18px; text-align: left; background: #F8FAFC; padding: 18px 24px; border-radius: 8px; white-space: pre; line-height: 1.35; color: #0F172A; }
+    .pipeline-diagram { font-family: 'Menlo', 'Consolas', monospace; font-size: 20px; text-align: left; background: #F8FAFC; padding: 18px 24px; border-radius: 8px; white-space: pre; line-height: 1.4; color: #0F172A; }
+
+    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 12px; }
+    .metric { background: #F8FAFC; border-radius: 8px; padding: 14px; }
+    .metric .value { font-size: 1.4em; font-weight: 700; color: #2563EB; }
+    .metric .label { font-size: 0.6em; color: #64748B; margin-top: 4px; }
+
+    .reveal .progress { color: #2563EB; height: 6px; }
+    .reveal .slide-number { color: #94A3B8; }
+
+    .timer { position: absolute; top: 16px; right: 24px; font-size: 14px; color: #94A3B8; }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 1 — Portada                                  0:00 -> 0:30 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h1>Sistema Inteligente de Soporte Hospitalario</h1>
+        <p class="subtitle">laSalle Health Center — Asistencia diagnóstica con Big Data e IA</p>
+        <br>
+        <div style="font-size: 0.75em; line-height: 1.6;">
+          <strong>Alejandro Marinas</strong> &middot; <strong>Yago</strong><br>
+          <span class="small">Máster en AI &amp; Big Data &middot; Proyecto final del Máster</span><br>
+          <span class="tiny">Defensa &middot; 2026-05-18</span>
+        </div>
+        <aside class="notes">
+          [0:00 - 0:30] Portada — 30 segundos.
+          - Saludo breve.
+          - Presentación: "Sistema Inteligente de Soporte Hospitalario para el hospital ficticio laSalle Health Center, trabajo en pareja Alejandro y Yago, máster en AI y Big Data."
+          - Objetivo de los 12 minutos: contar problema, solución, demo en vivo, modelo, uso de IA y SDD.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 2 — El problema                              0:30 -> 1:30 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h2>El problema</h2>
+        <p class="small">El hospital ficticio <strong>laSalle Health Center</strong> tiene tres tipos de información que hoy gestiona de forma fragmentada:</p>
+        <div class="three-col" style="margin-top: 28px;">
+          <div class="card">
+            <h3>Datos clínicos tabulares</h3>
+            <p>Pacientes, admisiones, diagnósticos. Sin procesamiento sistemático.</p>
+          </div>
+          <div class="card">
+            <h3>Radiografías de tórax</h3>
+            <p>PNG en disco. Sin clasificación automatizada.</p>
+          </div>
+          <div class="card">
+            <h3>Logs y trazas</h3>
+            <p>Sin cuadro de mando que consolide el estado.</p>
+          </div>
+        </div>
+        <p class="small" style="margin-top: 28px;">Falta un sistema que <span class="accent">procese a escala</span>, <span class="accent">asista al diagnóstico por imagen</span> y <span class="accent">presente todo en un cuadro de mando único</span>.</p>
+        <aside class="notes">
+          [0:30 - 1:30] El problema — 1 minuto.
+          - Tres bullets, uno por columna.
+          - Aclarar que el hospital es ficticio: no datos reales (clave para ética/legal).
+          - Cerrar con la frase "asistencia diagnóstica, no diagnóstico final" — la repetimos al final del bloque del modelo.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 3 — Qué hemos construido                     1:30 -> 2:30 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h2>Qué hemos construido</h2>
+        <p class="small">Cuatro piezas interdependientes, un único <code>docker compose up</code>.</p>
+        <div class="four-col" style="margin-top: 24px;">
+          <div class="card">
+            <h3>Pipeline ETL</h3>
+            <p><strong>PySpark</strong> ingesta CSVs e imágenes, valida, limpia, enriquece.</p>
+          </div>
+          <div class="card">
+            <h3>Modelo de IA</h3>
+            <p>CNN <strong>Keras/TF</strong> custom. Sana / Pneumonia / COVID-19.</p>
+          </div>
+          <div class="card">
+            <h3>API REST</h3>
+            <p><strong>FastAPI</strong>: 14 endpoints + Swagger automático.</p>
+          </div>
+          <div class="card">
+            <h3>Dashboard</h3>
+            <p><strong>Streamlit</strong>: centro de control hospitalario, 5 vistas.</p>
+          </div>
+        </div>
+        <div class="metric-grid" style="margin-top: 28px;">
+          <div class="metric"><div class="value">7</div><div class="label">servicios Docker</div></div>
+          <div class="metric"><div class="value">3</div><div class="label">almacenes (Mongo + SQLite + MinIO)</div></div>
+          <div class="metric"><div class="value">275</div><div class="label">tests verdes</div></div>
+          <div class="metric"><div class="value">7</div><div class="label">ADRs documentadas</div></div>
+        </div>
+        <aside class="notes">
+          [1:30 - 2:30] Qué hemos construido — 1 minuto.
+          - Una frase por pieza.
+          - Las cifras de abajo son el "qué se entrega": 7 servicios, 3 almacenes (poliglota), 275 tests, 7 ADRs.
+          - Mencionar que arranca con un único `docker compose up` y queda listo en menos de un minuto.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 4 — Arquitectura                             2:30 -> 4:00 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h2>Arquitectura</h2>
+        <div class="arch-diagram">   Usuario --HTTP--&gt;  Dashboard (Streamlit, :8501)
+   (navegador)              |
+                            | HTTP (api_client)
+                            v
+                        +------------------------+
+                        |     API REST           |
+                        |   (FastAPI, :8000)     |
+                        |   readers + classify   |
+                        +------------------------+
+                          |        |        |
+                  lee/inf | lee    | lee    |
+                          v        v        v
+                       MongoDB  SQLite    MinIO
+                       (docs)   (runs +   (PNGs)
+                                quality)
+                          ^        ^        ^
+                          | write  | write  | write
+                          +-----+--+--------+
+                                |
+                  +-------------+--------------+
+                  |                            |
+            Pipeline ETL                   Watcher
+            (PySpark, batch)               (watchdog)</div>
+        <p class="small" style="margin-top: 18px;">Polyglot persistence (<strong>ADR-004</strong>): cada dato vive donde su forma encaja. El dashboard <span class="accent">nunca</span> accede directamente a los almacenes.</p>
+        <aside class="notes">
+          [2:30 - 4:00] Arquitectura — 1 minuto 30 segundos.
+          - Señalar el diagrama: dashboard arriba, API en el medio, tres almacenes abajo.
+          - Las únicas escrituras directas a los almacenes son del pipeline y del watcher.
+          - El dashboard es API-only (ADR-007). Esto permite imagen Docker ligera (~240 MB).
+          - Polyglot persistence (ADR-004): MongoDB para datos clínicos jerárquicos, SQLite para metadatos tabulares del pipeline, MinIO para binarios.
+          - Si te preguntan por qué tres BBDD: cada dato donde su forma encaja, sin duplicar fuente de verdad.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 5 — Datos                                    4:00 -> 5:00 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h2>Datos</h2>
+        <div class="two-col">
+          <div>
+            <h3>Datos clínicos tabulares</h3>
+            <p class="small">Sintéticos generados con <strong>Faker</strong> (seed 42, reproducible).</p>
+            <table>
+              <thead><tr><th>RAW</th><th>Final</th><th>Motivo del descarte</th></tr></thead>
+              <tbody>
+                <tr><td>5.150 pacientes</td><td><strong>4.745</strong></td><td>264 validación + 141 dedup</td></tr>
+                <tr><td>10.000 admisiones</td><td><strong>8.569</strong></td><td>493 validación + 3 dedup + 935 huérfanas</td></tr>
+              </tbody>
+            </table>
+            <p class="tiny" style="margin-top: 10px;">No hay PII real. <span class="accent">Decisión ética por diseño.</span></p>
+          </div>
+          <div>
+            <h3>Radiografías de tórax</h3>
+            <p class="small"><strong>COVID-19 Radiography Database</strong> (Kaggle, ~0,9 GB local).</p>
+            <table>
+              <thead><tr><th>Clase</th><th>Imágenes</th></tr></thead>
+              <tbody>
+                <tr><td>Normal</td><td>10.192</td></tr>
+                <tr><td>COVID-19</td><td>3.616</td></tr>
+                <tr><td>Viral Pneumonia</td><td>1.345</td></tr>
+                <tr><td><span class="small">(Lung_Opacity descartada)</span></td><td>6.012</td></tr>
+              </tbody>
+            </table>
+            <p class="tiny" style="margin-top: 10px;">Split estratificado 80/10/10, seed 42. Test = 1.515 imágenes.</p>
+          </div>
+        </div>
+        <aside class="notes">
+          [4:00 - 5:00] Datos — 1 minuto.
+          - Tabular: 5.150 RAW → 4.745 pacientes finales. Decir las cifras altas pero sin perderse en detalles. Insistir: datos sintéticos por ética.
+          - Imágenes: 15.153 totales (3 clases) + Lung_Opacity descartada por no encajar en la triple. Split estratificado.
+          - Si preguntan por qué descartar Lung_Opacity: porque "opacidad pulmonar" es un hallazgo radiológico, no una categoría diagnóstica clasificatoria.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 6 — Pipeline ETL                             5:00 -> 6:00 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h2>Pipeline ETL — cómo procesamos los datos</h2>
+        <div class="pipeline-diagram">CSVIngester -&gt; DataValidator -&gt; DataCleaner -&gt; DataTransformer -&gt; MongoWriter
+                     |                                            ^
+                     v                                            |
+              rejected_records                              patients + admisiones
+                  (Mongo)                                      embebidas
+
+SqlWriter envuelve toda la ejecución:
+  start_pipeline_run  ->  finish_pipeline_run + write_quality_summary</div>
+        <div class="three-col" style="margin-top: 24px;">
+          <div class="card">
+            <h3>Validación</h3>
+            <p>Reglas <em>first-failure-wins</em>. <strong>1.692</strong> rechazados con motivo trazable.</p>
+          </div>
+          <div class="card">
+            <h3>Idempotente</h3>
+            <p>Reejecutar = mismo estado. CA-6 cubierto.</p>
+          </div>
+          <div class="card">
+            <h3>Auditoría completa</h3>
+            <p>Cada ejecución deja huella en SQLite (<code>pipeline_runs</code>).</p>
+          </div>
+        </div>
+        <p class="small" style="margin-top: 20px;">Cuatro <em>triggers</em>: bootstrap, watcher (<code>data/incoming/</code>), API (<code>POST /pipeline/trigger</code>), tests E2E.</p>
+        <aside class="notes">
+          [5:00 - 6:00] Pipeline ETL — 1 minuto.
+          - Recorrer rápido la cadena de etapas.
+          - Insistir en idempotencia (CA-6): re-ejecutar no duplica.
+          - Mencionar los 4 triggers: bootstrap automático, watcher (drop file → ETL), API manual, tests E2E.
+          - Si preguntan: el rechazo del 935 admisiones huérfanas (cross-entity validation) fue uno de los bugs que detectamos cuadrando los números.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 7 — Modelo CNN                               6:00 -> 7:30 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h2>Modelo CNN — Clasificación de radiografías</h2>
+        <div class="two-col">
+          <div>
+            <h3>Arquitectura</h3>
+            <pre style="font-size: 0.55em;"><code>Input (224x224x1, grayscale)
+  4 x Conv2D + MaxPool (32,64,128,128)
+  Dropout(0.3) + Flatten
+  Dense(64) + Dropout(0.3)
+  Dense(3, softmax)</code></pre>
+            <p class="small">
+              <span class="chip">CNN custom, sin transfer learning</span><br>
+              <span class="chip">~1,8M params · 21 MB</span><br>
+              <span class="chip">35 epochs · lr=1e-4 · class_weight=sqrt</span>
+            </p>
+            <p class="tiny">Alineación literal con el Bloque 6 del Máster (ADR-005).</p>
+          </div>
+          <div>
+            <h3>Métricas sobre test (1.515 imágenes)</h3>
+            <div class="metric-grid" style="grid-template-columns: 1fr 1fr;">
+              <div class="metric"><div class="value">0,872</div><div class="label">accuracy</div></div>
+              <div class="metric"><div class="value">0,846</div><div class="label">macro-F1</div></div>
+            </div>
+            <table style="margin-top: 14px;">
+              <thead><tr><th>Clase</th><th>Recall</th><th>F1</th></tr></thead>
+              <tbody>
+                <tr><td>Normal</td><td class="good">0,926</td><td>0,912</td></tr>
+                <tr><td>Pneumonia</td><td class="good">0,933</td><td>0,878</td></tr>
+                <tr><td>COVID-19</td><td class="danger">0,695</td><td>0,747</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <aside class="notes">
+          [6:00 - 7:30] Modelo — 1 minuto 30 segundos.
+          - Arquitectura: la mostramos pero no nos perdemos en detalles. Mensaje clave: CNN custom, no transfer learning, alineada con lo que enseña Jordi en el Bloque 6.
+          - 21 MB → cabe commiteada al repo (RNF-4 dice <50 MB).
+          - Métricas: accuracy 0,872 y macro-F1 0,846 son buenos pero NO es el indicador clave.
+          - El recall por clase sí. Normal y Pneumonia bien. COVID-19 0,695 → preparar el siguiente slide.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 8 — Análisis clínico                         7:30 -> 8:30 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h2>Análisis clínico — el límite del sistema</h2>
+        <div class="two-col">
+          <div>
+            <h3>Matriz de confusión</h3>
+            <table>
+              <thead><tr><th>Real \ Pred.</th><th>Normal</th><th>Pneumonia</th><th>COVID-19</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Normal</strong></td><td class="good">944</td><td>17</td><td>58</td></tr>
+                <tr><td><strong>Pneumonia</strong></td><td>7</td><td class="good">126</td><td>2</td></tr>
+                <tr><td><strong>COVID-19</strong></td><td class="danger">101</td><td>9</td><td class="good">251</td></tr>
+              </tbody>
+            </table>
+            <p class="small" style="margin-top: 8px;"><span class="danger">110 COVID-19 mal clasificados</span> de 361 (recall 0,695).</p>
+          </div>
+          <div>
+            <h3>Consecuencia clínica</h3>
+            <ul class="small">
+              <li><span class="danger">FN COVID → "Normal"</span>: no se aísla a un contagioso. <strong>Error más grave.</strong></li>
+              <li>FN Pneumonia: paciente sin tratamiento adecuado.</li>
+              <li>FP: pruebas adicionales innecesarias, pero sin riesgo clínico.</li>
+            </ul>
+            <p class="small" style="margin-top: 16px;"><strong class="accent">Posicionamiento del sistema:</strong></p>
+            <p class="small">El modelo se entrega como <span class="accent">asistencia diagnóstica</span>, <span class="danger">NUNCA como diagnóstico final</span>. La última palabra es del clínico humano.</p>
+          </div>
+        </div>
+        <aside class="notes">
+          [7:30 - 8:30] Análisis clínico — 1 minuto.
+          - Insistir: el recall COVID de 0,695 es el LÍMITE del sistema, lo decimos antes de que nos lo pregunten.
+          - 110 COVID-19 mal clasificados / 361 = ~30% de falsos negativos.
+          - Mensaje clave que se repite en memoria, runbook y UI del dashboard: ASISTENCIA, no diagnóstico.
+          - Si preguntan cómo mejoraríamos: transfer learning con DenseNet/EfficientNet, Grad-CAM para interpretabilidad, detección out-of-domain.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 9 — DEMO EN VIVO                            8:30 -> 11:00 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#F8FAFC">
+        <h2 style="color: #2563EB;">Demo en vivo</h2>
+        <p class="small">Centro de control hospitalario en <code>localhost:8501</code>.</p>
+
+        <a href="http://localhost:8501" target="_blank" rel="noopener" class="demo-button">
+          Abrir dashboard &nbsp;&rarr;
+        </a>
+
+        <div style="margin-top: 28px;">
+          <a href="http://localhost:8000/docs" target="_blank" rel="noopener" class="demo-secondary">API · Swagger</a>
+          <a href="http://localhost:9001" target="_blank" rel="noopener" class="demo-secondary">MinIO · consola</a>
+        </div>
+
+        <p class="small" style="margin-top: 36px;">Recorrido por las 5 vistas:</p>
+        <p class="small" style="margin-top: 4px;">
+          <span class="chip chip-blue">1. Overview</span>
+          <span class="chip chip-blue">2. Calidad</span>
+          <span class="chip chip-blue">3. Pacientes</span>
+          <span class="chip chip-blue">4. Clasificador</span>
+          <span class="chip chip-blue">5. Pipeline runs</span>
+        </p>
+
+        <aside class="notes">
+          [8:30 - 11:00] DEMO — 2 minutos 30 segundos.
+
+          PRE-DEMO checklist (antes de empezar la presentación):
+          - `docker compose up -d` arrancado y healthy.
+          - `curl http://localhost:8501/_stcore/health` -> 200.
+          - `curl http://localhost:8000/api/v1/health` -> 200 con predictor_loaded=true.
+          - Tener el dataset Kaggle descargado para que HOSP-PRES-* esté en el dropdown.
+
+          GUION (sigue docs/runbooks/presentation-demo.md):
+
+          1) Overview (30s): 4 cards arriba (pacientes, admisiones, radiografías, modelo). Último run del pipeline. Strip de evaluación abajo. Sidebar: 3 chips en verde.
+             Mensaje: "el sistema está arriba, los datos cargados, el modelo listo".
+
+          2) Calidad de datos (20s): snapshot por dimensión + gráfico histórico rejection_rate.
+             Mensaje: "el pipeline rechaza datos malos de forma controlada y queda traza".
+
+          3) Pacientes (20s): tabla paginada, click en una fila → detalle con admisiones y radiografías embebidas.
+             Mensaje: "MongoDB embebe admisiones y radiografías sin joins — encaja con el dominio clínico".
+
+          4) Clasificador (60s — el momento clave):
+             - Dropdown ordenado: HOSP-PRES-* primero (reales).
+             - Selecciona HOSP-PRES-001 (COVID real).
+             - "Clasificar" → predicción + probabilidades + model_version.
+             - Bajar a la sub-sección "Evaluación detallada" → matriz de confusión heatmap.
+             - PARAR aquí y decir: "el recall de COVID-19 es 0,695. Por eso el sistema es asistencia, no diagnóstico."
+
+          5) Pipeline runs (20s): tabla del histórico ETL + opcional mostrar un run failed con su error_message.
+             Mensaje: "cada ejecución deja traza auditable en SQLite, no en ficheros sueltos".
+
+          PLAN B si algo falla:
+          - Si la API no responde: enseñar los chips rojos del sidebar como ejemplo de manejo de errores.
+          - Si HOSP-PRES-* no aparece: usar HOSP-DEMO-001 y AVISAR explícitamente que es sintética.
+          - Si la demo no arranca: capturas en docs/model-evaluation/ + ir directo al slide 10.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 10 — Uso de IA + SDD                       11:00 -> 11:45 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h2>Uso de IA generativa + metodología SDD</h2>
+        <p class="small">El proyecto se ha desarrollado en pareo con asistentes de IA + revisión técnica del equipo y contraste contra la spec, bajo metodología <strong>Spec-Driven Development</strong>.</p>
+
+        <div class="arch-diagram" style="font-size: 16px; padding: 14px; margin-top: 16px;">/spec  -&gt;  /planificar  -&gt;  /tareas  -&gt;  /implementar  -&gt;  /revisar
+ QUÉ         CÓMO          EN QUÉ        CÓDIGO          ¿CUMPLE?
+                           ORDEN</div>
+
+        <div class="metric-grid" style="margin-top: 18px;">
+          <div class="metric"><div class="value">4</div><div class="label">specs aprobadas</div></div>
+          <div class="metric"><div class="value">7</div><div class="label">ADRs</div></div>
+          <div class="metric"><div class="value">28</div><div class="label">sesiones IA documentadas</div></div>
+          <div class="metric"><div class="value">57</div><div class="label">lecciones registradas</div></div>
+        </div>
+
+        <p class="small" style="margin-top: 20px;">
+          <span class="accent">Disciplina:</span> dudas marcadas como <code>[NEEDS CLARIFICATION]</code>, no se asumen. Decisiones técnicas en ADRs. Revisión cruzada con otro proveedor para mitigar <em>sycophancy</em> del LLM.
+        </p>
+
+        <aside class="notes">
+          [11:00 - 11:45] IA + SDD — 45 segundos.
+          - Eje obligatorio del enunciado: "Desarrollo Asistido por IA".
+          - SDD descompone en 5 fases con artefacto revisable por fase. La IA no inventa requisitos: trabaja sobre una spec aprobada.
+          - Mostrar las cifras: 4 specs, 7 ADRs, 28 sesiones, 57 lecciones registradas en tasks/lessons.md.
+          - Revisión técnica del equipo y contraste contra la spec en features grandes: detectó los 4 bloqueantes del pipeline que una revisión superficial habría pasado por alto.
+          - Cierre: "la IA es un multiplicador de capacidad, no un sustituto. SDD es la disciplina que hace seguro ese multiplicador".
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 11 — Ética + Limitaciones                  11:45 -> 12:05 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h2>Ética, legal y limitaciones</h2>
+        <div class="two-col">
+          <div>
+            <h3>Ético y legal</h3>
+            <ul class="small">
+              <li><span class="accent">Datos sintéticos por diseño</span>: ninguna PII real. Faker + seed 42.</li>
+              <li>Dataset Kaggle: licencia tal como la publica el proveedor. <span class="accent">No asumimos licencia genérica</span>.</li>
+              <li><span class="accent">Asistencia, no diagnóstico</span>. La última palabra es del clínico.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Limitaciones reconocidas</h3>
+            <ul class="small">
+              <li><span class="danger">Recall COVID 0,695</span> → ~30% FN clínicamente graves.</li>
+              <li>Sin detección <em>out-of-domain</em> (rechazar lo que no es radiografía).</li>
+              <li>Sin interpretabilidad (Grad-CAM).</li>
+              <li>Sin auth ni HA: entorno académico de demo.</li>
+            </ul>
+          </div>
+        </div>
+        <aside class="notes">
+          [11:45 - 12:05] Ética + límites — 20 segundos.
+          - Datos sintéticos: el riesgo de PII queda neutralizado de raíz.
+          - Licencia: no citar una licencia concreta sin comprobarla; usar "los términos que publica el autor del dataset".
+          - Limitaciones: ser honesto. El recall COVID es el límite real del sistema.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 12 — Conclusiones + trabajo futuro         12:05 -> 12:30 -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h2>Conclusiones</h2>
+        <div class="two-col">
+          <div>
+            <h3>Qué se entrega</h3>
+            <ul class="small">
+              <li>Sistema completo, reproducible: 1 comando.</li>
+              <li>275 tests verdes + 1 skip esperado.</li>
+              <li>Memoria técnica de 26 pp. + 7 ADRs + 4 specs.</li>
+              <li>Diario IA: 28 sesiones documentadas.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Trabajo futuro priorizado</h3>
+            <ol class="small">
+              <li>Subir recall COVID via <em>transfer learning</em>.</li>
+              <li>Interpretabilidad: Grad-CAM por defecto.</li>
+              <li>Detección <em>out-of-domain</em>.</li>
+              <li>Auth + cifrado en tránsito.</li>
+              <li>Alertas + informes (Feature 5 partial).</li>
+            </ol>
+          </div>
+        </div>
+        <aside class="notes">
+          [12:05 - 12:30] Conclusiones — 25 segundos.
+          - Cerrar lo que se entrega.
+          - Trabajo futuro priorizado: el orden importa, refleja lo que la memoria razona en cap 16.3.
+        </aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 13 — Gracias + Q&A                                  cierre -->
+      <!-- ============================================================ -->
+      <section data-background-color="#FFFFFF">
+        <h1 style="font-size: 2.6em; color: #2563EB;">Gracias</h1>
+        <p style="font-size: 0.85em; margin-top: 8px;">Preguntas y comentarios</p>
+        <br>
+        <div class="small" style="margin-top: 18px; line-height: 2;">
+          <span class="chip">Repositorio: <code>github.com/MarinasAlejandro/lasalle-hospital</code></span><br>
+          <span class="chip">Memoria técnica: <code>docs/memoria-tecnica.md</code></span><br>
+          <span class="chip">Diario IA: <code>docs/diario-ia.md</code></span><br>
+          <span class="chip">Runbook demo: <code>docs/runbooks/presentation-demo.md</code></span>
+        </div>
+        <p class="tiny" style="margin-top: 28px;">Alejandro Marinas · Yago &middot; Máster en AI &amp; Big Data &middot; 2026-05-18</p>
+        <aside class="notes">
+          Cierre + Q&A.
+          - Dejar abierto un par de minutos para preguntas.
+          - Preguntas frecuentes esperables:
+            * "¿Por qué CNN custom y no transfer learning?" → ADR-005, alineación con Bloque 6 + tamaño <50 MB.
+            * "¿Cómo afecta el desbalance de clases?" → CB-6 mitigado con class_weight=sqrt.
+            * "¿Cómo escalaría a producción?" → cap 13 limitaciones + cap 16 trabajo futuro.
+            * "¿Cómo se mide el éxito del proyecto?" → 275 tests + criterio clínico cualitativo, no accuracy bruta.
+        </aside>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- reveal.js core + plugins -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+
+  <script>
+    Reveal.initialize({
+      hash: true,
+      slideNumber: 'c/t',
+      transition: 'slide',
+      controls: true,
+      progress: true,
+      center: true,
+      plugins: [ RevealNotes, RevealHighlight ]
+    });
+  </script>
+</body>
+</html>

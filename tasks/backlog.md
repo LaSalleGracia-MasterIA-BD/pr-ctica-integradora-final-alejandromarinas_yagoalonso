@@ -13,7 +13,7 @@
 | 9 | Consideraciones eticas y legales (sesgos, privacidad, riesgos, limitaciones) | — | — | — | done (integrado como cap 14 de `docs/memoria-tecnica.md`) | S |
 | 10 | Justificaciones tecnicas y reflexion critica (limitaciones, mejoras) | — | — | — | done (integrado como cap 13 + tabla de ADRs en cap 9 de `docs/memoria-tecnica.md`) | S |
 | 11 | Diario de desarrollo con IA (documento vivo — se actualiza cada sesion) | — | — | — | in-progress | M |
-| 12 | Presentacion final (10-15 min) | — | — | — | pending | S |
+| 12 | Presentacion final (10-15 min) | — | — | — | done (12 slides de contenido + slide Q&A en `docs/presentation/presentation.html` con reveal.js + guion en notas del presentador + preflight y plan B en `docs/presentation/README.md` + fallback offline en `docs/presentation/fallback.md`) | S |
 | 13 | Almacenamiento SQL para metadatos del pipeline (SQLite + SQLAlchemy, alineado con Bloque 7 de Eric) | specs/sqlite-pipeline-metadata.md | design/sqlite-pipeline-metadata.md | tasks/sqlite-pipeline-metadata.md | done | M |
 
 Estados: pending | spec-done | design-done | tasks-done | in-progress | done
@@ -24,4 +24,5 @@ Tamanos: S (< 1 dia) | M (1-3 dias) | L (> 3 dias)
 - **Feature 11 (Diario IA)** — Es un documento vivo que se actualiza cada sesion de trabajo. Entregable OBLIGATORIO segun el enunciado.
 - **Feature 6 (Monitorizacion)** — Se construye incrementalmente con el pipeline. Incluye logging, validacion de calidad (rejected_records) y alertas.
 - **Feature 7 (Evaluacion clinica)** — Separada del modelo porque el enunciado da peso especifico al "Porque" del modelo (matriz de confusion, impacto de errores desde punto de vista medico).
-- **Features 8-10** — Documentacion final integrada en `docs/memoria-tecnica.md` (caps 1-17). Pendiente la presentacion (Feature 12).
+- **Features 8-10** — Documentacion final integrada en `docs/memoria-tecnica.md` (caps 1-17).
+- **Feature 12** — Presentacion completada en `docs/presentation/` (slides reveal.js + README con preflight + fallback Markdown offline).
