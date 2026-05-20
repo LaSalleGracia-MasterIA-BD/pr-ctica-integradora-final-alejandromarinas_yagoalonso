@@ -249,3 +249,20 @@ class ApiClient:
         """Read the offline metrics.json. 503 if missing (not the same as
         predictor_loaded=false — see ADR-007 and spec CB-4)."""
         return self._request_json("GET", "/api/v1/model/evaluation")
+
+    # ------------------------------------------------------------------
+    # triage (feature triage-pacientes)
+    # ------------------------------------------------------------------
+
+    def create_triage_patient(self, payload: dict) -> ResultJson:
+        """POST /api/v1/triage/patients (alta manual con triaje).
+
+        Mapea 201 -> (data, None) y 422 / 503 / 409 -> ApiError clasificado.
+        """
+        return self._request_json(
+            "POST", "/api/v1/triage/patients", json=payload,
+        )
+
+    def get_triage_rules(self) -> ResultJson:
+        """GET /api/v1/triage/rules (RF-8): definicion de las reglas vigentes."""
+        return self._request_json("GET", "/api/v1/triage/rules")

@@ -59,6 +59,10 @@ pages = [
         title="Pacientes",
     ),
     st.Page(
+        str(_VIEWS_DIR / "triage.py"),
+        title="Triaje",
+    ),
+    st.Page(
         str(_VIEWS_DIR / "classifier.py"),
         title="Clasificador",
     ),

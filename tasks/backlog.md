@@ -15,6 +15,7 @@
 | 11 | Diario de desarrollo con IA (documento vivo — se actualiza cada sesion) | — | — | — | in-progress | M |
 | 12 | Presentacion final (10-15 min) | — | — | — | done (12 slides de contenido + slide Q&A en `docs/presentation/presentation.html` con reveal.js + guion en notas del presentador + preflight y plan B en `docs/presentation/README.md` + fallback offline en `docs/presentation/fallback.md`) | S |
 | 13 | Almacenamiento SQL para metadatos del pipeline (SQLite + SQLAlchemy, alineado con Bloque 7 de Eric) | specs/sqlite-pipeline-metadata.md | design/sqlite-pipeline-metadata.md | tasks/sqlite-pipeline-metadata.md | done | M |
+| 14 | Triaje de pacientes en alta manual (sistema basado en reglas, alineado con teoria de Modelos de IA del Master) — ver ADR-008 | specs/triage-pacientes.md | design/triage-pacientes.md | tasks/triage-pacientes.md | done (70 tests verdes nuevos; suite proyecto 344+1 skip; endpoint POST /triage/patients + GET /triage/rules; vista dashboard "Triaje"; buscador por external_id en vista Pacientes) | M |
 
 Estados: pending | spec-done | design-done | tasks-done | in-progress | done
 Tamanos: S (< 1 dia) | M (1-3 dias) | L (> 3 dias)

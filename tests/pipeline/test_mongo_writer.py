@@ -27,6 +27,12 @@ def writer():
 def _reset_db(w: MongoWriter) -> None:
     w.db.patients.drop()
     w.db.rejected_records.drop()
+    # Recrear el indice unico de `external_id` (en produccion lo crea
+    # `docker/mongo-init/init-db.js` para la BD `hospital`; las BDs de
+    # tests no pasan por ese script, asi que lo creamos aqui para
+    # reproducir la condicion de produccion — necesario para que
+    # `insert_patient` lance DuplicateKeyError ante colisiones).
+    w.db.patients.create_index("external_id", unique=True)
 
 
 def test_bulk_upsert_patients_inserts_new_documents(writer: MongoWriter):
@@ -247,3 +253,59 @@ def test_set_classification_overwrites_previous(writer: MongoWriter):
     doc = writer.db.patients.find_one({"external_id": "HOSP-CLS-4"})
     radio = doc["radiographies"][0]
     assert radio["classification"]["predicted_class"] == "COVID-19"
+
+
+
+# -- Triaje (T4b): insert_patient con insert_one, no upsert ----------------
+
+
+def test_insert_patient_creates_new_document(writer: MongoWriter):
+    doc = {
+        "external_id": "TRIAGE-20260519-0001",
+        "name": "Paciente Triaje",
+        "age": 40,
+        "gender": "M",
+        "triage": {"level": "leve", "score": 0, "reasons": []},
+    }
+
+    returned_id = writer.insert_patient(doc)
+
+    assert returned_id == "TRIAGE-20260519-0001"
+    persisted = writer.db.patients.find_one(
+        {"external_id": "TRIAGE-20260519-0001"}
+    )
+    assert persisted is not None
+    assert persisted["name"] == "Paciente Triaje"
+    assert persisted["triage"]["level"] == "leve"
+    # created_at + updated_at are stamped by the writer
+    assert "created_at" in persisted
+    assert "updated_at" in persisted
+
+
+def test_insert_patient_does_not_upsert_existing(writer: MongoWriter):
+    """Garantia dura: si el external_id ya existe, insert_patient NO
+    sobrescribe. Lanza pymongo.errors.DuplicateKeyError (propagado),
+    para que el router decida si reintentar o devolver 409 (RF-7)."""
+    from pymongo.errors import DuplicateKeyError
+
+    original = {
+        "external_id": "TRIAGE-20260519-0042",
+        "name": "Original",
+        "age": 30,
+    }
+    writer.insert_patient(original)
+
+    duplicate = {
+        "external_id": "TRIAGE-20260519-0042",
+        "name": "Should NOT overwrite",
+        "age": 99,
+    }
+    with pytest.raises(DuplicateKeyError):
+        writer.insert_patient(duplicate)
+
+    # El paciente original NO ha sido alterado:
+    persisted = writer.db.patients.find_one(
+        {"external_id": "TRIAGE-20260519-0042"}
+    )
+    assert persisted["name"] == "Original"
+    assert persisted["age"] == 30

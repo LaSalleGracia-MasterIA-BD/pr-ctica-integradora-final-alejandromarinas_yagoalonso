@@ -113,6 +113,30 @@ class MongoWriter:
         )
         return stats
 
+    def insert_patient(self, patient_doc: dict) -> str:
+        """Inserta un paciente nuevo sin upsert (feature triage-pacientes).
+
+        A diferencia de `bulk_upsert_patients` (usado por el ETL), este
+        metodo:
+          * llama a `insert_one`, NUNCA a un upsert;
+          * NO modifica `admissions` ni `radiographies` (el doc llega
+            tal cual lo construye el router de triaje);
+          * anade `created_at` y `updated_at` antes de persistir.
+
+        Si Mongo lanza `pymongo.errors.DuplicateKeyError` por colision
+        contra el indice unico `external_id`, esta funcion **propaga**
+        la excepcion sin intentar resolverla: el router de triaje
+        decide si reintentar con el siguiente NNNN (RF-7) o devolver
+        409 tras agotar `TRIAGE_MAX_RETRIES`. Garantia dura: el alta
+        manual NUNCA actualiza un paciente existente.
+
+        Devuelve el `external_id` del paciente insertado.
+        """
+        now = datetime.now(timezone.utc)
+        doc = {**patient_doc, "created_at": now, "updated_at": now}
+        self.db.patients.insert_one(doc)
+        return doc["external_id"]
+
     def add_radiography_to_patient(
         self, external_id: str, radiography: dict[str, Any]
     ) -> bool:

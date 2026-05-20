@@ -40,6 +40,21 @@ st.caption(
 )
 
 
+# Buscador rapido por external_id (util tras crear un paciente nuevo en
+# la vista Triaje y querer comprobar que esta persistido sin necesidad
+# de paginar). NO sustituye al click en fila — coexisten.
+search_id = st.text_input(
+    "Buscar por external_id (opcional)",
+    value="",
+    placeholder="HOSP-000123, TRIAGE-20260519-0001, ...",
+    help=(
+        "Si introduces un external_id valido, se muestra su detalle "
+        "directamente, saltandose la paginacion. Deja vacio para usar "
+        "el listado paginado de abajo."
+    ),
+).strip()
+
+
 # Paginacion en sidebar de la pagina (no en el sidebar global del app)
 col_left, col_right = st.columns([3, 1])
 with col_right:
@@ -108,13 +123,21 @@ else:
 st.markdown("---")
 st.subheader("Detalle del paciente seleccionado")
 
-if not selected_external_id:
-    st.info("Selecciona un paciente en la tabla para ver su detalle.")
+# Prioridad: si el buscador esta informado, gana sobre la seleccion por
+# fila. Esto permite buscar un external_id concreto (p. ej. uno recien
+# creado en la vista Triaje) sin tener que paginar.
+effective_external_id = search_id or selected_external_id
+
+if not effective_external_id:
+    st.info(
+        "Selecciona un paciente en la tabla, o usa el buscador de arriba "
+        "para abrir el detalle por external_id."
+    )
 else:
-    detail, det_err = _cached_patient(api.base_url, selected_external_id)
+    detail, det_err = _cached_patient(api.base_url, effective_external_id)
     if det_err is not None:
         if det_err.kind == "not_found":
-            st.info(f"No existe el paciente `{selected_external_id}`.")
+            st.info(f"No existe el paciente `{effective_external_id}`.")
         else:
             show_api_error(det_err, context="")
     elif detail:

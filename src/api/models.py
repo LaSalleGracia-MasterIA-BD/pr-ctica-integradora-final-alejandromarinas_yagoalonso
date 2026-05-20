@@ -1,9 +1,10 @@
 """Pydantic response schemas for the API."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Admission(BaseModel):
@@ -47,6 +48,41 @@ class Radiography(BaseModel):
     classification: RadiographyClassification | None = None
 
 
+class VitalSigns(BaseModel):
+    """Signos vitales basicos usados por el sistema de triaje.
+
+    Rangos plausibles (no umbrales validados medicamente; cubren
+    errores de tecleo, no juicio clinico). Ver specs/triage-pacientes.md
+    RF-1 + design seccion "Datos de entrada".
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    temperature_celsius: float = Field(ge=30, le=45)
+    oxygen_saturation: int = Field(ge=0, le=100)
+    heart_rate: int = Field(ge=0, le=300)
+    respiratory_rate: int = Field(ge=0, le=100)
+    systolic_bp: int = Field(ge=0, le=300)
+
+
+class TriageInfo(BaseModel):
+    """Resultado de triaje embebido en un paciente dado de alta manualmente.
+
+    Lo emite `src/api/triage.py::evaluate` y lo persiste el endpoint
+    POST /api/v1/triage/patients. Ver ADR-008 (reglas vs ML).
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    level: Literal["grave", "medio", "leve"]
+    score: int
+    reasons: list[str]
+    vital_signs: VitalSigns
+    symptoms: list[str] = Field(default_factory=list)
+    risk_factors: list[str] = Field(default_factory=list)
+    triaged_at: datetime
+    source: str = "manual_triage"
+    rules_version: str
+
+
 class Patient(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -58,6 +94,10 @@ class Patient(BaseModel):
     blood_type: str | None = None
     admissions: list[Admission] = Field(default_factory=list)
     radiographies: list[Radiography] = Field(default_factory=list)
+    # RNF-6: declarado explicitamente para que Pydantic no lo descarte
+    # (model_config=extra="ignore"). Solo presente en pacientes creados
+    # via POST /api/v1/triage/patients.
+    triage: TriageInfo | None = None
 
 
 class Page(BaseModel):
@@ -150,3 +190,71 @@ class ClassificationResponse(RadiographyClassification):
     the classification belongs to without round-tripping through the query.
     """
     minio_object_key: str
+
+
+# -- Triaje de pacientes en alta manual (Feature 14) --
+
+class TriagePatientRequest(BaseModel):
+    """Body of POST /api/v1/triage/patients.
+
+    Requiere `name` no vacio, `gender`, signos vitales y uno de los dos:
+    `birth_date` (ISO YYYY-MM-DD pasada/actual) o `age`. El servidor
+    genera el `external_id`. Las validaciones estrictas viven en
+    `field_validator`s para devolver 422 con mensaje concreto.
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    name: str = Field(min_length=1)
+    gender: Literal["M", "F", "Other"]
+    birth_date: str | None = None  # ISO YYYY-MM-DD
+    age: int | None = Field(default=None, ge=0, le=130)
+    blood_type: str | None = None
+    vital_signs: VitalSigns
+    symptoms: list[str] = Field(default_factory=list)
+    risk_factors: list[str] = Field(default_factory=list)
+
+    @field_validator("name")
+    @classmethod
+    def _name_must_not_be_blank(cls, v: str) -> str:
+        """name=' ' pasaria `min_length=1`. Forzamos contenido real."""
+        if not v.strip():
+            raise ValueError("name no puede estar vacio ni ser solo espacios")
+        return v
+
+    @field_validator("birth_date")
+    @classmethod
+    def _birth_date_must_be_iso_and_not_future(cls, v: str | None) -> str | None:
+        """Si viene, debe ser ISO YYYY-MM-DD parseable y no futura.
+
+        Devolver None si el campo no se envia. Si llega informado pero
+        es invalido o futuro, Pydantic devuelve 422 con el mensaje.
+        """
+        if v is None:
+            return v
+        try:
+            parsed = date.fromisoformat(v)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                f"birth_date debe ser ISO YYYY-MM-DD valido, recibido: {v!r}"
+            ) from exc
+        if parsed > date.today():
+            raise ValueError(
+                f"birth_date no puede ser futura, recibido: {v}"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _require_birth_date_or_age(self) -> "TriagePatientRequest":
+        if self.birth_date is None and self.age is None:
+            raise ValueError("birth_date o age es obligatorio")
+        return self
+
+
+class TriagePatientResponse(Patient):
+    """Respuesta del endpoint POST /api/v1/triage/patients.
+
+    Hereda explicitamente de Patient (mejor OpenAPI que un alias y
+    permite anadir campos especificos en el futuro sin tocar Patient).
+    Garantiza que `triage` queda poblado en la respuesta.
+    """
+    triage: TriageInfo

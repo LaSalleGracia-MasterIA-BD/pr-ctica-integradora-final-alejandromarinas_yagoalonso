@@ -251,3 +251,93 @@ def test_image_bytes_404_returns_error_not_bytes():
     assert data is None
     assert err is not None
     assert err.kind == "not_found"
+
+
+# ---------------------------------------------------------------------------
+# triage (feature triage-pacientes)
+# ---------------------------------------------------------------------------
+
+def test_create_triage_patient_maps_201_to_data():
+    payload_recv = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/triage/patients":
+            assert request.method == "POST"
+            payload_recv.update(json.loads(request.content))
+            return httpx.Response(201, json={
+                "external_id": "TRIAGE-20260519-0001",
+                "name": "Test",
+                "gender": "M",
+                "triage": {"level": "grave", "score": 1, "reasons": ["spo2_lt_92"]},
+            })
+        return httpx.Response(404, json={"detail": "not found"})
+
+    api = _make_client(handler)
+    data, err = api.create_triage_patient({"name": "Test", "vital_signs": {}})
+    assert err is None
+    assert data["triage"]["level"] == "grave"
+    assert payload_recv["name"] == "Test"
+
+
+def test_create_triage_patient_maps_422_to_validation_error():
+    api = _make_client(_json_handler({
+        "/api/v1/triage/patients": (422, {"detail": "field required"}),
+    }))
+    data, err = api.create_triage_patient({})
+    assert data is None
+    assert err is not None
+    assert err.kind == "validation"
+    assert err.status == 422
+
+
+def test_create_triage_patient_maps_409_to_server_error():
+    api = _make_client(_json_handler({
+        "/api/v1/triage/patients": (409, {"detail": "retries exhausted"}),
+    }))
+    data, err = api.create_triage_patient({"name": "X"})
+    assert data is None
+    assert err is not None
+    # 409 cae en "server" segun el ApiClient (no es 404/422/503)
+    assert err.kind == "server"
+    assert err.status == 409
+
+
+def test_create_triage_patient_maps_503_to_unavailable():
+    api = _make_client(_json_handler({
+        "/api/v1/triage/patients": (503, {"detail": "mongo unreachable"}),
+    }))
+    data, err = api.create_triage_patient({"name": "X"})
+    assert err is not None
+    assert err.kind == "unavailable"
+
+
+def test_create_triage_patient_maps_network_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    api = _make_client(handler)
+    data, err = api.create_triage_patient({"name": "X"})
+    assert data is None
+    assert err is not None
+    assert err.kind == "network"
+
+
+def test_get_triage_rules_returns_data():
+    api = _make_client(_json_handler({
+        "/api/v1/triage/rules": (200, {
+            "version": "1.0",
+            "levels": {"grave": [], "medio": []},
+        }),
+    }))
+    data, err = api.get_triage_rules()
+    assert err is None
+    assert data["version"] == "1.0"
+
+
+def test_get_triage_rules_maps_503():
+    api = _make_client(_json_handler({
+        "/api/v1/triage/rules": (503, {"detail": "unavailable"}),
+    }))
+    data, err = api.get_triage_rules()
+    assert err is not None
+    assert err.kind == "unavailable"

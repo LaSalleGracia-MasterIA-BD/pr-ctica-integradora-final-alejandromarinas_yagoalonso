@@ -109,6 +109,27 @@ curl -X POST http://localhost:8000/api/v1/radiographies/classify \
 
 # Leer la clasificacion persistida sin re-inferir
 curl "http://localhost:8000/api/v1/radiographies/classification?key=HOSP-000001/HOSP-000001_xray1.png"
+
+# Triaje: alta manual de paciente con asignacion de prioridad (grave/medio/leve)
+curl -X POST http://localhost:8000/api/v1/triage/patients \
+     -H "Content-Type: application/json" \
+     -d '{
+       "name": "Paciente Test",
+       "gender": "M",
+       "age": 65,
+       "vital_signs": {
+         "temperature_celsius": 38.5,
+         "oxygen_saturation": 88,
+         "heart_rate": 110,
+         "respiratory_rate": 22,
+         "systolic_bp": 100
+       },
+       "symptoms": ["tos", "disnea"],
+       "risk_factors": ["epoc"]
+     }'
+
+# Ver las reglas de triaje vigentes (RF-8)
+curl http://localhost:8000/api/v1/triage/rules
 ```
 
 ## Ejecutar los tests
@@ -117,12 +138,17 @@ curl "http://localhost:8000/api/v1/radiographies/classification?key=HOSP-000001/
 docker compose run --rm --entrypoint "" pipeline pytest tests -v
 ```
 
-Suite de **275 tests** distribuidos:
-- **218** unit + integracion en `hospital-pipeline` (incluye los 10 nuevos
-  para `GET /radiographies/image` y `GET /model/evaluation`)
-- **33** unit en `hospital-dashboard` (`ApiClient` con `httpx.MockTransport`,
-  `error_banner`, `system_status`)
-- **24** E2E con stack vivo (incluye smoke del dashboard healthcheck)
+Suite de **344 tests verdes + 1 skip esperado** distribuidos en:
+- tests de **pipeline, API, integracion y E2E** que se ejecutan en la
+  imagen `hospital-pipeline` (incluye los E2E con stack vivo y los del
+  watcher);
+- tests **unit del dashboard** en la imagen `hospital-dashboard`
+  (`ApiClient` con `httpx.MockTransport`, `error_banner`,
+  `system_status`).
+
+La feature de triaje (`POST /api/v1/triage/patients` + sistema basado
+en reglas) **anadio 70 tests nuevos** al total (reglas + endpoint +
+E2E + writer + cliente HTTP).
 
 1 test se salta cuando se ejecuta dentro del contenedor `pipeline` (el
 watcher E2E necesita rw sobre `data/incoming/`). Los tests E2E de
@@ -240,7 +266,7 @@ roles cubiertos y reglas operativas).
 
 **Clasificacion de radiografias (Keras/TensorFlow):** 16/16 tareas completadas. Ver `tasks/clasificacion-radiografias.md`, ADR-005 y ADR-006. Modelo entrenado en `data/models/radiography_classifier.keras` (~21 MB, commiteado) + reporte clinico en `docs/model-evaluation/`. Metricas finales (test split de 1.515 imagenes): accuracy=0.872, macro-F1=0.846, recall Normal=0.93, Pneumonia=0.93, COVID-19=0.70.
 
-**Tests:** 275 verdes + 1 skip.
+**Tests:** 344 verdes + 1 skip esperado.
 
 **Roadmap completo:** ver `tasks/backlog.md`. Pendientes principales:
 - ~~Dashboard de visualizacion~~ ✅ **Implementado** (Streamlit en

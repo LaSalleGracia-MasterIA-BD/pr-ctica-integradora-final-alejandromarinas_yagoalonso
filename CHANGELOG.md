@@ -7,6 +7,69 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Feature 14 — Triaje de pacientes en alta manual (sistema basado en reglas):**
+  endpoint REST `POST /api/v1/triage/patients` que recibe demograficos +
+  signos vitales + sintomas, evalua reglas explicitas (ver
+  `decisions/ADR-008-triaje-basado-en-reglas.md`) y persiste el paciente
+  en el dataset operativo `patients` de MongoDB con un campo `triage`
+  embebido (`level: grave|medio|leve`, `score`, `reasons`,
+  `triaged_at`, `source: manual_triage`, `rules_version: 1.0`).
+  - **`src/api/triage.py`**: funcion pura `evaluate(payload) -> TriageResult`
+    sin dependencias de Mongo ni FastAPI. 6 reglas grave + 5 reglas medio
+    (umbrales academicos simplificados, conectados con la teoria de
+    Modelos de IA del Master; ver ADR-008).
+  - **`src/api/routers/triage.py`**: orquesta validacion Pydantic +
+    reglas + persistencia. Genera `external_id` con formato
+    `TRIAGE-YYYYMMDD-NNNN` y usa **`MongoWriter.insert_patient`**
+    (`insert_one`, NO upsert) — el alta manual nunca actualiza un
+    paciente existente. Retry con `TRIAGE_MAX_RETRIES=5` ante
+    `DuplicateKeyError`; 409 tras agotar reintentos.
+  - **`src/pipeline/storage/mongo_writer.py`**: metodo nuevo
+    `insert_patient(doc) -> str` que propaga `DuplicateKeyError` sin
+    intentar resolverlo (responsabilidad del router).
+  - **`src/api/models.py`**: schemas `VitalSigns`, `TriageInfo`,
+    `TriagePatientRequest` (con `@model_validator` que exige
+    birth_date o age) y `class TriagePatientResponse(Patient): ...`
+    (clase explicita heredando para mejor OpenAPI). Campo
+    `triage: TriageInfo | None = None` anadido a `Patient` para que
+    no se descarte con `extra="ignore"`.
+  - **`GET /api/v1/triage/rules`**: documenta la version de reglas
+    vigente (RF-8). Sirve como auto-documentacion del sistema.
+  - **Dashboard**: vista nueva **"Triaje"** en
+    `src/dashboard/views/triage.py` (formulario con demograficos +
+    signos vitales + sintomas multiselect + factores de riesgo +
+    visualizacion del resultado con color por nivel + expander con
+    las reglas vigentes). Dashboard sigue API-only (ADR-007).
+    Registrada en `src/dashboard/app.py::st.navigation` entre
+    "Pacientes" y "Clasificador".
+  - **70 tests nuevos**: 34 unitarios de reglas
+    (`tests/api/test_triage_rules.py`, cubren las 6 reglas grave +
+    5 reglas medio + casos borde de fronteras 91/92/94/95, 30/31
+    fr, 130/131 fc, 89/90 sbp, 38.9/39.0 temp); 21 de endpoint
+    (`tests/api/test_triage_endpoint.py`: 3 niveles + validaciones
+    422 incluyendo birth_date invalida, birth_date futura, name solo
+    espacios; formato del external_id; cupo diario 9999 -> 409;
+    CA-5 GET /patients tras crear); 2 de `insert_patient`
+    (`tests/pipeline/test_mongo_writer.py`); 6 E2E con stack vivo
+    (`tests/e2e/test_triage_e2e.py`: incluye verificacion real
+    paginando hasta la ultima pagina usando `total`); 7 de
+    `api_client` con `httpx.MockTransport`
+    (`tests/dashboard/test_api_client.py`). **Total proyecto: 344
+    tests verdes** + 1 skip esperado (antes 275).
+  - **ADR-008**: justifica reglas vs ML (no hay dataset etiquetado
+    con severidad `grave|medio|leve` disponible; reglas son
+    auditables y conectan con la teoria del Master sobre sistemas
+    basados en reglas). El proyecto contiene ahora ambos paradigmas:
+    ML para radiografias (donde si hay dataset) y reglas para triaje
+    (donde no lo hay).
+  - Disclaimer permanente en la UI: "asistencia al triaje, no
+    diagnostico ni decision medica vinculante". Umbrales academicos
+    simplificados, NO validados clinicamente.
+  - **Mejora demo en vista Pacientes**: anadido buscador opcional
+    por `external_id` que coexiste con la seleccion por fila. Util
+    tras crear un paciente en la vista Triaje para comprobar al
+    instante que esta persistido en Mongo.
+
 - **Feature 4 — Dashboard de visualizacion (Streamlit, puerto 8501):**
   centro de control hospitalario que consume exclusivamente la API REST
   (sin acceso directo a MongoDB/SQLite/MinIO). Ver ADR-007.

@@ -554,6 +554,28 @@
   - Justificar SQLite como "cubre" el requisito de >=2 almacenes. Mongo+MinIO ya cumplia; SQLite *refuerza* anadiendo capa relacional.
 - **Leccion aprendida:** Antes de afirmar la existencia de ficheros (progress/, runbooks, etc.) o cifras puntuales (tamano dataset), verificar con `ls`/`du`/`grep` en lugar de citar de memoria. Las inexactitudes pequenas suman ruido y minan la credibilidad del documento completo.
 
+### Sesion 29 — 2026-05-19: Feature triaje de pacientes (reglas explicitas)
+
+- **Objetivo:** Implementar la feature `triage-pacientes` siguiendo SDD completo (spec/design/tasks/ADR-008 previos) con TDD desde los criterios de aceptacion. Sistema basado en reglas (no ML) conectado con la teoria del Master sobre Modelos de IA.
+- **Resultado:**
+  - **`src/api/triage.py`** (funcion pura): `evaluate(payload) -> TriageResult`, `get_rules_definition()`, `build_triage_external_id`. Reglas v1.0: 6 grave (SpO2<92, SBP<90, FR>30, FC>130, alteracion_conciencia, dolor_toracico_fuerte) + 5 medio (SpO2 92-94, T>=39, FR 22-30, FC 110-130, anciano_riesgo_respiratorio). Cero dependencias de Mongo/FastAPI.
+  - **`src/api/routers/triage.py`**: `POST /api/v1/triage/patients` y `GET /api/v1/triage/rules`. Maneja retry +1 ante `DuplicateKeyError` con `TRIAGE_MAX_RETRIES=5`, 409 al agotar, 503 si Mongo cae, 422 automatico via Pydantic.
+  - **`src/pipeline/storage/mongo_writer.py`**: metodo `insert_patient(doc) -> str` con `insert_one` (no upsert) — garantia dura: el alta manual nunca actualiza un paciente.
+  - **`src/api/models.py`**: schemas `VitalSigns`, `TriageInfo`, `TriagePatientRequest` (con `@model_validator` birth_date xor age) y `class TriagePatientResponse(Patient)` heredando explicitamente. Campo `triage: TriageInfo | None` anadido a `Patient` para no perderlo con `extra="ignore"`.
+  - **Dashboard**: vista nueva `src/dashboard/views/triage.py` registrada en `app.py` entre "Pacientes" y "Clasificador". API-only via `api_client.create_triage_patient` + `get_triage_rules`. Formulario con dos columnas + multiselect de sintomas/factores + visualizacion con color por nivel + expander con reglas vigentes.
+  - **Tests (70 nuevos)**: 34 unitarios de reglas (incluye casos borde de fronteras 91/92/94/95, 30/31 fr, 130/131 fc, 89/90 sbp, 38.9/39.0 temp), 21 de endpoint (3 niveles + validaciones 422 incluyendo birth_date invalida, birth_date futura, name solo espacios; formato del external_id; cupo diario 9999 -> 409; CA-5), 2 de `insert_patient`, 6 E2E con stack vivo (incluye verificacion real paginando hasta la ultima pagina usando `total`), 7 de api_client con `httpx.MockTransport`. **Total proyecto: 344 tests verdes** + 1 skip esperado (antes 275).
+  - **Mejora demo en vista Pacientes**: anadido buscador opcional por `external_id` que coexiste con la seleccion por fila. Pensado para que, tras crear un paciente en la vista Triaje, se pueda copiar el ID y comprobar al instante que esta persistido.
+  - **Smoke real**: POST con SpO2=88 -> 201 con `level=grave`, `reasons=["spo2_lt_92"]`, `source=manual_triage`, `rules_version=1.0`. GET /patients/{id} confirma persistencia. Dashboard `/_stcore/health` 200 OK. GET /triage/rules con 6 reglas grave + 5 medio. Validaciones reforzadas verificadas con curl: birth_date invalida -> 422, birth_date futura -> 422, name solo espacios -> 422.
+- **Aciertos de la IA:**
+  - **TDD ejecutado literal**: tests rojos primero, codigo despues. Cero retrabajos por incompatibilidad spec/codigo.
+  - **Decision tecnica respetada**: `insert_one` en lugar de `bulk_upsert_patients`. Cero tentaciones de "reutilizar lo que ya hay" sacrificando la semantica.
+  - **Funcion pura `evaluate`**: trivial de testear (34 unit tests en 0.10s, sin Mongo ni FastAPI). El esfuerzo del design de separar reglas de orquestacion se paga con creces.
+  - **Schemas Pydantic explicitos**: `class TriagePatientResponse(Patient)` heredando (no alias) — el OpenAPI lo refleja correctamente y queda claro en /docs.
+- **Casos donde hubo que corregir:**
+  - El fixture de `test_mongo_writer.py` no creaba el indice unico `external_id` (en produccion lo crea `docker/mongo-init/init-db.js` solo en la BD `hospital`, no en las BDs de tests `hospital_test_*`). El test de "insert_patient no sobrescribe" fallaba la primera vez. Corregido anadiendo `create_index("external_id", unique=True)` al fixture.
+  - El container `api` precarga el codigo en la imagen Docker, asi que tras anadir el router nuevo hizo falta `docker compose up -d --build api dashboard` para que el endpoint estuviera disponible (no basta con montar `./src` en runtime).
+- **Leccion aprendida:** Los fixtures de tests de integracion contra Mongo deben reproducir **explicitamente** los indices que en produccion crea el init script. Sin esa replica, los tests que dependen del indice unico (como "no sobrescribir") dan falsos verdes.
+
 ## Reflexion critica
 
 ### Que ha aportado la IA
