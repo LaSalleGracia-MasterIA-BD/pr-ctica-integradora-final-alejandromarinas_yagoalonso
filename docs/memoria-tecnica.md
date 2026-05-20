@@ -34,7 +34,7 @@
 
 ## 1. Resumen ejecutivo
 
-Este proyecto implementa, para el hospital ficticio **laSalle Health Center**, un sistema completo de soporte a la decisión clínica formado por cuatro piezas interdependientes:
+Este proyecto implementa, para el hospital ficticio **laSalle Health Center**, un sistema completo de asistencia clínica formado por cuatro piezas interdependientes:
 
 1. Un **pipeline ETL** con PySpark que ingesta datos clínicos tabulares (pacientes e ingresos) e imágenes de radiografía, los valida, los limpia y los persiste en los almacenes apropiados.
 2. Dos **sistemas de IA** complementarios: una **CNN custom en Keras/TensorFlow** que clasifica radiografías de tórax en tres clases (`Normal`, `Pneumonia`, `COVID-19`) como **asistencia al diagnóstico**, y un **sistema de triaje basado en reglas IF-THEN** que asigna prioridad `grave / medio / leve` a pacientes registrados manualmente desde el dashboard. La elección de paradigma para cada uno se justifica en el capítulo 6.
@@ -43,7 +43,7 @@ Este proyecto implementa, para el hospital ficticio **laSalle Health Center**, u
 
 La arquitectura se despliega como un único `docker compose up` que orquesta siete servicios (MongoDB, MinIO, inicializador de buckets, pipeline, API, watcher y dashboard) y deja el sistema listo en menos de un minuto. El estado actual del repositorio contiene **404 tests automáticos verdes** (más un skip controlado), nueve ADRs documentadas y artefactos vivos de la metodología SDD aplicada durante todo el desarrollo.
 
-El **modelo entrenado** sobre el split de test (1.515 radiografías del *COVID-19 Radiography Database* de Kaggle) alcanza una *accuracy* de **0,8719** y un **macro-F1 de 0,8456**, con un *recall* por clase de 0,926 (Normal), 0,933 (Pneumonia) y **0,695 (COVID-19)**. Esta última cifra es el principal límite clínico del sistema y se discute en detalle en los capítulos de resultados, limitaciones y ética: el sistema se entrega como herramienta de **asistencia**, nunca como diagnóstico final.
+El **modelo entrenado** sobre el split de test (1.515 radiografías del *COVID-19 Radiography Database* de Kaggle) alcanza una *accuracy* de **0,8719** y un **macro-F1 de 0,8456**, con un *recall* por clase de 0,926 (Normal), 0,933 (Pneumonia) y **0,695 (COVID-19)**. Esta última cifra es la principal limitación del sistema de cara a un uso clínico y se discute en detalle en los capítulos de resultados, limitaciones y ética: el sistema se entrega como herramienta de **asistencia**, nunca como diagnóstico final.
 
 El proyecto está construido con metodología **SDD (Spec-Driven Development)**: cada feature pasa por las fases `/spec -> /planificar -> /tareas -> /implementar -> /revisar`, con artefactos versionados en `specs/`, `design/`, `tasks/` y `decisions/`. El uso de IA generativa como herramienta de pareo en el desarrollo está documentado sesión a sesión en `docs/diario-ia.md` y se trata explícitamente en el capítulo 16.
 
@@ -88,7 +88,7 @@ El problema operacional se descompone en cuatro subproblemas, que se han trabaja
 1. **Ingesta y procesamiento a escala** de datos clínicos heterogéneos (CSVs + imágenes) sobre un *framework* de cómputo distribuido (PySpark), con validación, deduplicación y enriquecimiento, persistiendo el resultado en almacenes adecuados a cada tipo de dato.
 2. **Clasificación automática** de radiografías de tórax como `Normal`, `Pneumonia` o `COVID-19`, empleando una **CNN propia** entrenada desde cero (sin *transfer learning*) sobre el *COVID-19 Radiography Database* de Kaggle. Esta decisión se justifica formalmente en la ADR-005, alineada con el Bloque 6 del Máster.
 3. **Servicio HTTP** que expone tanto los datos procesados como la inferencia del modelo a través de una API REST documentada (FastAPI + Swagger), con contratos estables y separación lectura/escritura.
-4. **Cuadro de mando** que sintetiza el estado del sistema (datos cargados, pipeline ejecutándose, modelo cargado, métricas de calidad) y permite a un operador clínico no técnico inspeccionar pacientes, lanzar la clasificación de una radiografía y auditar el histórico de ejecuciones del ETL.
+4. **Cuadro de mando** que sintetiza el estado del sistema (datos cargados, pipeline ejecutándose, modelo cargado, métricas de calidad) y permite a un operador del hospital sin perfil técnico inspeccionar pacientes, lanzar la clasificación de una radiografía y auditar el histórico de ejecuciones del ETL.
 
 ### 2.3. Alcance, supuestos y exclusiones
 
@@ -175,7 +175,7 @@ Tres servicios — `pipeline`, `api` y `watcher` — comparten la **misma imagen
 
 ### 3.3. Persistencia poliglota
 
-Una de las decisiones de diseño nucleares del proyecto es la **persistencia poliglota** (ADR-004): cada tipo de dato vive donde su forma encaja, sin duplicar fuente de verdad.
+Una de las decisiones de diseño más importantes del proyecto es la **persistencia poliglota** (ADR-004): cada tipo de dato vive donde su forma encaja, sin duplicar fuente de verdad.
 
 | Almacén | Datos | Justificación |
 |---|---|---|
@@ -355,7 +355,7 @@ La conjunción de estos tres campos permite responder preguntas como *"¿qué fi
 
 ### 5.1. Visión general del pipeline
 
-El pipeline ETL es el componente con más superficie del sistema y se diseña como una **cadena de etapas** orquestadas por `PipelineOrchestrator` (`src/pipeline/orchestrator.py`):
+El pipeline ETL es el componente más grande del sistema y se diseña como una **cadena de etapas** orquestadas por `PipelineOrchestrator` (`src/pipeline/orchestrator.py`):
 
 ```
 CSVIngester -> DataValidator -> DataCleaner -> DataTransformer -> MongoWriter
@@ -431,7 +431,7 @@ Mapea cada `diagnosis_code` (ICD-10) a uno de cuatro valores en `diagnosis_categ
 - Otros códigos válidos -> `Other`
 - Códigos no reconocidos -> `Unknown`
 
-La distribución observada tras el smoke test contra los datos sintéticos generados es **9,7 % COVID-19 / 19,5 % Pneumonia / 70,8 % Other**, que cuadra con la distribución 1/10, 2/10, 7/10 que el generador (`generate_data.py`) inyecta intencionadamente para que las tres clases estén representadas con peso clínicamente verosímil.
+La distribución observada tras el smoke test contra los datos sintéticos generados es **9,7 % COVID-19 / 19,5 % Pneumonia / 70,8 % Other**, que cuadra con la distribución 1/10, 2/10, 7/10 que el generador (`generate_data.py`) inyecta intencionadamente para que las tres clases queden representadas en proporciones razonables (la mayoría "Other", y COVID-19 como minoritaria), sin pretender que reflejen incidencia clínica real.
 
 #### 5.4.3. Agregaciones
 
@@ -511,7 +511,7 @@ El apartado 6.9 cierra el capítulo explicando por qué se ha elegido un paradig
 
 ### 6.1. Clasificador de radiografías — encuadre del problema (primer sistema de IA)
 
-El **primer sistema de IA** del proyecto clasifica radiografías de tórax en tres clases (`Normal`, `Pneumonia`, `COVID-19`) como **asistencia diagnóstica** — no como diagnóstico final. La spec `clasificacion-radiografias` fija explícitamente que **no hay umbral bloqueante de *accuracy***: el criterio de evaluación es **clínico**, basado en *recall* por clase y análisis cualitativo de la matriz de confusión, no en una cifra global de *accuracy*. Esta orientación está alineada con lo enseñado en el Bloque 6 del Máster (Aprendizaje Automático, profesor Jordi), donde se subraya que en problemas clínicos el coste de un falso negativo es mayor que el de un falso positivo.
+El **primer sistema de IA** del proyecto clasifica radiografías de tórax en tres clases (`Normal`, `Pneumonia`, `COVID-19`) como **asistencia diagnóstica** — no como diagnóstico final. La spec `clasificacion-radiografias` fija explícitamente que **no hay umbral bloqueante de *accuracy***: para evaluar el modelo se mira el *recall* por clase (cuántos positivos reales detecta) y la matriz de confusión, no solo una cifra global. Esto se alinea con lo enseñado en el Bloque 6 del Máster (Aprendizaje Automático, profesor Jordi): en problemas clínicos, dejar pasar un positivo (falso negativo) suele tener peor consecuencia que avisar de más (falso positivo), así que el *recall* manda sobre la *accuracy*.
 
 ### 6.2. Arquitectura del modelo
 
@@ -602,11 +602,11 @@ Matriz de confusión 3x3 (filas = clase real, columnas = clase predicha):
 
 Los artefactos visuales completos están en `docs/model-evaluation/confusion_matrix.png` (mapa de calor de la matriz) y `docs/model-evaluation/learning_curves.png` (curvas de *loss* y *accuracy* por *epoch* para *train* y *val*).
 
-### 6.6. Análisis clínico (CA-3)
+### 6.6. Lectura cualitativa de los errores (CA-3)
 
-La matriz de confusión tiene seis tipos de error con consecuencias clínicas distintas. El error de mayor gravedad en contexto hospitalario es el **falso negativo de COVID-19** (un paciente realmente positivo clasificado como `Normal`), porque implica no aislar a un contagioso. Por debajo se sitúan los **falsos negativos de Pneumonia** (paciente con neumonía no detectada) y las **confusiones COVID/Pneumonia** (al menos disparan protocolo respiratorio aunque etiqueten mal). Los **falsos positivos** son los menos graves: generan pruebas adicionales pero no ponen en riesgo al paciente.
+La matriz de confusión tiene seis tipos de error y no todos pesan igual en un hospital. El más grave es el **falso negativo de COVID-19** (un paciente que sí lo es y el modelo lo clasifica como `Normal`), porque ese paciente no se aislaría. Por debajo se sitúan los **falsos negativos de Pneumonia** (neumonía no detectada) y las **confusiones COVID ↔ Pneumonia** (al menos llevan a un protocolo respiratorio aunque la etiqueta exacta esté mal). Los **falsos positivos** son los menos graves: generan pruebas adicionales pero no ponen al paciente en riesgo.
 
-Con la matriz obtenida, el modelo presenta **101 COVID-19 clasificados como Normal y 9 como Pneumonia (total 110 COVID-19 no detectados como tal)**, lo que se traduce en un *recall* de **0,695** para esa clase. Esta cifra es **el principal límite clínico del sistema** y se discute con franqueza en las secciones 13 (limitaciones) y 14 (ética). La conclusión clínica es que el modelo, en su estado actual, **no es apto para uso autónomo**: se entrega como herramienta de asistencia que prioriza casos para revisión humana, no como sustituto del juicio clínico.
+Con la matriz obtenida, el modelo deja **101 COVID-19 clasificados como Normal y 9 como Pneumonia (110 COVID-19 que se pierden como tal)**, lo que se traduce en un *recall* de **0,695** para esa clase. Es la principal limitación del modelo de cara a un uso clínico, y se discute con franqueza en los capítulos 14 (limitaciones) y 15 (ética). La conclusión es directa: el modelo no es apto para tomar decisiones por sí solo; se entrega como herramienta de asistencia que prioriza casos para que los revise un profesional, no como sustituto del juicio clínico.
 
 ### 6.7. Ciclo de vida del modelo en producción
 
@@ -845,7 +845,7 @@ La propiedad clave es la **idempotencia**: el mismo `docker compose up` aplicado
 
 ### 9.4. Alertas operativas bajo demanda — `GET /api/v1/alerts`
 
-El tercer requisito del enunciado en este eje ("alertas o notificaciones ante eventos relevantes") se cumple con el endpoint `GET /api/v1/alerts`, expuesto por la API y consumido por la vista *Alertas* del dashboard. La decisión arquitectónica nuclear de esta pieza está formalizada en **ADR-009**: las alertas son una **vista derivada** que se calcula al vuelo desde las fuentes existentes; **no se persisten en una tabla nueva**.
+El tercer requisito del enunciado en este eje ("alertas o notificaciones ante eventos relevantes") se cumple con el endpoint `GET /api/v1/alerts`, expuesto por la API y consumido por la vista *Alertas* del dashboard. La decisión arquitectónica principal está formalizada en **ADR-009**: las alertas son una **vista derivada** que se calcula al consultar el endpoint, leyendo las fuentes ya existentes; **no se guardan en una tabla nueva**.
 
 #### Qué considera "alerta" el sistema
 
@@ -879,7 +879,7 @@ Escribe el mismo contenido en formato **Markdown** dentro de `docs/reports/YYYY-
 
 #### La pieza que cierra el círculo: idempotencia byte-a-byte (RNF-6 / CA-11)
 
-Esta es la propiedad técnica más característica del bloque y merece un comentario explícito. El Markdown que el script escribe es **byte-a-byte estable a igualdad de (estado del sistema + fecha solicitada)**. Misma BBDD + mismo `--date` aplicado dos veces → dos ficheros con `sha256` idéntico.
+Esta es la propiedad técnica más característica del bloque. En lenguaje natural: si se ejecuta el script dos veces sobre la misma BBDD y la misma fecha (un día cerrado), el fichero `.md` resultante es **exactamente el mismo**, byte por byte. Misma BBDD + mismo `--date` aplicado dos veces → dos ficheros con `sha256` idéntico (lo que confirma que no hay ni un carácter de diferencia entre ambos).
 
 Se consigue separando el builder del render:
 
@@ -917,7 +917,7 @@ Tres niveles de cobertura aseguran que la automatización y la observabilidad es
 | **Tests del CLI con sha256** | Idempotencia byte-a-byte del Markdown, creación del directorio, manejo de errores. | `tests/automation/test_daily_report.py` |
 | **Smoke real con stack vivo** | Cadena completa: paciente grave inyectado via `POST /triage/patients` aparece como alerta `triage_severe / critical` en `/alerts`; dos ejecuciones del CLI sobre la misma fecha dan sha256 idéntico. | Verificado al cerrar la Feature 15. |
 
-La conjunción de las cuatro capas hace que cualquier cambio que rompa una de las propiedades nucleares (reglas, idempotencia, ventana correcta) rompa al menos un test.
+La conjunción de las cuatro capas hace que cualquier cambio que rompa una de las propiedades clave (reglas, idempotencia, ventana correcta) rompa al menos un test.
 
 ---
 
@@ -925,7 +925,7 @@ La conjunción de las cuatro capas hace que cualquier cambio que rompa una de la
 
 Las decisiones técnicas no triviales están documentadas en `decisions/` como ADRs (*Architecture Decision Records*) con contexto, alternativas consideradas y consecuencias. Esta sección las consolida en una sola tabla; el detalle completo está en los ficheros enlazados:
 
-| ID | Decisión | Alternativa principal descartada | Razón nuclear | Estado |
+| ID | Decisión | Alternativa principal descartada | Motivo principal | Estado |
 |---|---|---|---|---|
 | **ADR-001** | Stack inicial: PySpark + PyTorch + FastAPI + MongoDB + MinIO + Docker | Dask, Apache Beam | PySpark es estándar del temario de Big Data; FastAPI + MongoDB + MinIO son stack moderno conocido | aceptada, parcialmente superada por ADR-003 |
 | **ADR-002** | MongoDB para datos clínicos en lugar de PostgreSQL | PostgreSQL relacional | El enunciado pide al menos dos tipos de almacenamiento y pone PostgreSQL como ejemplo (no como obligación); la jerarquía paciente → admisiones → radiografías encaja con un modelo documental | aceptada |
