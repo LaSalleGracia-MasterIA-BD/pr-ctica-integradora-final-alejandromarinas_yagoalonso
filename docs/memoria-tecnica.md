@@ -225,129 +225,76 @@ Estas decisiones se desarrollan formalmente en los ADR-001 a ADR-009 (capítulo 
 
 ### 4.1. Tipos de datos manejados
 
-El sistema trabaja con tres familias de datos heterogéneas, cada una persistida en el almacén que mejor encaja con su forma:
+El sistema trabaja con cinco familias de datos heterogéneas, cada una persistida en el almacén que mejor encaja con su forma:
 
 | Familia | Naturaleza | Fuente | Almacén destino |
 |---|---|---|---|
-| Pacientes | Tabular relacional con campos demográficos | `data/raw/patients.csv` (sintético, *Faker*) | MongoDB (`patients`) |
-| Admisiones / ingresos | Tabular relacional con FK a paciente | `data/raw/admissions.csv` (sintético) | MongoDB (embebido en `patients.admissions`) |
-| Radiografías (binarios + metadatos) | Imagen PNG + metadatos | `data/raw/images/` (dummies para *smoke*) + `data/raw/covid_radiography/` (dataset Kaggle, solo en local) | MinIO (binario) + MongoDB (metadatos embebidos en `patients.radiographies`) |
+| Pacientes | Tabular con campos demográficos | `data/raw/patients.csv` (sintético, *Faker*) | MongoDB (`patients`) |
+| Admisiones / ingresos | Tabular con FK lógica a paciente | `data/raw/admissions.csv` (sintético) | MongoDB (embebido en `patients.admissions`) |
+| Radiografías (binarios + metadatos) | Imagen PNG + metadatos | `data/raw/images/` (dummies para *smoke*) + dataset Kaggle (solo en local) | MinIO (binario) + MongoDB (metadatos en `patients.radiographies`) |
 | Métricas operativas | Tabular plano (auditoría + agregados) | Generado por el orchestrator | SQLite (`pipeline_runs`, `data_quality_summary`) |
-| Rechazos del pipeline | Documento heterogéneo con `raw_data` específico de cada motivo | Generado por `DataValidator` y `DataCleaner` | MongoDB (`rejected_records`) |
+| Rechazos del pipeline | Documento heterogéneo con `raw_data` por motivo | Generado por `DataValidator` y `DataCleaner` | MongoDB (`rejected_records`) |
 
-### 4.2. Datos sintéticos del pipeline (CSVs)
+### 4.2. Datos sintéticos del pipeline
 
-Los CSVs de pacientes e ingresos están **generados con Faker** (`src/pipeline/scripts/generate_data.py`) y commiteados al repositorio para que el arranque sea reproducible y offline. Esta decisión deliberada — *no usar* datos reales — es la solución natural al problema ético y legal de manejar datos clínicos identificables (ver capítulo 15).
+Los CSVs de pacientes e ingresos están **generados con Faker** (`src/pipeline/scripts/generate_data.py`) con `seed=42`, y se commitean al repositorio para que el arranque sea reproducible y offline. Es la solución natural al problema ético y legal de manejar datos clínicos identificables: no usamos datos reales (ver capítulo 15).
 
-**`data/raw/patients.csv`** (5.150 filas, ~5.000 pacientes + ~5% de casos borde intencionados):
+**`patients.csv`** contiene 5.150 filas con `external_id` (formato `HOSP-NNNNNN`), `name`, `birth_date`, `gender` (`M / F / Other`) y `blood_type`. **`admissions.csv`** contiene 10.000 filas con `patient_external_id` (FK lógica a `patients`), `admission_date`, `discharge_date`, `department` (12 valores fijos), `diagnosis_code` (ICD-10) y `status` (`admitted / discharged / transferred`). Los esquemas completos viven en `specs/pipeline-datos.md`.
 
-| Campo | Tipo | Ejemplo | Notas |
-|---|---|---|---|
-| `external_id` | string | `HOSP-000042` | Formato fijo `HOSP-NNNNNN`, validado |
-| `name` | string | `María García López` | Puede venir vacío en casos borde |
-| `birth_date` | string ISO | `1972-08-14` | Puede venir mal formada en casos borde |
-| `gender` | string | `F` | Set válido: `M`, `F`, `Other`; otros valores se rechazan |
-| `blood_type` | string | `A+` | Set válido: 8 grupos sanguíneos estándar |
-
-**`data/raw/admissions.csv`** (10.000 filas):
-
-| Campo | Tipo | Ejemplo | Notas |
-|---|---|---|---|
-| `patient_external_id` | string | `HOSP-000042` | FK lógica a `patients.external_id` — puede ser huérfana (intencionado) |
-| `admission_date` | string ISO | `2024-03-15` | |
-| `discharge_date` | string ISO | `2024-03-22` | Opcional |
-| `department` | string | `Urgencias` | 12 valores fijos (Cardiología, Oncología, Urgencias, etc.) |
-| `diagnosis_code` | string | `J18.9` | Código ICD-10; distribución intencionada 10% COVID-19, 20% Pneumonia, 70% Other |
-| `status` | string | `discharged` | Set válido: `admitted`, `discharged`, `transferred` |
-
-**Casos borde intencionados** introducidos por el generador (parámetro `--seed 42` por defecto):
-
-- **Nulos** en campos obligatorios (~5%): nombres vacíos, fechas faltantes, *gender* nulo. Permiten verificar CB-3 ("registros con valores nulos en campos obligatorios se rechazan con motivo").
-- **Duplicados** (~3%): mismo `external_id` repetido. Permiten verificar CB-4 ("registros duplicados se deduplican antes de persistir").
-- **Fechas malformadas**: `1972-13-44` o cadenas no-ISO. Permiten verificar la robustez del parser.
-- **Valores fuera de set**: `gender=X`, `status=unknown`, `blood_type=ZZ`. Permiten verificar que las reglas `isin` capturan correctamente lo fuera de dominio (con el bug fix de `null` documentado en `lessons.md`).
-- **Admisiones huérfanas**: ~10% de `patient_external_id` apuntan a pacientes inexistentes. Permiten verificar la validación cruzada (cross-entity) entre `admissions` y `patients`.
-
-El script de generación es **determinista por *seed***, lo que permite que cualquier desarrollador regenere exactamente el mismo dataset:
+El generador inyecta **~5 % de casos borde intencionados** para verificar la validación: nulos en campos obligatorios, duplicados, fechas mal formadas, valores fuera de set y admisiones huérfanas (~10 % de FKs apuntan a pacientes inexistentes). Cada uno cubre un CB de la spec (CB-3 nulos, CB-4 duplicados, etc.) y existen tests de regresión asociados. Cualquier desarrollador regenera el mismo dataset con:
 
 ```bash
 docker compose run --rm --entrypoint "" pipeline \
   python -m src.pipeline.scripts.generate_data --seed 42
 ```
 
-El resultado de procesar este dataset por el pipeline se detalla con todas sus cifras en la sección 5.8 (métricas observadas). Estos números se persisten en `data_quality_summary` (una fila por dimensión) y son consultables vía `GET /api/v1/pipeline/quality-summary` o desde la vista *Calidad de datos* del dashboard.
+Las cifras resultantes de procesar este dataset por el pipeline se detallan en la sección 5.8.
 
 ### 4.3. Radiografías de tórax (binarios)
 
-El sistema maneja tres familias de imágenes con propósitos distintos. Cada una se identifica por el prefijo del `external_id` del paciente al que se ata:
+El sistema maneja tres familias de imágenes con propósitos distintos, identificadas por el prefijo del `external_id` del paciente al que se atan:
 
 | Prefijo | Origen | Propósito | Estado en repo |
 |---|---|---|---|
-| `HOSP-NNNNNN` | Generador `generate_dummy_images.py` | Smoke test del pipeline de ingesta (validan PNG signature, suben a MinIO, se embeben en paciente) | 17 PNGs **dummy 1x1** commiteados en `data/raw/images/` |
-| `HOSP-DEMO-001` | Bootstrap genera al vuelo (numpy + Pillow + ImageDraw, 256x256, banda gradiente sintética) | Fixture *out-of-the-box* para que la vista *Clasificador* del dashboard tenga al menos una imagen clasificable sin pedir descarga del dataset real | No commiteada — generada en cada bootstrap |
-| `HOSP-PRES-001..006` | Subset de 6 imágenes del *COVID-19 Radiography Database* de Kaggle | Demo con radiografías reales del dataset (2 por clase: COVID, Normal, Viral Pneumonia), más representativa visualmente que la sintética y suficiente para ilustrar el comportamiento del modelo; **sin valor diagnóstico real** sobre ningún paciente | No commiteadas — el bootstrap las copia a MinIO **solo si existen localmente** en `data/raw/covid_radiography/` |
+| `HOSP-NNNNNN` | `generate_dummy_images.py` | *Smoke* del pipeline de ingesta (validan PNG signature, suben a MinIO, se embeben en paciente) | 17 PNGs **dummy 1×1** commiteados |
+| `HOSP-DEMO-001` | Bootstrap (numpy + Pillow, 256×256) | Fixture *out-of-the-box* para que la vista *Clasificador* funcione sin pedir descarga del dataset | No commiteada, regenerada en cada arranque |
+| `HOSP-PRES-001..006` | Subset de 6 imágenes del COVID-19 Radiography Database | Demo con radiografías reales (2 por clase) | No commiteadas, el bootstrap las copia si existen en local |
 
-**Particularidad técnica relevante (CB-7)**: los 17 PNGs dummy son archivos **1x1 píxel** intencionadamente mínimos, lo justo para validar la *signature* PNG. Esto los hace válidos como fixture del pipeline de *ingesta*, pero **no clasificables**: la API rechaza con HTTP 422 cualquier imagen con dimensiones inferiores a **32x32 píxeles** (constante `MIN_IMAGE_DIM = 32` en `src/ml/preprocessing.py`), por debajo de las cuales una entrada no puede corresponder a una radiografía real. Adicionalmente, el **dashboard** aplica una heurística más laxa basada en tamaño en bytes (`MIN_CLASSIFIABLE_BYTES = 1024` en `src/dashboard/views/classifier.py`) para **ocultar del dropdown** las imágenes 1x1 antes incluso de mostrarlas, evitando que el operador llegue a intentar clasificarlas. Para que el flujo end-to-end del clasificador funcione *out-of-the-box* sin necesidad de descargar el dataset de Kaggle, el bootstrap genera al vuelo la imagen sintética `HOSP-DEMO-001` (256x256).
-
-La transparencia sobre la naturaleza de `HOSP-DEMO-001` es explícita en la UI: la vista *Clasificador* muestra un banner amarillo con la nota *"imagen sintética de demo — no es una radiografía real"* siempre que esa imagen está seleccionada, y la predicción se etiqueta como **no evidencia clínica**.
+**Particularidad (CB-7):** los 17 PNGs dummy son **1×1 píxel** intencionadamente mínimos. Son válidos como fixture de *ingesta* (validan signature) pero **no clasificables**: el endpoint `POST /classify` los rechaza con HTTP 422 porque `MIN_IMAGE_DIM = 32` (`src/ml/preprocessing.py`). El dashboard refuerza esto con un filtro de tamaño en bytes que oculta las dummy del dropdown del clasificador. Por eso el bootstrap genera al vuelo `HOSP-DEMO-001` (256×256), que sí pasa el umbral y permite que el flujo end-to-end del clasificador funcione sin descarga adicional. La UI declara explícitamente que `HOSP-DEMO-001` es sintética y que su predicción no aporta evidencia clínica.
 
 ### 4.4. Dataset real para entrenamiento del modelo
 
-El modelo de clasificación se entrena sobre el **COVID-19 Radiography Database** (Kaggle), descargado localmente por el operador y **no commiteado al repositorio** por:
+El modelo de clasificación se entrena sobre el **COVID-19 Radiography Database** (Kaggle), descargado localmente por el operador y **no commiteado** por tamaño (~0,9 GB) y por licencia: el dataset tiene términos de uso propios que se respetan y citan tal como el proveedor los publica (ver capítulo 15).
 
-1. **Tamaño**: ~0,9 GB en la versión local utilizada (descomprimido).
-2. **Licencia**: el dataset tiene términos de uso propios definidos por su autor original que deben respetarse y citarse tal cual el proveedor los publica (ver capítulo 15 y `data/raw/images-demo/README.md`).
-
-El subconjunto utilizado para el entrenamiento incluye tres de las cuatro clases originales:
-
-| Clase del dataset | Etiqueta interna del modelo | Imágenes utilizadas |
-|---|---|---|
+| Clase del dataset | Etiqueta del modelo | Imágenes |
+|---|---|---:|
 | `COVID` | `COVID-19` | 3.616 |
 | `Normal` | `Normal` | 10.192 |
 | `Viral Pneumonia` | `Pneumonia` | 1.345 |
 | `Lung_Opacity` | (descartada) | 6.012 |
 | **Total utilizado** | — | **15.153** |
 
-La clase `Lung_Opacity` se **descarta explícitamente** porque no encaja en la clasificación triple del proyecto (`Normal` / `Pneumonia` / `COVID-19`): "opacidad pulmonar" es un hallazgo radiológico que puede aparecer en múltiples patologías, no una categoría diagnóstica clasificatoria. Esta decisión está documentada en la spec de clasificación de radiografías y en el reporte clínico (`docs/model-evaluation/report.md`).
+La clase `Lung_Opacity` se **descarta** porque "opacidad pulmonar" es un hallazgo radiológico inespecífico que puede aparecer en muchas patologías, no una categoría diagnóstica que encaje con la clasificación triple del proyecto. La decisión está justificada en la spec de clasificación y en el reporte del modelo (`docs/model-evaluation/report.md`).
 
-El dataset se reparte en **train / validation / test (80 / 10 / 10)** con **partición estratificada** (manteniendo la proporción de clases en cada split) y **seed = 42**. La regla operativa estricta es:
-
-- `train` -> entrenamiento (`fit`)
-- `validation` -> callbacks (EarlyStopping, ModelCheckpoint) y guía de hiperparámetros
-- `test` -> reporte final al cierre de cada versión candidata del modelo
-
-El split de test queda fijado en **1.515 imágenes** (1.019 Normal + 361 COVID-19 + 135 Pneumonia, manteniendo la proporción del dataset original).
+El dataset se reparte en **train / validation / test (80 / 10 / 10)** con partición **estratificada** y `seed=42`. La regla operativa es estricta: `train` alimenta `fit`, `validation` alimenta los callbacks (`EarlyStopping`, `ModelCheckpoint`) y guía de hiperparámetros, y `test` se reserva para el reporte final de cada versión candidata. El split de test queda fijado en **1.515 imágenes** (1.019 Normal + 361 COVID-19 + 135 Pneumonia).
 
 ### 4.5. Calidad de datos: validación, limpieza y reporte
 
-El pipeline implementa un esquema de validación **first-failure-wins**: cada fila se evalúa contra una secuencia de reglas y se queda con el primer motivo de rechazo. Las reglas para pacientes son:
+El pipeline implementa validación **first-failure-wins**: cada fila se queda con el primer motivo de rechazo, no se acumulan. Las reglas para pacientes evalúan formato del `external_id`, presencia de `name`, parseo de `birth_date`, valores válidos de `gender` (incluyendo el rechazo de nulos tras un bug-fix documentado en `lessons.md`) y validez del `blood_type`. Para admisiones, reglas análogas sobre sus campos. Tras la validación campo a campo se ejecuta una **validación cruzada (cross-entity)**: las admisiones cuyo `patient_external_id` no apunta a ningún paciente válido se marcan como **huérfanas** y se rechazan en la dimensión `admissions` del quality summary. Las versiones iniciales del orchestrator no las contabilizaban, lo que daba la falsa impresión de que el pipeline "perdía" registros — fix documentado en `lessons.md` y cubierto por CA-3 de `sqlite-pipeline-metadata`.
 
-1. `external_id` debe coincidir con el patrón `HOSP-\d{6}`.
-2. `name` no puede ser vacío ni nulo.
-3. `birth_date` debe ser ISO parseable.
-4. `gender` debe estar en `{M, F, Other}` (o ser nulo, que también se rechaza).
-5. `blood_type` debe estar en el set de 8 grupos sanguíneos válidos.
+`DataCleaner` aplica luego dos operaciones deliberadamente conservadoras: **trim** solo en `name` y `department` (no en campos de negocio que ya habrían fallado en validación si tuvieran whitespace), y **deduplicación** con `dropDuplicates(subset=...)` por `external_id` en pacientes y por `(patient_external_id, admission_date, department)` en admisiones. Una versión anterior basada en *window functions* con `monotonically_increasing_id` se descartó por su no-determinismo entre particiones de Spark (también en `lessons.md`).
 
-Para admisiones, análogamente: `patient_external_id` no vacío, `admission_date` ISO, `department` no vacío y `status` en `{admitted, discharged, transferred}`.
-
-Adicionalmente, tras la validación campo a campo, se ejecuta una **validación cruzada (cross-entity)**: las admisiones cuyo `patient_external_id` no apunta a ningún paciente válido se marcan como **huérfanas** y se rechazan en la dimensión `admissions` del *quality summary*. Este detalle fue el origen de un bug-fix relevante documentado en `lessons.md`: las primeras versiones del orchestrator no contabilizaban los huérfanos en el summary, lo que daba la falsa impresión de que el pipeline "perdía" registros. La spec `sqlite-pipeline-metadata.md` recoge explícitamente este caso en su CA-3.
-
-Tras la validación, `DataCleaner` aplica:
-
-- **Trim** conservador de whitespace: solo en `name` (pacientes) y `department` (admisiones), no en todos los campos. La política deliberada es **no tocar los campos de negocio** y normalizar únicamente artefactos obvios de tabulación.
-- **Deduplicación**: `dropDuplicates(subset=...)` por `external_id` en pacientes y por la tupla `(patient_external_id, admission_date, department)` en admisiones. Esta elección reemplaza una versión anterior basada en *window functions* con `monotonically_increasing_id`, que sufría de no-determinismo entre particiones (también documentado en `lessons.md`).
-
-El reporte de calidad por ejecución se persiste en SQLite en la tabla `data_quality_summary` (esquema completo en `src/pipeline/storage/sql_models.py`): una fila por dimensión (`patients`, `admissions`) por run, con `total`, `valid`, `rejected`, `rejection_rate` y `pipeline_run_id` como FK lógica a `pipeline_runs`. Y se expone via `GET /api/v1/pipeline/quality-summary` (snapshot del último run) y `GET /api/v1/pipeline/quality-summary/history?dimension=...` (histórico paginado). El dashboard consume estos dos endpoints en la vista *Calidad de datos*, donde un toggle permite mostrar todos los snapshots o esconder por defecto los **snapshots pequeños o de prueba** mediante un umbral por `total` (filtro `total > 100`): un run con dataset vacío o casi vacío enmascararía el comportamiento real del pipeline si se mostrase junto a los runs operativos sin distinción.
+El resultado se persiste en SQLite (`data_quality_summary`, una fila por dimensión y run) y se expone vía `GET /api/v1/pipeline/quality-summary` y su histórico paginado. El dashboard lo consume en la vista *Calidad de datos*, con un toggle que oculta por defecto snapshots con `total ≤ 100` para que los runs de test con datasets vacíos no enmascaren los runs operativos reales.
 
 ### 4.6. Trazabilidad de cada registro
 
-Tres mecanismos juntos garantizan que cada registro persistido pueda trazarse a su origen:
+Tres mecanismos garantizan que cada registro persistido pueda trazarse a su origen:
 
 1. **`_source_file`**: columna añadida por `CSVIngester` con el nombre del CSV de origen.
-2. **`pipeline_run_id` (UUID v4)**: cada documento de `rejected_records` lleva el UUID del run que lo rechazó (`soft reference` Mongo -> SQLite). Esto permite ir del *quality summary* (SQLite) a los rechazos crudos (Mongo) para un run concreto.
-3. **`ingested_at`**: timestamp en los metadatos de cada radiografía en MinIO (renombrado desde `capture_date` por claridad — la fecha real de captura del paciente no la conocemos).
+2. **`pipeline_run_id` (UUID v4)**: cada documento de `rejected_records` lleva el UUID del run que lo rechazó (referencia blanda Mongo → SQLite). Permite ir del *quality summary* (SQLite) a los rechazos crudos (Mongo) para un run concreto.
+3. **`ingested_at`**: timestamp en los metadatos de cada radiografía en MinIO. El campo se renombró desde `capture_date` por claridad (la fecha real de captura del paciente no la conocemos).
 
-La conjunción de estos tres campos permite responder preguntas como *"¿qué fichero CSV y qué run del pipeline produjo este rechazo concreto?"* sin necesidad de consultar logs.
+La conjunción de los tres permite responder a *"¿qué fichero CSV y qué run produjo este rechazo concreto?"* sin tener que consultar logs.
 
 ---
 
@@ -372,131 +319,76 @@ SqlWriter envuelve toda la ejecución: start_pipeline_run al inicio,
 finish_pipeline_run + write_quality_summary al final.
 ```
 
-Cada componente vive en una subcarpeta de `src/pipeline/`: `ingesters/` (csv + image), `processors/` (validator, cleaner, transformer, quality_summary_builder), `storage/` (mongo_writer, minio_client, sql_writer/engine + modelos SQLAlchemy) y `scripts/` (bootstrap, watcher_daemon, generadores).
+Cada componente vive en una subcarpeta de `src/pipeline/` (`ingesters/`, `processors/`, `storage/`, `scripts/`) y el detalle de implementación está en la spec `pipeline-datos`. Esta sección se centra en el **porqué** de cada etapa y en los matices que conviene saber para defender el diseño.
 
 ### 5.2. Ingesta (E)
 
-#### 5.2.1. CSVIngester
+**`CSVIngester`** lee CSVs a *DataFrames* de PySpark, valida que existan las columnas requeridas (lanza `MissingColumnsError` si no) aceptando cualquier orden, y añade una columna `_source_file` para trazabilidad. Una decisión que merece comentario: no se fuerza `df.count()` tras la lectura. Era una *action* innecesaria que rompía la optimización perezosa de Spark; el bug-fix está documentado en `lessons.md`.
 
-`CSVIngester` lee CSVs a *DataFrames* de PySpark. Valida que existan las columnas requeridas (lanza `MissingColumnsError` si no) pero acepta cualquier orden, y añade una columna `_source_file` para trazabilidad. Por decisión documentada en `lessons.md`, no fuerza `df.count()` tras la lectura (era una *action* innecesaria que rompía la optimización perezosa de Spark).
-
-#### 5.2.2. ImageIngester
-
-`ImageIngester` lee PNGs del filesystem, valida la *signature* PNG (primeros 8 bytes coinciden con `\x89PNG\r\n\x1a\n`) y los sube a MinIO con metadatos. El object key es **determinista**: `{patient_id}/{filename}` (sin timestamp en el path, lo que permite que la subida sea idempotente — MinIO sobreescribe sin error).
-
-CB-2 está cubierto: una imagen corrupta o no-PNG se loguea y se omite sin propagar excepción.
-
-Cada imagen genera dos efectos:
-
-1. PNG subido a `MinIO/radiographies/{patient_id}/{filename}`.
-2. Documento embebido en `patients.radiographies` (vía `MongoWriter.add_radiography_to_patient`, idempotente con `$ne` sobre `minio_object_key`).
+**`ImageIngester`** lee PNGs del filesystem, valida la *signature* PNG (primeros 8 bytes `\x89PNG\r\n\x1a\n`) y los sube a MinIO con metadatos. El *object key* es **determinista**: `{patient_id}/{filename}`, sin timestamp en el path, lo que permite que la subida sea idempotente (MinIO sobrescribe sin error). Una imagen corrupta o no-PNG se loguea y se omite sin propagar excepción (CB-2). Cada imagen genera dos efectos: el PNG sube a `MinIO/radiographies/{patient_id}/{filename}` y se añade el documento de metadatos al array `patients.radiographies` del paciente correspondiente vía `MongoWriter.add_radiography_to_patient` (idempotente con `$ne` sobre `minio_object_key`).
 
 ### 5.3. Validación y limpieza (T parte 1)
 
-#### 5.3.1. DataValidator
+**`DataValidator`** separa filas válidas de rechazadas con una política **first-failure-wins**: cada fila se queda con el primer motivo de rechazo, no se acumulan motivos. El resultado son dos DataFrames: `valid_df` y `rejected_df`, este último con un campo `rejection_reason` (`empty_name`, `invalid_birth_date`, `invalid_gender`, etc.) y todos los campos originales conservados en `raw_data`. Las reglas concretas se describen en 4.5.
 
-`DataValidator` separa filas válidas de rechazadas, con una regla *first-failure-wins*: cada fila se queda con el primer motivo de rechazo (no se acumulan motivos). El resultado son dos DataFrames: `valid_df` y `rejected_df`. El `rejected_df` tiene un campo `rejection_reason` con el motivo (`empty_name`, `invalid_birth_date`, `invalid_gender`, `invalid_status`, etc.) y conserva todos los campos originales en `raw_data`.
+Un detalle relevante: las reglas `isin` para `gender`, `blood_type` y `status` originalmente **no capturaban valores `NULL`** por la lógica ternaria de PySpark (`null isin {a, b, c} -> null`, no `false`). El fix fue añadir `col.isNull() |` a las tres reglas, con tests de regresión propios. Es un *gotcha* clásico de PySpark y se descubrió cuadrando los números del smoke test a mano contra los datos sintéticos. Está documentado en `lessons.md`.
 
-**Detalle de implementación relevante** (documentado en `lessons.md` como bug-fix): las reglas `isin` para `gender`, `blood_type` y `status` originalmente no capturaban valores `NULL` por la lógica ternaria de PySpark (`null isin {a, b, c} -> null`, no `false`). La fix fue añadir `col.isNull() |` a las tres reglas, con sus tests de regresión correspondientes. Este *gotcha* es uno de los más típicos al trabajar con PySpark y se descubrió cuadrando manualmente los números del smoke test contra los datos sintéticos generados.
-
-#### 5.3.2. DataCleaner
-
-`DataCleaner` aplica dos operaciones después de la validación, intencionadamente conservadoras (la limpieza no debe modificar campos de negocio):
-
-- **Trim** solo en los campos donde el whitespace es un artefacto típico: `name` para pacientes y `department` para admisiones. No se aplica a `external_id`, fechas, género, código diagnóstico, etc., porque cualquier whitespace en esos campos debería haber hecho fallar antes la validación.
-- **Deduplicación**: `dropDuplicates(subset=['external_id'])` para pacientes y `dropDuplicates(subset=['patient_external_id', 'admission_date', 'department'])` para admisiones.
-
-Se descartó una versión inicial basada en *window functions* con `monotonically_increasing_id` por su no-determinismo entre particiones — el orden en el que se elegía "qué duplicado conservar" no era estable. `dropDuplicates` es más idiomático en Spark y suficiente para las garantías que se necesitan.
+**`DataCleaner`** aplica dos operaciones intencionadamente conservadoras (la limpieza no debe modificar campos de negocio): **trim** solo en `name` y `department`, donde el whitespace es un artefacto típico, y **deduplicación** con `dropDuplicates(subset=['external_id'])` en pacientes y `dropDuplicates(subset=['patient_external_id', 'admission_date', 'department'])` en admisiones. Una versión anterior basada en *window functions* con `monotonically_increasing_id` se descartó por no-determinismo entre particiones de Spark — el orden en el que se elegía "qué duplicado conservar" no era estable.
 
 ### 5.4. Transformación (T parte 2)
 
-`DataTransformer` enriquece los DataFrames con dos columnas calculadas que son fundamentales para los casos de uso clínicos:
+`DataTransformer` enriquece los DataFrames con dos columnas calculadas:
 
-#### 5.4.1. `enrich_patients` — cálculo de edad
+- **`age`** (a partir de `birth_date`, mes a mes): `floor(months_between(reference_date, birth_date) / 12)`. Acepta `reference_date` como parámetro para tests deterministas (por defecto `current_date()` de Spark).
+- **`diagnosis_category`** (a partir de `diagnosis_code` en ICD-10): `J18.x` → `Pneumonia`, `U07.1` → `COVID-19`, otros códigos válidos → `Other`, no reconocidos → `Unknown`. La distribución observada tras el smoke (**9,7 % COVID-19 / 19,5 % Pneumonia / 70,8 % Other**) cuadra con la distribución 1/10, 2/10, 7/10 que el generador inyecta intencionadamente para que las tres clases queden representadas en proporciones razonables, sin pretender que reflejen incidencia clínica real.
 
-Calcula la columna `age` a partir de `birth_date` con precisión mes-a-mes:
-
-```python
-age = floor(months_between(reference_date, birth_date) / 12)
-```
-
-Acepta un parámetro `reference_date` para tests deterministas (por defecto `current_date()` de Spark). El resultado se cuadra con la pirámide de edad esperada del dataset sintético.
-
-#### 5.4.2. `enrich_admissions` — categoría diagnóstica
-
-Mapea cada `diagnosis_code` (ICD-10) a uno de cuatro valores en `diagnosis_category`:
-
-- `J18.x` y similares -> `Pneumonia`
-- `U07.1` y similares -> `COVID-19`
-- Otros códigos válidos -> `Other`
-- Códigos no reconocidos -> `Unknown`
-
-La distribución observada tras el smoke test contra los datos sintéticos generados es **9,7 % COVID-19 / 19,5 % Pneumonia / 70,8 % Other**, que cuadra con la distribución 1/10, 2/10, 7/10 que el generador (`generate_data.py`) inyecta intencionadamente para que las tres clases queden representadas en proporciones razonables (la mayoría "Other", y COVID-19 como minoritaria), sin pretender que reflejen incidencia clínica real.
-
-#### 5.4.3. Agregaciones
-
-`DataTransformer` también expone tres métodos de agregación, hoy **implementados y testeados unitariamente** pero todavía no consumidos por la API ni el dashboard. Quedan disponibles como bloque reutilizable para análisis o endpoints futuros sin necesidad de rehacer el cómputo en cada caso de uso:
-
-- `admissions_by_department(df)` -> conteo por departamento.
-- `admissions_by_month(df)` -> conteo por mes (formato `yyyy-MM`).
-- `admissions_by_diagnosis_category(df)` -> conteo por categoría diagnóstica.
+`DataTransformer` también expone tres métodos de agregación (`admissions_by_department`, `admissions_by_month`, `admissions_by_diagnosis_category`) **implementados y testeados unitariamente** pero todavía no consumidos por la API ni el dashboard. Quedan como bloque reutilizable para análisis futuros sin tener que rehacer el cómputo.
 
 ### 5.5. Carga (L)
 
-#### 5.5.1. MongoWriter
+**`MongoWriter`** materializa el modelo documental. Su método clave es `bulk_upsert_patients_with_admissions`, que ejecuta una operación `bulk_write` de pymongo con `UpdateOne(upsert=True)` por paciente, embebiendo las admisiones como subdocumentos en `patients.admissions` (no como colección separada con FK). La idempotencia se garantiza por construcción: re-ejecutar el pipeline con los mismos CSVs sobrescribe el array completo del paciente, sin duplicar admisiones (CA-6 del pipeline).
 
-`MongoWriter` es el componente que materializa el modelo documental. Su método clave es `bulk_upsert_patients_with_admissions`, que toma listas de diccionarios (pacientes + admisiones por paciente) y ejecuta una operación `bulk_write` de pymongo con `UpdateOne(upsert=True)` por paciente. Las admisiones se **embeben como subdocumentos** en el array `patients.admissions` (no como colección separada con FK).
+**`SqlWriter`** persiste los metadatos operativos en SQLite a través de SQLAlchemy. Abre el run con `start_pipeline_run(trigger_type) -> run_id` (UUID v4 string), lo cierra con `finish_pipeline_run(run_id, status, counts, error_message=None)` y escribe el resumen de calidad con `write_quality_summary(run_id, summaries)` (una fila por dimensión). El esquema completo vive en `src/pipeline/storage/sql_models.py`. Lo arquitectónicamente relevante: `pipeline_runs.id` es un **UUID v4 string** referenciado desde `rejected_records.pipeline_run_id` como referencia blanda (sin FK enforcement entre Mongo y SQLite); la tabla `pipeline_runs` incluye `images_processed` además de `records_processed` y `records_rejected` por la naturaleza dual del pipeline (tabular + binario).
 
-La idempotencia se garantiza por construcción: re-ejecutar el pipeline con los mismos CSVs sobreescribe el array completo del paciente, sin duplicar admisiones. Esto cubre CA-6 ("ejecutar el pipeline dos veces con los mismos datos no genera duplicados").
+SQLite se ejecuta en **modo WAL** (write-ahead logging) para soportar concurrencia entre `pipeline` (escribiendo el run), `watcher` (eventualmente escribiendo otro) y `api` (leyendo). El volumen `pipeline-db` se monta `rw` en los tres servicios porque WAL crea ficheros sidecar (`.wal`, `.shm`) en el mismo directorio.
 
-#### 5.5.2. SqlWriter
+### 5.6. Orquestación y *triggers*
 
-`SqlWriter` (introducido como parte de la feature `sqlite-pipeline-metadata`) es el componente que persiste los metadatos operativos en SQLite. Sus métodos principales son:
+`PipelineOrchestrator` coordina las etapas y gestiona el ciclo de vida del run. Su método principal, `run_from_files(patients_csv, admissions_csv, trigger_type, run_id=None)`, abre un run en SQLite si no recibe uno, ejecuta toda la cadena E→T→L dentro de un `try/except` y cierra el run con `status='success'` o `status='failed' + error_message` según el resultado.
 
-- `start_pipeline_run(trigger_type) -> run_id` (UUID v4 string): abre un registro con `status=running` y devuelve el UUID.
-- `finish_pipeline_run(run_id, status, counts, error_message=None)`: cierra el registro, guarda `finished_at`, `records_processed`, `records_rejected`, `images_processed` y opcionalmente `error_message`.
-- `write_quality_summary(run_id, summaries)`: recibe una **lista** de objetos summary y los persiste en bloque (una fila por dimensión).
+El orchestrator se invoca desde **cuatro orígenes** (CA-6 y CA-7 del pipeline original):
 
-El esquema completo vive en `src/pipeline/storage/sql_models.py`. Lo más relevante para entender la arquitectura es que `pipeline_runs.id` es un **UUID v4 string** (independiente del concepto de BSON de Mongo, y referenciado desde `rejected_records.pipeline_run_id` como *soft reference*), mientras que `data_quality_summary.id` es un `Integer autoincrement` interno (la identidad útil aquí es la combinación `pipeline_run_id + dimension`). La tabla `pipeline_runs` incluye un contador específico `images_processed` además de `records_processed` y `records_rejected`, por la naturaleza dual del pipeline (tabular + binario).
-
-SQLite se ejecuta en **modo WAL** (write-ahead logging) para soportar concurrencia entre `pipeline` (escribiendo el run inicial), `watcher` (eventualmente escribiendo otro run) y `api` (leyendo). El volumen Docker named `pipeline-db` se monta `rw` en los tres servicios porque WAL crea ficheros sidecar (`.wal`, `.shm`) en el mismo directorio.
-
-### 5.6. Orquestación y *trigger*s
-
-`PipelineOrchestrator` coordina las etapas y gestiona el ciclo de vida del run. Su método principal, `run_from_files(patients_csv, admissions_csv, trigger_type, run_id=None)`, abre un run en SQLite si no recibe uno, ejecuta toda la cadena E->T->L dentro de un `try/except`, y cierra el run con `status='success'` o `status='failed' + error_message` según el resultado (gestión de fallos detallada en 5.7).
-
-El orchestrator se invoca desde **cuatro orígenes** distintos (CA-6 y CA-7 del pipeline original):
-
-1. **Bootstrap**: `src/pipeline/scripts/bootstrap.py`, lanzado por `CMD` del servicio `pipeline` en `docker compose up`. Solo ejecuta el ETL si MongoDB está vacío (idempotente). Lanza el run con `trigger_type=bootstrap`.
-2. **Watcher**: `src/pipeline/scripts/watcher_daemon.py`, servicio long-running que usa la librería `watchdog` para detectar la llegada de `patients.csv` + `admissions.csv` a `data/incoming/`. Lanza el run con `trigger_type=watcher` y mueve los ficheros a `data/incoming/processed/` tras procesarlos.
-3. **API**: `POST /api/v1/pipeline/trigger` lanza el orchestrator como `BackgroundTask` de FastAPI. Lanza el run con `trigger_type=manual` y devuelve `run_id` inmediatamente (HTTP 202).
-4. **Tests E2E**: `tests/e2e/` lanzan el orchestrator directamente con datasets vacíos o sintéticos para verificar el cumplimiento de los criterios de aceptación. Lanza el run con `trigger_type=e2e-test` (filtrado por defecto en el dashboard para no contaminar la vista operativa).
+| Origen | Cuándo se lanza | `trigger_type` |
+|---|---|---|
+| **Bootstrap** | `CMD` del servicio `pipeline` en `docker compose up`. Solo ejecuta el ETL si MongoDB está vacío. | `bootstrap` |
+| **Watcher** | Proceso *long-running* que detecta `patients.csv` + `admissions.csv` en `data/incoming/`, ejecuta y mueve los ficheros a `processed/`. | `watcher` |
+| **API** | `POST /api/v1/pipeline/trigger` lanza el orchestrator como `BackgroundTask`, devuelve `run_id` inmediatamente con HTTP 202. | `manual` |
+| **Tests E2E** | Lanzan el orchestrator con datasets sintéticos para verificar los criterios de aceptación. | `e2e-test` (filtrado por defecto en la vista del dashboard) |
 
 ### 5.7. Gestión de fallos
 
-La gestión de fallos del pipeline se rige por dos principios:
+Dos principios:
 
-1. **Fallos en una fila no detienen el batch**: la validación produce un DataFrame de rechazados que se persiste en `rejected_records`. Los demás se procesan.
-2. **Fallos en una etapa entera marcan el run como `failed` con mensaje explícito y se re-lanzan**: el `try/except` del orchestrator captura cualquier excepción de las etapas (ingesta, validación, transformación, carga), invoca `SqlWriter.finish_pipeline_run(run_id, status='failed', error_message=str(e))` para que SQLite registre el cierre y la causa, y re-lanza la excepción al llamante. El run no se "evapora": queda visible en `GET /api/v1/pipeline/runs` con su `error_message`.
+1. **Fallos en una fila no detienen el batch**: la validación produce un DataFrame de rechazados que se persiste en `rejected_records`; los demás siguen procesándose.
+2. **Fallos en una etapa entera marcan el run como `failed` con mensaje explícito y se re-lanzan**: el `try/except` del orchestrator captura cualquier excepción, invoca `SqlWriter.finish_pipeline_run(run_id, status='failed', error_message=str(e))` para que SQLite registre el cierre y la causa, y re-lanza la excepción al llamante. El run no se "evapora": queda visible en `GET /api/v1/pipeline/runs` con su `error_message`.
 
-La indisponibilidad de Mongo o MinIO se manifiesta como una excepción del cliente correspondiente en la etapa donde se intenta acceder, lo que entra por el flujo anterior. El test de regresión `test_image_ingester_silent_failure` verifica explícitamente que `ImageIngester` con MinIO inalcanzable **no** devuelve metadatos como si todo hubiera ido bien (CA-8: "si MinIO o MongoDB no están disponibles, el pipeline loguea el error y no crashea silenciosamente"). Este caso fue uno de los cuatro bloqueantes detectados en la revisión técnica inicial y corregidos antes de cerrar T10.
+La indisponibilidad de Mongo o MinIO se manifiesta como una excepción del cliente correspondiente y entra por el flujo anterior. El test `test_image_ingester_silent_failure` verifica explícitamente que `ImageIngester` con MinIO inalcanzable **no** devuelve metadatos como si todo hubiera ido bien (CA-8: "si MinIO o MongoDB no están disponibles, el pipeline loguea el error y no crashea silenciosamente"). Este caso fue uno de los cuatro bloqueantes detectados en la revisión técnica inicial y corregidos antes de cerrar T10.
 
 ### 5.8. Métricas observadas
 
-Sobre el dataset sintético commiteado (`patients.csv` con 5.150 filas + `admissions.csv` con 10.000 filas), el resultado de un bootstrap en frío es:
+Sobre el dataset sintético commiteado (`patients.csv` 5.150 filas + `admissions.csv` 10.000), el resultado de un bootstrap en frío es:
 
-**Pacientes** — 5.150 RAW -> 264 rechazados por validación + 141 deduplicados -> **4.745 finales** en MongoDB.
-
-**Admisiones** — 10.000 RAW -> 493 rechazadas por validación + 3 deduplicadas + 935 huérfanas cross-entity -> **8.569 finales** embebidas en sus pacientes.
+- **Pacientes:** 5.150 → 264 rechazados por validación + 141 deduplicados → **4.745 finales** en MongoDB.
+- **Admisiones:** 10.000 → 493 rechazadas + 3 deduplicadas + 935 huérfanas cross-entity → **8.569 finales** embebidas.
 
 | Métrica | Valor |
 |---|---|
-| Total registros en `rejected_records` | 1.692 (264 patients + 1.428 admissions incl. 935 huérfanas; los deduplicados no se contabilizan ahí) |
-| Imágenes en MinIO (bucket `radiographies`) | 17 dummy + 1 demo + 6 reales si el dataset Kaggle está presente |
-| Tiempo de bootstrap completo | ~50 s en una máquina de desarrollo media |
+| Total en `rejected_records` | 1.692 (264 patients + 1.428 admissions, incluyendo 935 huérfanas; los deduplicados no se contabilizan ahí) |
+| Imágenes en MinIO | 17 dummy + 1 demo + 6 reales (si el dataset Kaggle está presente) |
+| Tiempo de bootstrap | ~50 s en una máquina de desarrollo media |
 | Tiempo de *warm restart* | ~1 s (todos los skips idempotentes) |
 
-Estos números son **reproducibles**: se obtienen exactamente igual en cualquier máquina con `docker compose down -v && docker compose up`.
+Estos números son **reproducibles**: se obtienen idénticos en cualquier máquina con `docker compose down -v && docker compose up`.
 
 ---
 
@@ -1126,7 +1018,7 @@ Este capítulo recorre las limitaciones reales del sistema en el orden que impor
 
 El clasificador alcanza *accuracy* global de **0,8719** y macro-F1 de **0,8456** sobre el split de test, pero las cifras agregadas esconden comportamientos que conviene declarar antes de que un evaluador los descubra leyendo la matriz de confusión.
 
-- **Recall de COVID-19 = 0,695 — el límite clínico principal.** El modelo deja de detectar como tales aproximadamente el 30 % de los positivos reales de COVID-19 del split de test (101 clasificados como Normal y 9 como Pneumonia). Es el motivo central por el que el sistema se entrega como **asistencia diagnóstica** y nunca como diagnóstico final (RNF-2 de la spec): si se usara en autonomía, dejaría escapar 3 de cada 10 contagiosos sin alarma.
+- **Recall de COVID-19 = 0,695 — el límite clínico principal.** El modelo deja de detectar como tales aproximadamente el 30 % de los positivos reales de COVID-19 del split de test (101 clasificados como Normal y 9 como Pneumonia). Es el motivo central por el que el sistema **no se diseña para autonomía** (RNF-2 de la spec): si se usara sin un profesional que valide cada predicción, dejaría escapar 3 de cada 10 contagiosos sin alarma.
 - **Sin detección *out-of-domain*.** Si llegara una imagen que no es una radiografía de tórax — una resonancia, una foto de una mano, una captura de pantalla — el modelo devolvería igualmente una de las tres clases con la confianza que tocase. No hay un verificador previo "esto es realmente una radiografía / no lo es". Para una demo controlada esto no afecta; para un despliegue real es un agujero abierto.
 - **Sin interpretabilidad.** El modelo dice qué clase predice y con qué probabilidad, pero no muestra dónde está mirando. No hay Grad-CAM, ni mapas de saliencia, ni SHAP. Un radiólogo que recibiera la predicción no tendría forma de validar si la atención del modelo cae sobre el parénquima pulmonar o sobre artefactos del marcador de la radiografía.
 - **Generalización a otros equipos y poblaciones no medida.** El entrenamiento se hace exclusivamente sobre el *COVID-19 Radiography Database* (Kaggle). El comportamiento sobre radiografías capturadas con otros equipos, otras poblaciones, otras calibraciones de exposición o con artefactos clínicos distintos (drenajes, sondas, marcapasos visibles) no se ha evaluado. Lo razonable es asumir caída de rendimiento.
@@ -1256,7 +1148,7 @@ Los sesgos no son sólo del modelo aprendido: las reglas también tienen sesgos,
 
 ### 15.4. Uso clínico del clasificador — asistencia, no diagnóstico
 
-El clasificador se entrega explícitamente como **asistencia diagnóstica**, NUNCA como diagnóstico final. Esta posición está consagrada como **RNF-2** de la spec de clasificación, repetida en el runbook de presentación, visible en la UI cuando una predicción se ejecuta sobre `HOSP-DEMO-001` y discutida con datos concretos en el reporte clínico (`docs/model-evaluation/report.md`). La métrica que sostiene esta posición es el *recall* de COVID-19 = 0,695: el modelo pierde el 30 % de los positivos reales y por tanto no puede sustituir al criterio humano.
+El clasificador propone una clase y unas probabilidades; **la decisión clínica la mantiene siempre el profesional**. Esta posición se materializa como **RNF-2** de la spec de clasificación, se recuerda en el runbook de presentación, queda visible en la UI cuando una predicción se ejecuta sobre `HOSP-DEMO-001` y se discute con cifras concretas en el reporte del modelo (`docs/model-evaluation/report.md`). La métrica que la sostiene es el *recall* de COVID-19 = 0,695: el modelo pierde el 30 % de los positivos reales, así que sin revisión humana de cada predicción se dejarían pasar casos contagiosos.
 
 Cualquier despliegue clínico real requeriría, además: (a) certificación como producto sanitario (CE/FDA), (b) auditoría con datos representativos del centro, (c) interpretabilidad (Grad-CAM como mínimo), (d) protocolos de incertidumbre (no clasificar cuando la confianza es baja) y (e) integración con el flujo del radiólogo humano que mantenga la última palabra clínica siempre en la persona.
 
@@ -1371,7 +1263,7 @@ Conclusión: la IA actúa como **multiplicador de capacidad**, no como sustituto
 Un sistema **funcional, contenedorizado y reproducible** que cubre los cuatro subproblemas del enunciado:
 
 1. Pipeline ETL distribuido con PySpark, persistencia poliglota (MongoDB + SQLite + MinIO), validación, deduplicación y enriquecimiento.
-2. Modelo CNN custom en Keras/TF para clasificación de radiografías en 3 clases, con métricas clínicas reportadas y artefacto commiteado al repositorio (21 MB).
+2. Modelo CNN custom en Keras/TF para clasificación de radiografías en 3 clases, con métricas por clase reportadas (recall, precision, F1 y matriz de confusión) y artefacto commiteado al repositorio (21 MB).
 3. API REST en FastAPI con 17 endpoints versionados, documentación Swagger automática y separación lectura/escritura.
 4. Dashboard Streamlit con siete vistas, *API-only*, imagen Docker independiente (~240 MB), barra persistente de estado del sistema.
 
@@ -1393,7 +1285,7 @@ Si el proyecto evolucionara más allá de la entrega académica, las prioridades
 2. **Añadir interpretabilidad** (Grad-CAM por defecto en cada predicción).
 3. **Detección *out-of-domain***: clasificador binario previo "es radiografía de tórax / no".
 4. **Autenticación + autorización** (OAuth2/JWT) y cifrado en tránsito.
-5. **Observabilidad**: métricas Prometheus, logs estructurados, dashboards Grafana.
+5. **Observabilidad de infraestructura**: métricas Prometheus, logs estructurados, dashboards Grafana. La observabilidad accionable para el operador (alertas y estado del pipeline en el dashboard) ya se entrega en el capítulo 9; lo que falta es la parte de plataforma.
 6. **Re-entrenamiento automatizado** (DVC, MLflow) y *model registry*.
 7. **Streaming**: pasar de `watchdog` sobre filesystem a Kafka/RabbitMQ.
 
@@ -1415,9 +1307,9 @@ El proyecto demuestra que es posible llegar a un sistema completo, reproducible 
 | ADRs | `decisions/ADR-001..ADR-009.md` | Decisiones técnicas con alternativas |
 | Lecciones | `tasks/lessons.md` | 57 entradas: patrones a evitar, decisiones, cosas que funcionan |
 | Diario IA | `docs/diario-ia.md` | 30 sesiones documentadas |
-| Reporte del modelo | `docs/model-evaluation/{report.md,metrics.json,confusion_matrix.png,learning_curves.png}` | Métricas + análisis clínico + curvas + matriz |
+| Reporte del modelo | `docs/model-evaluation/{report.md,metrics.json,confusion_matrix.png,learning_curves.png}` | Métricas + lectura cualitativa de los errores + curvas + matriz de confusión |
 | Runbooks | `docs/runbooks/{download-radiography-dataset,use-real-radiograph-for-demo,presentation-demo}.md` | Procedimientos operativos |
-| Changelog | `CHANGELOG.md` | Historial de entregas (incluye el bloque "Auditoria interna del codigo — 4 bloqueantes arreglados" tras cerrar T10) |
+| Changelog | `CHANGELOG.md` | Historial de entregas, incluida la entrada de los 4 bloqueantes detectados y corregidos al cerrar T10 |
 
 ### 18.2. Comandos clave
 
