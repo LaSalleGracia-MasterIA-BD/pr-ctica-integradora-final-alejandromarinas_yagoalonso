@@ -75,3 +75,8 @@ data/raw/covid_radiography/
 # RNF-4 de specs/clasificacion-radiografias.md).
 !data/models/*.keras
 !data/models/*.meta.json
+
+# Informes diarios generados localmente por src/automation/daily_report.py
+# (el script escribe en docs/reports/YYYY-MM-DD.md por defecto). Cada operador
+# los genera bajo demanda; no se commitean.
+docs/reports/
