@@ -40,7 +40,7 @@ Este proyecto implementa, para el hospital ficticio **laSalle Health Center**, u
 3. Una **API REST** en FastAPI que expone los datos procesados y la inferencia del modelo.
 4. Un **dashboard** en Streamlit que actúa como centro de control hospitalario: vista de pacientes, calidad del pipeline, runs operativos, y demo del clasificador.
 
-La arquitectura se despliega como un único `docker compose up` que orquesta siete servicios (MongoDB, MinIO, inicializador de buckets, pipeline, API, watcher y dashboard) y deja el sistema listo en menos de un minuto. El estado actual del repositorio contiene **275 tests automáticos verdes** (más un skip controlado), siete ADRs documentadas y artefactos vivos de la metodología SDD aplicada durante todo el desarrollo.
+La arquitectura se despliega como un único `docker compose up` que orquesta siete servicios (MongoDB, MinIO, inicializador de buckets, pipeline, API, watcher y dashboard) y deja el sistema listo en menos de un minuto. El estado actual del repositorio contiene **404 tests automáticos verdes** (más un skip controlado), nueve ADRs documentadas y artefactos vivos de la metodología SDD aplicada durante todo el desarrollo.
 
 El **modelo entrenado** sobre el split de test (1.515 radiografías del *COVID-19 Radiography Database* de Kaggle) alcanza una *accuracy* de **0,8719** y un **macro-F1 de 0,8456**, con un *recall* por clase de 0,926 (Normal), 0,933 (Pneumonia) y **0,695 (COVID-19)**. Esta última cifra es el principal límite clínico del sistema y se discute en detalle en los capítulos de resultados, limitaciones y ética: el sistema se entrega como herramienta de **asistencia**, nunca como diagnóstico final.
 
@@ -55,7 +55,7 @@ El proyecto está construido con metodología **SDD (Spec-Driven Development)**:
 | Almacenes de datos heterogéneos | 3 (MongoDB, SQLite, MinIO) |
 | Pacientes procesados desde el dataset sintético | 4.745 |
 | Admisiones embebidas en MongoDB | 8.569 |
-| Tests automáticos verdes | 275 (+ 1 skip esperado) |
+| Tests automáticos verdes | 405 (+ 1 skip esperado) |
 | ADRs documentadas | 7 |
 | Specs aprobadas | 4 (`pipeline-datos`, `sqlite-pipeline-metadata`, `clasificacion-radiografias`, `dashboard`) |
 | Accuracy del modelo (test split) | 0,8719 |
@@ -655,6 +655,10 @@ La fábrica `build_app()` recibe sus colaboradores (readers, writers, launcher, 
 | `GET /api/v1/radiographies/classification?key=...` | MongoDB | Devuelve la clasificación ya persistida, sin re-inferir |
 | `GET /api/v1/radiographies/image?key=...` | MinIO | Proxy de bytes PNG (necesario para que el dashboard *API-only* pueda renderizar imágenes) |
 | `GET /api/v1/model/evaluation` | Filesystem (`docs/model-evaluation/metrics.json`) | Devuelve las métricas del reporte como JSON |
+| `POST /api/v1/triage/patients` | MongoDB (writer) | Alta manual de paciente con asignación de prioridad por reglas (ADR-008). Devuelve 201 con el paciente y su `triage` embebido |
+| `GET /api/v1/triage/rules` | — | Devuelve la definición de las reglas de triaje vigentes (autodocumentación, RF-8 de triage) |
+| `GET /api/v1/alerts` | MongoDB + SQLite | Alertas activas calculadas en tiempo real (ADR-009). 3 tipos: `pipeline_failed`/high, `data_quality_low`/medium, `triage_severe`/critical. Query params `since`, `severity`. Ventana por defecto: últimas `ALERT_WINDOW_HOURS` (24h) |
+| `GET /api/v1/reports/daily?date=YYYY-MM-DD` | MongoDB + SQLite | Informe estructurado JSON del día consultado. **Ventana estricta** `[00:00, 23:59:59.999]` UTC; NO reutiliza la ventana de `/alerts`. Misma función pura `evaluate()` |
 
 ### 7.4. Decisiones de diseño relevantes
 
@@ -663,6 +667,9 @@ La fábrica `build_app()` recibe sus colaboradores (readers, writers, launcher, 
 - **`/radiographies/image`** es un **proxy puro de lectura**: descarga los bytes desde MinIO con `Content-Type: image/png`, sin tocar Mongo ni el modelo. Sin este endpoint, un dashboard *API-only* no podría renderizar imágenes (no puede abrir conexión directa a MinIO por la decisión de ADR-007).
 - **Idempotencia del `classify`**: `MongoWriter.set_radiography_classification` retorna `matched_count > 0` (no `modified_count`), de modo que un segundo `classify` con el mismo modelo y misma imagen — que escribe el mismo `predicted_class` y `probabilities` — sigue contando como éxito aunque `modified_count` sea 0 al no haber diferencia.
 - **`POST /pipeline/trigger` devuelve 202**: la ejecución del orchestrator es asíncrona (`BackgroundTasks`). El cliente recibe el `run_id` inmediatamente; el estado se consulta luego en `/pipeline/runs`.
+- **Alertas como vista derivada (ADR-009)**: `GET /api/v1/alerts` y la sección `alerts` del informe diario se calculan al vuelo combinando `pipeline_runs.status='failed'` (high), `data_quality_summary.rejection_rate > umbral` (medium) y `patients.triage.level='grave'` (critical). **Cero estado nuevo persistido**: no hay tabla `alerts`. La lógica vive como **función pura** `src/api/alerts.py::evaluate(failed_runs, quality_snapshots, severe_triage_patients, threshold) -> list[Alert]`, mismo patrón que el triaje (ADR-008) y la teoría de sistemas basados en reglas (Sesión 07 de Yuri, `ruleBasedSystem/`).
+- **Doble ventana temporal sin duplicar la regla**: `/alerts` usa `[now - ALERT_WINDOW_HOURS, now]` (estado actual del sistema); `/reports/daily` usa `[YYYY-MM-DDT00:00:00Z, YYYY-MM-DDT23:59:59.999Z]` (cierre del día natural UTC). La función `evaluate` NO conoce el reloj — solo aplica las reglas sobre las listas que recibe. Los readers exponen dos familias paralelas (`_since` para `/alerts`, `_between` para `/reports/daily`).
+- **Idempotencia byte-a-byte del Markdown del informe (RNF-6 / CA-11)**: el script `src/automation/daily_report.py` produce `docs/reports/YYYY-MM-DD.md` deterministicamente. Misma fecha + mismo estado del sistema → mismo fichero (`sha256` idéntico). Lo hace separando `build_daily_report` (que puede llevar `generated_at` dinámico en el dict) de `render_markdown` (que NO lee el reloj, NO incluye `generated_at` y ordena listas por claves estables). El JSON del endpoint `/reports/daily` sí lleva `generated_at` como metadato: la idempotencia byte-a-byte aplica **sólo al Markdown**.
 
 ### 7.5. Manejo de errores
 
@@ -692,10 +699,10 @@ La app se organiza en `src/dashboard/`:
 | `app.py` | Entry point: configura tema, sidebar con la barra persistente de estado del sistema, navegación |
 | `api_client.py` | `ApiClient` con todos los métodos HTTP envueltos, manejo uniforme de errores (`ApiError(kind, status, detail)`) |
 | `config.py` | Lee `API_BASE_URL` y `CACHE_TTL_SECONDS` del entorno |
-| `views/{overview,quality,patients,classifier,runs}.py` | Una vista por fichero (cinco) |
+| `views/{overview,quality,patients,triage,alerts,classifier,runs}.py` | Una vista por fichero (siete) |
 | `components/{error_banner,system_status}.py` | Componentes reutilizables (banner de error consistente, chips de estado del sistema) |
 
-### 8.3. Las cinco vistas
+### 8.3. Las siete vistas
 
 Cada vista vende explícitamente una pieza del *stack* (ver tabla "Razón de producto por vista" en la spec):
 
@@ -704,6 +711,8 @@ Cada vista vende explícitamente una pieza del *stack* (ver tabla "Razón de pro
 | **Overview** | Salud operativa + KPI agregados + *strip* mínimo de evaluación del modelo |
 | **Calidad de datos** | Pipeline Big Data + `data_quality_summary` |
 | **Pacientes** | MongoDB con `admissions` y `radiographies` embebidas |
+| **Triaje** | Sistema basado en reglas (ADR-008) + alta manual de paciente con prioridad |
+| **Alertas** | Observabilidad accionable (ADR-009): vista derivada en tiempo real desde `pipeline_runs`, `data_quality_summary` y `patients.triage` |
 | **Clasificador** | Keras/TF CNN + sub-sección de evaluación detallada (matriz de confusión) |
 | **Pipeline runs** | Watcher + `pipeline_runs` en SQLite |
 
@@ -746,6 +755,8 @@ Las decisiones técnicas no triviales están documentadas en `decisions/` como A
 | **ADR-005** | CNN custom desde cero, sin *transfer learning* | EfficientNet/MobileNet pre-entrenado en ImageNet | Alineación literal con el patrón docente del Bloque 6; modelo dentro de los 50 MB del RNF-4; sin dependencias externas en arranque | aceptada |
 | **ADR-006** | TensorFlow en la imagen Docker compartida `hospital-pipeline` | Dos imágenes (pipeline sin TF + `hospital-ml` con TF) | Cambio operativo mínimo; entrenamiento dentro del compose; tests existentes siguen funcionando | aceptada |
 | **ADR-007** | Streamlit + imagen Docker independiente para el dashboard | Plotly Dash / React / reutilizar `hospital-pipeline` | A 3 días de la entrega, Streamlit corta ~70 % del tiempo de implementación vs React; imagen ligera (~240 MB) cumple holgadamente RNF-5 | aceptada |
+| **ADR-008** | Triaje de pacientes implementado como **sistema basado en reglas** (no ML) | Modelo de clasificación clínica entrenado | Trazabilidad explícita clínico → predicción (cada decisión cita la regla); alineación con la Sesión 07 de Yuri (`ruleBasedSystem/`); ML no aporta valor sin etiquetas reales | aceptada |
+| **ADR-009** | Alertas y vista del informe diario como **vista derivada** (cero estado nuevo) | Tabla `alerts` en SQLite con estado leída/no leída | Cero superficie de estado nuevo; las fuentes (`pipeline_runs`, `data_quality_summary`, `patients.triage`) ya tienen lo necesario; encaja con la separación lectura/escritura del proyecto (`MongoReader`/`MongoWriter`, `SqlReader`/`SqlWriter`). Si fuera producción real, se reabriría para auditoría histórica | aceptada |
 
 Las ADRs son **vivas**: cuando una decisión cambia, se crea un ADR nuevo que *supersede* la anterior, dejando trazabilidad histórica (caso ADR-001 -> ADR-003 para la migración de PyTorch a Keras).
 
@@ -801,7 +812,16 @@ La ausencia de autenticación es deliberada para el entorno de demostración; ve
 
 - `download-radiography-dataset.md`: cómo descargar el dataset COVID-19 Radiography de Kaggle.
 - `use-real-radiograph-for-demo.md`: cómo dejar el dataset disponible localmente para que el bootstrap incluya las `HOSP-PRES-*`.
-- `presentation-demo.md`: guion paso a paso de la demo de presentación (10-15 min) con flujo recomendado por las cinco vistas y mitigaciones para problemas frecuentes.
+- `presentation-demo.md`: guion paso a paso de la demo de presentación (10-15 min) con flujo recomendado por las siete vistas y mitigaciones para problemas frecuentes.
+
+### 10.5. Automatización: alertas e informe diario (Feature 15)
+
+El sistema incluye dos piezas explícitas de **observabilidad accionable** que cierran el requisito del enunciado ("entrada en el dashboard ante eventos relevantes" + "generación automática de informes"):
+
+- **`GET /api/v1/alerts`**: el dashboard muestra en la vista *Alertas* las condiciones operativas activas en tiempo real (runs fallidos, calidad de datos baja, pacientes triajeados como graves). Sin estado nuevo: las alertas se derivan al vuelo desde las tres fuentes ya existentes (ADR-009).
+- **Script CLI `python -m src.automation.daily_report --date YYYY-MM-DD`**: genera un Markdown reproducible en `docs/reports/YYYY-MM-DD.md` con secciones de pipeline, calidad, conteos, triaje y alertas del día. **Idempotente byte-a-byte**: mismo estado del sistema + misma fecha → mismo fichero (`sha256` idéntico). El equivalente HTTP es `GET /api/v1/reports/daily?date=YYYY-MM-DD` (devuelve JSON con `generated_at` dinámico como metadato).
+
+**Sobre la palabra "automatización"**: el enunciado del Máster pide "automatización de procesos" e "informes automáticos". Este proyecto interpreta automatización como **reproducibilidad** (un comando, mismo resultado siempre), no como **programación** (cron/scheduler). El watcher de `data/incoming/` ya es automático en sentido fuerte (escucha cambios en el filesystem). El informe diario, en cambio, es manual y reproducible: invocar el script genera el fichero del día. Esta decisión deja fuera dependencias externas (cron, Celery, APScheduler, Airflow, Prometheus, Grafana) que están fuera del temario del Máster y añadirían complejidad sin valor para la demo.
 
 ---
 
@@ -809,17 +829,18 @@ La ausencia de autenticación es deliberada para el entorno de demostración; ve
 
 ### 11.1. Estado de la suite
 
-El estado actual del repositorio contiene **275 tests automáticos verdes** (+ 1 skip esperado), distribuidos en cuatro grandes capas:
+El estado actual del repositorio contiene **404 tests automáticos verdes** (+ 1 skip esperado), distribuidos en las siguientes capas:
 
 | Capa | Carpeta | Ficheros | Cobertura |
 |---|---|---|---|
 | Unit + integration pipeline | `tests/pipeline/` | 15 | Ingesters, processors, storage (MongoWriter + SqlWriter + MinIO), orchestrator, watcher |
 | Unit + integration ML | `tests/ml/` | 6 | dataset, preprocessing, model, train, evaluate, predictor |
-| Unit + integration API | `tests/api/` | 7 | data endpoints, pipeline endpoints, classify, image, model evaluation, sql_reader, mongo_reader |
+| Unit + integration API | `tests/api/` | 12 | data endpoints, pipeline endpoints, classify, image, model evaluation, sql_reader, mongo_reader, triage rules + endpoint, alerts rules + endpoint, reports builder + endpoint, time_window |
+| Unit + integration automation | `tests/automation/` | 1 | `daily_report` CLI con verificación `sha256` byte-a-byte |
 | Unit dashboard | `tests/dashboard/` | 3 | `ApiClient` con `httpx.MockTransport`, `error_banner`, `system_status` |
 | E2E con stack vivo | `tests/e2e/` | 4 | `test_acceptance_criteria` (uno por CA-1..CA-8 del pipeline), watcher integration, dashboard smoke, classification E2E |
 
-Los 275 tests cubren el **estado actual del proyecto**: pipeline ETL completo, persistencia poliglota, clasificador, API completa y dashboard. El skip controlado corresponde al test del watcher cuando se ejecuta dentro del contenedor `pipeline` (necesita permisos *rw* sobre `data/incoming/` que el contenedor no tiene). Los tests E2E de clasificación se saltan limpiamente si la API reporta `predictor_loaded=false`.
+La suite cubre el **estado actual del proyecto**: pipeline ETL completo, persistencia poliglota, clasificador, API completa, triaje, alertas, informe diario y dashboard. La Feature 14 (triaje) añadió 70 tests; la Feature 15 (alertas + informe) añadió otros 60 (13 puros de `evaluate`, 11 del builder/render con sha256, 17 de los endpoints, 5 del helper de ventana, 6 del CLI y 8 del cliente HTTP). El skip controlado corresponde al test del watcher cuando se ejecuta dentro del contenedor `pipeline` (necesita permisos *rw* sobre `data/incoming/` que el contenedor no tiene). Los tests E2E de clasificación se saltan limpiamente si la API reporta `predictor_loaded=false`.
 
 ### 11.2. Tipos de prueba
 
@@ -867,12 +888,14 @@ El modelo supera ampliamente los *baselines* triviales. La metodología que llev
 
 ### 12.3. Dashboard — demo operativa
 
-El dashboard expone las cinco vistas funcionales descritas en el capítulo 8. Smoke test verificado en presentación:
+El dashboard expone las siete vistas funcionales descritas en el capítulo 8. Smoke test verificado en presentación:
 
-- Las cinco vistas responden 200 OK con datos cargados de MongoDB/SQLite via API.
+- Las siete vistas responden 200 OK con datos cargados de MongoDB/SQLite via API.
 - `HOSP-DEMO-001` se clasifica como `Normal` con probabilidad ~0,95 (la imagen sintética no tiene patrón clínico real; el resultado demuestra el flujo end-to-end, no valor diagnóstico).
 - Con `docker compose stop api`, el dashboard sigue respondiendo `200 OK`: el chip *API* pasa a rojo y los chips *Modelo* y *Último run* pasan a gris (estado desconocido al depender de la API), sin pantalla blanca ni *stacktrace* (CA-10).
 - Las HOSP-PRES-* (cuando el dataset está descargado) permiten una demo con imágenes reales del dataset, más representativa visualmente que la sintética.
+- **Triaje + Alertas end-to-end**: inyectar un paciente con `oxygen_saturation=85` via `POST /api/v1/triage/patients` (vista *Triaje*) genera `level=grave` con `reasons=["spo2_lt_92"]`; abrir la vista *Alertas* muestra inmediatamente la alerta `triage_severe`/`critical` con el `external_id` del paciente, calculada por la función pura `evaluate()`.
+- **Idempotencia del informe diario**: `python -m src.automation.daily_report --date 2026-05-20` ejecutado dos veces sobre la misma BBDD produce dos ficheros con `sha256` idéntico (verificado en smoke real con hash `7b58670962575077f1b5166e9cdf1975c62f6596972686d04530b1368f1c0c07`).
 
 ### 12.4. Cobertura por criterios de aceptación
 
@@ -1041,9 +1064,9 @@ Un sistema **funcional, contenedorizado y reproducible** que cubre los cuatro su
 1. Pipeline ETL distribuido con PySpark, persistencia poliglota (MongoDB + SQLite + MinIO), validación, deduplicación y enriquecimiento.
 2. Modelo CNN custom en Keras/TF para clasificación de radiografías en 3 clases, con métricas clínicas reportadas y artefacto commiteado al repositorio (21 MB).
 3. API REST en FastAPI con 14 endpoints versionados, documentación Swagger automática y separación lectura/escritura.
-4. Dashboard Streamlit con cinco vistas, *API-only*, imagen Docker independiente (~240 MB), barra persistente de estado del sistema.
+4. Dashboard Streamlit con siete vistas, *API-only*, imagen Docker independiente (~240 MB), barra persistente de estado del sistema.
 
-El despliegue se realiza con un único `docker compose up` y deja el sistema operativo en menos de un minuto. El estado actual del repositorio contiene 275 tests verdes, 7 ADRs y 4 specs aprobadas con trazabilidad spec -> design -> tareas -> tests -> criterios de aceptación.
+El despliegue se realiza con un único `docker compose up` y deja el sistema operativo en menos de un minuto. El estado actual del repositorio contiene 404 tests verdes, 9 ADRs y 6 specs aprobadas con trazabilidad spec -> design -> tareas -> tests -> criterios de aceptación.
 
 ### 16.2. Qué no se entrega y por qué
 
@@ -1082,7 +1105,7 @@ El proyecto demuestra que es posible llegar a un sistema completo, reproducible 
 | Tareas | `tasks/*.md` + `tasks/backlog.md` | Trabajo descompuesto, prioridad, estado |
 | ADRs | `decisions/ADR-001..ADR-007.md` | Decisiones técnicas con alternativas |
 | Lecciones | `tasks/lessons.md` | 57 entradas: patrones a evitar, decisiones, cosas que funcionan |
-| Diario IA | `docs/diario-ia.md` | 28 sesiones documentadas |
+| Diario IA | `docs/diario-ia.md` | 30 sesiones documentadas |
 | Reporte del modelo | `docs/model-evaluation/{report.md,metrics.json,confusion_matrix.png,learning_curves.png}` | Métricas + análisis clínico + curvas + matriz |
 | Runbooks | `docs/runbooks/{download-radiography-dataset,use-real-radiograph-for-demo,presentation-demo}.md` | Procedimientos operativos |
 | Changelog | `CHANGELOG.md` | Historial de entregas (incluye el bloque "Auditoria interna del codigo — 4 bloqueantes arreglados" tras cerrar T10) |

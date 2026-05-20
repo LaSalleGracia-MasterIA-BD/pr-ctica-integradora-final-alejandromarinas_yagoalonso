@@ -266,3 +266,29 @@ class ApiClient:
     def get_triage_rules(self) -> ResultJson:
         """GET /api/v1/triage/rules (RF-8): definicion de las reglas vigentes."""
         return self._request_json("GET", "/api/v1/triage/rules")
+
+    # ------------------------------------------------------------------
+    # alerts + reports (Feature 15)
+    # ------------------------------------------------------------------
+
+    def get_alerts(
+        self,
+        since: str | None = None,
+        severity: str | None = None,
+    ) -> ResultJson:
+        """GET /api/v1/alerts: alertas activas calculadas en tiempo real."""
+        params: dict[str, str] = {}
+        if since is not None:
+            params["since"] = since
+        if severity is not None:
+            params["severity"] = severity
+        return self._request_json(
+            "GET", "/api/v1/alerts", params=params or None,
+        )
+
+    def get_daily_report(self, date: str | None = None) -> ResultJson:
+        """GET /api/v1/reports/daily: informe del dia consultado (JSON)."""
+        params = {"date": date} if date else None
+        return self._request_json(
+            "GET", "/api/v1/reports/daily", params=params,
+        )

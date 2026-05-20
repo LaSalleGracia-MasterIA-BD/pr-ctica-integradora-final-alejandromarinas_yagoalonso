@@ -9,9 +9,10 @@ the API layer): the router only does Pydantic validation on top.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
@@ -142,6 +143,83 @@ class SqlReader:
                 DataQualitySummaryRow.dimension == dimension
             )
             return session.execute(stmt).scalar_one()
+
+    # -- Alertas: ventana abierta desde `since` hasta ahora -----------------
+    # Usado por GET /api/v1/alerts (Feature 15, ADR-009).
+
+    def list_failed_runs_since(self, since: datetime) -> list[dict]:
+        """Runs con status='failed' y started_at >= since, mas nuevos primero."""
+        with self._SessionFactory() as session:
+            stmt = (
+                select(PipelineRunRow)
+                .where(and_(
+                    PipelineRunRow.status == "failed",
+                    PipelineRunRow.started_at >= since,
+                ))
+                .order_by(desc(PipelineRunRow.started_at))
+            )
+            return [_pipeline_run_to_dict(r) for r in session.scalars(stmt).all()]
+
+    def list_quality_snapshots_since(self, since: datetime) -> list[dict]:
+        """Snapshots con recorded_at >= since, mas nuevos primero."""
+        with self._SessionFactory() as session:
+            stmt = (
+                select(DataQualitySummaryRow)
+                .where(DataQualitySummaryRow.recorded_at >= since)
+                .order_by(desc(DataQualitySummaryRow.recorded_at))
+            )
+            return [_quality_summary_to_dict(r) for r in session.scalars(stmt).all()]
+
+    # -- Informe diario: ventana cerrada [start, end] -----------------------
+    # Usado por GET /api/v1/reports/daily y src/automation/daily_report.py.
+    # NO reutiliza la ventana de /alerts: el informe es del dia pedido,
+    # no de "ultimas 24h desde ahora" (ver spec RF-4 + CB-7b).
+
+    def list_failed_runs_between(
+        self, start: datetime, end: datetime,
+    ) -> list[dict]:
+        """Runs failed con started_at en [start, end] (ambos inclusivos)."""
+        with self._SessionFactory() as session:
+            stmt = (
+                select(PipelineRunRow)
+                .where(and_(
+                    PipelineRunRow.status == "failed",
+                    PipelineRunRow.started_at >= start,
+                    PipelineRunRow.started_at <= end,
+                ))
+                .order_by(PipelineRunRow.started_at)
+            )
+            return [_pipeline_run_to_dict(r) for r in session.scalars(stmt).all()]
+
+    def list_runs_between(
+        self, start: datetime, end: datetime,
+    ) -> list[dict]:
+        """Todos los runs (cualquier status) con started_at en [start, end]."""
+        with self._SessionFactory() as session:
+            stmt = (
+                select(PipelineRunRow)
+                .where(and_(
+                    PipelineRunRow.started_at >= start,
+                    PipelineRunRow.started_at <= end,
+                ))
+                .order_by(PipelineRunRow.started_at)
+            )
+            return [_pipeline_run_to_dict(r) for r in session.scalars(stmt).all()]
+
+    def list_quality_snapshots_between(
+        self, start: datetime, end: datetime,
+    ) -> list[dict]:
+        """Snapshots con recorded_at en [start, end]."""
+        with self._SessionFactory() as session:
+            stmt = (
+                select(DataQualitySummaryRow)
+                .where(and_(
+                    DataQualitySummaryRow.recorded_at >= start,
+                    DataQualitySummaryRow.recorded_at <= end,
+                ))
+                .order_by(DataQualitySummaryRow.recorded_at)
+            )
+            return [_quality_summary_to_dict(r) for r in session.scalars(stmt).all()]
 
 
 def get_sql_reader_from_env() -> SqlReader:

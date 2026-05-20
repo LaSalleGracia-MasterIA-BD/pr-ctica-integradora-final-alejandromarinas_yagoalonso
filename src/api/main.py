@@ -17,10 +17,12 @@ from fastapi import FastAPI, Request
 from src.api.models import HealthResponse
 from src.api.mongo_reader import MongoReader
 from src.api.pipeline_launcher import PipelineLauncher
+from src.api.routers import alerts as alerts_router
 from src.api.routers import classify as classify_router
 from src.api.routers import data as data_router
 from src.api.routers import model as model_router
 from src.api.routers import pipeline as pipeline_router
+from src.api.routers import reports as reports_router
 from src.api.routers import triage as triage_router
 from src.api.sql_reader import get_sql_reader_from_env
 from src.pipeline.storage.minio_client import get_minio_client_from_env
@@ -143,6 +145,8 @@ def build_app(
     app.include_router(classify_router.router)
     app.include_router(model_router.router)
     app.include_router(triage_router.router)
+    app.include_router(alerts_router.router)
+    app.include_router(reports_router.router)
 
     return app
 

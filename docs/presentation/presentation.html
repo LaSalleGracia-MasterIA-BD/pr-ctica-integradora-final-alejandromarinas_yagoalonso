@@ -172,23 +172,23 @@
           </div>
           <div class="card">
             <h3>API REST</h3>
-            <p><strong>FastAPI</strong>: 14 endpoints + Swagger automático.</p>
+            <p><strong>FastAPI</strong>: 17 endpoints + Swagger automático.</p>
           </div>
           <div class="card">
             <h3>Dashboard</h3>
-            <p><strong>Streamlit</strong>: centro de control hospitalario, 5 vistas.</p>
+            <p><strong>Streamlit</strong>: centro de control hospitalario, 7 vistas.</p>
           </div>
         </div>
         <div class="metric-grid" style="margin-top: 28px;">
           <div class="metric"><div class="value">7</div><div class="label">servicios Docker</div></div>
           <div class="metric"><div class="value">3</div><div class="label">almacenes (Mongo + SQLite + MinIO)</div></div>
-          <div class="metric"><div class="value">275</div><div class="label">tests verdes</div></div>
-          <div class="metric"><div class="value">7</div><div class="label">ADRs documentadas</div></div>
+          <div class="metric"><div class="value">404</div><div class="label">tests verdes (+ 1 skip)</div></div>
+          <div class="metric"><div class="value">9</div><div class="label">ADRs documentadas</div></div>
         </div>
         <aside class="notes">
           [1:30 - 2:30] Qué hemos construido — 1 minuto.
           - Una frase por pieza.
-          - Las cifras de abajo son el "qué se entrega": 7 servicios, 3 almacenes (poliglota), 275 tests, 7 ADRs.
+          - Las cifras de abajo son el "qué se entrega": 7 servicios, 3 almacenes (poliglota), 404 tests, 9 ADRs.
           - Mencionar que arranca con un único `docker compose up` y queda listo en menos de un minuto.
         </aside>
       </section>
@@ -409,13 +409,15 @@ SqlWriter envuelve toda la ejecución:
           <a href="http://localhost:9001" target="_blank" rel="noopener" class="demo-secondary">MinIO · consola</a>
         </div>
 
-        <p class="small" style="margin-top: 36px;">Recorrido por las 5 vistas:</p>
+        <p class="small" style="margin-top: 36px;">Recorrido por las 7 vistas:</p>
         <p class="small" style="margin-top: 4px;">
           <span class="chip chip-blue">1. Overview</span>
           <span class="chip chip-blue">2. Calidad</span>
           <span class="chip chip-blue">3. Pacientes</span>
-          <span class="chip chip-blue">4. Clasificador</span>
-          <span class="chip chip-blue">5. Pipeline runs</span>
+          <span class="chip chip-blue">4. Triaje</span>
+          <span class="chip chip-blue">5. Alertas</span>
+          <span class="chip chip-blue">6. Clasificador</span>
+          <span class="chip chip-blue">7. Pipeline runs</span>
         </p>
 
         <aside class="notes">
@@ -429,23 +431,29 @@ SqlWriter envuelve toda la ejecución:
 
           GUION (sigue docs/runbooks/presentation-demo.md):
 
-          1) Overview (30s): 4 cards arriba (pacientes, admisiones, radiografías, modelo). Último run del pipeline. Strip de evaluación abajo. Sidebar: 3 chips en verde.
+          1) Overview (20s): 4 cards arriba (pacientes, admisiones, radiografías, modelo). Último run del pipeline. Strip de evaluación abajo. Sidebar: 3 chips en verde.
              Mensaje: "el sistema está arriba, los datos cargados, el modelo listo".
 
-          2) Calidad de datos (20s): snapshot por dimensión + gráfico histórico rejection_rate.
+          2) Calidad de datos (15s): snapshot por dimensión + gráfico histórico rejection_rate.
              Mensaje: "el pipeline rechaza datos malos de forma controlada y queda traza".
 
-          3) Pacientes (20s): tabla paginada, click en una fila → detalle con admisiones y radiografías embebidas.
+          3) Pacientes (15s): tabla paginada, click en una fila → detalle con admisiones y radiografías embebidas.
              Mensaje: "MongoDB embebe admisiones y radiografías sin joins — encaja con el dominio clínico".
 
-          4) Clasificador (60s — el momento clave):
+          4) Triaje (20s): formulario con signos vitales (SpO2=85). POST → paciente nuevo con triage.level=grave y reasons=["spo2_lt_92"].
+             Mensaje: "reglas IF-THEN deterministas, cada decisión cita la regla (ADR-008)".
+
+          5) Alertas (15s): vista nueva — la alerta triage_severe/critical del paciente recién creado aparece en tiempo real.
+             Mensaje: "vista derivada, cero estado nuevo persistido (ADR-009)".
+
+          6) Clasificador (45s — el momento clave):
              - Dropdown ordenado: HOSP-PRES-* primero (reales).
              - Selecciona HOSP-PRES-001 (COVID real).
              - "Clasificar" → predicción + probabilidades + model_version.
              - Bajar a la sub-sección "Evaluación detallada" → matriz de confusión heatmap.
              - PARAR aquí y decir: "el recall de COVID-19 es 0,695. Por eso el sistema es asistencia, no diagnóstico."
 
-          5) Pipeline runs (20s): tabla del histórico ETL + opcional mostrar un run failed con su error_message.
+          7) Pipeline runs (20s): tabla del histórico ETL + opcional mostrar un run failed con su error_message.
              Mensaje: "cada ejecución deja traza auditable en SQLite, no en ficheros sueltos".
 
           PLAN B si algo falla:
@@ -467,9 +475,9 @@ SqlWriter envuelve toda la ejecución:
                            ORDEN</div>
 
         <div class="metric-grid" style="margin-top: 18px;">
-          <div class="metric"><div class="value">4</div><div class="label">specs aprobadas</div></div>
-          <div class="metric"><div class="value">7</div><div class="label">ADRs</div></div>
-          <div class="metric"><div class="value">28</div><div class="label">sesiones IA documentadas</div></div>
+          <div class="metric"><div class="value">6</div><div class="label">specs aprobadas</div></div>
+          <div class="metric"><div class="value">9</div><div class="label">ADRs</div></div>
+          <div class="metric"><div class="value">30</div><div class="label">sesiones IA documentadas</div></div>
           <div class="metric"><div class="value">57</div><div class="label">lecciones registradas</div></div>
         </div>
 
@@ -481,7 +489,7 @@ SqlWriter envuelve toda la ejecución:
           [11:00 - 11:45] IA + SDD — 45 segundos.
           - Eje obligatorio del enunciado: "Desarrollo Asistido por IA".
           - SDD descompone en 5 fases con artefacto revisable por fase. La IA no inventa requisitos: trabaja sobre una spec aprobada.
-          - Mostrar las cifras: 4 specs, 7 ADRs, 28 sesiones, 57 lecciones registradas en tasks/lessons.md.
+          - Mostrar las cifras: 6 specs, 9 ADRs, 30 sesiones, 57 lecciones registradas en tasks/lessons.md.
           - Revisión técnica del equipo y contraste contra la spec en features grandes: detectó los 4 bloqueantes del pipeline que una revisión superficial habría pasado por alto.
           - Cierre: "la IA es un multiplicador de capacidad, no un sustituto. SDD es la disciplina que hace seguro ese multiplicador".
         </aside>
@@ -529,9 +537,10 @@ SqlWriter envuelve toda la ejecución:
             <h3>Qué se entrega</h3>
             <ul class="small">
               <li>Sistema completo, reproducible: 1 comando.</li>
-              <li>275 tests verdes + 1 skip esperado.</li>
-              <li>Memoria técnica de 26 pp. + 7 ADRs + 4 specs.</li>
-              <li>Diario IA: 28 sesiones documentadas.</li>
+              <li>404 tests verdes + 1 skip esperado.</li>
+              <li>Memoria técnica de 26 pp. + 9 ADRs + 6 specs.</li>
+              <li>Diario IA: 30 sesiones documentadas.</li>
+              <li>Observabilidad: <code>/alerts</code>, <code>/reports/daily</code> y CLI idempotente (Feature 15).</li>
             </ul>
           </div>
           <div>
@@ -541,7 +550,7 @@ SqlWriter envuelve toda la ejecución:
               <li>Interpretabilidad: Grad-CAM por defecto.</li>
               <li>Detección <em>out-of-domain</em>.</li>
               <li>Auth + cifrado en tránsito.</li>
-              <li>Alertas + informes (Feature 5 partial).</li>
+              <li>Persistir alertas como histórico auditable (reabrir ADR-009).</li>
             </ol>
           </div>
         </div>
@@ -573,7 +582,7 @@ SqlWriter envuelve toda la ejecución:
             * "¿Por qué CNN custom y no transfer learning?" → ADR-005, alineación con Bloque 6 + tamaño <50 MB.
             * "¿Cómo afecta el desbalance de clases?" → CB-6 mitigado con class_weight=sqrt.
             * "¿Cómo escalaría a producción?" → cap 13 limitaciones + cap 16 trabajo futuro.
-            * "¿Cómo se mide el éxito del proyecto?" → 275 tests + criterio clínico cualitativo, no accuracy bruta.
+            * "¿Cómo se mide el éxito del proyecto?" → 404 tests + criterio clínico cualitativo, no accuracy bruta.
         </aside>
       </section>
 

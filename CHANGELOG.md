@@ -7,6 +7,86 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Feature 15 — Automatizacion, alertas e informes operativos
+  (cierra Features 5 y 6 del backlog):** capa de observabilidad
+  accionable sobre el pipeline + calidad + triajes ya existentes.
+  Cumple el enunciado ("entrada en el dashboard ante eventos
+  relevantes" + "generacion automatica de informes") sin servicios
+  externos (cero scheduler, cero email, cero Prometheus).
+  - **`GET /api/v1/alerts`** — alertas activas calculadas en tiempo
+    real desde 3 fuentes existentes (sin estado nuevo persistido,
+    ver `decisions/ADR-009-alertas-como-vista-derivada.md`):
+    `pipeline_runs.status='failed'` (high), `data_quality_summary
+    .rejection_rate > umbral` (medium), `patients.triage.level=grave`
+    (critical). Query params: `since` (override ventana), `severity`
+    (filtro server-side). Response: `{items, total, generated_at,
+    threshold, window_start}`. Configurable via env:
+    `ALERT_REJECTION_RATE_THRESHOLD` (default 0.10),
+    `ALERT_WINDOW_HOURS` (default 24).
+  - **`GET /api/v1/reports/daily?date=YYYY-MM-DD`** — informe
+    estructurado JSON del dia consultado. **Ventana estricta**
+    `[00:00, 23:59:59.999]` UTC: NO reutiliza la ventana de
+    `/alerts`. Secciones: pipeline (runs del dia, failed del dia,
+    ultimo run), quality (snapshots por dimension), counts
+    (snapshot total), triage (grave/medio/leve del dia), alerts
+    (calculadas con la misma `evaluate` que `/alerts`).
+  - **`src/api/alerts.py`** — funcion pura
+    `evaluate(failed_runs, quality_snapshots, severe_triage_patients,
+    threshold) -> list[Alert]` con dataclass frozen `Alert`. Mismo
+    patron que el triaje (ADR-008): NO conoce el reloj ni el IO,
+    aplica las 3 reglas IF-THEN y ordena por
+    `severity DESC, created_at DESC`. Conexion con la **Sesion 07
+    de Yuri (sistemas basados en reglas, `ruleBasedSystem/`)**.
+  - **`src/api/reports.py`** — builder + render puros
+    (`build_daily_report` + `render_markdown`). El render NO incluye
+    `generated_at` ni nada dependiente del reloj: garantiza
+    idempotencia byte-a-byte (RNF-6 + CA-11) del Markdown del
+    script. El JSON del endpoint si lleva `generated_at` dinamico
+    como metadato.
+  - **`src/api/time_window.py`** — helper `day_window_utc(day)` que
+    devuelve `(start, end)` UTC del dia. Centralizado para evitar
+    drift entre endpoint y CLI.
+  - **`src/automation/daily_report.py`** — CLI reproducible
+    (`python -m src.automation.daily_report --date YYYY-MM-DD
+    [--output PATH]`) que llama internamente al mismo
+    `build_daily_report` (DRY) y escribe el Markdown determinista
+    en `docs/reports/YYYY-MM-DD.md`. Sin scheduler:
+    "automatizacion" = comando reproducible byte-a-byte.
+  - **`src/api/sql_reader.py`** — 5 metodos nuevos: familia `_since`
+    para `/alerts` (ventana abierta) + familia `_between` para
+    `/reports/daily` (ventana cerrada del dia). Cero tablas nuevas.
+  - **`src/api/mongo_reader.py`** — 4 metodos nuevos: misma logica
+    de doble familia + `get_total_counts()` para el snapshot del
+    informe.
+  - **`src/api/models.py`** — schemas `AlertResponse`,
+    `AlertsResponse`, `DailyReportResponse`.
+  - **Dashboard**: vista nueva **"Alertas"** en
+    `src/dashboard/views/alerts.py` (4 chips por severity + tabla +
+    detalle por alerta con chip de color + boton "Recargar" +
+    filtro server-side). API-only (ADR-007): cero imports de
+    pymongo/sqlite/sqlalchemy/minio en `src/dashboard/`. Registrada
+    en `src/dashboard/app.py::st.navigation` entre "Triaje" y
+    "Clasificador". `api_client` con 2 metodos nuevos: `get_alerts`,
+    `get_daily_report`.
+  - **60 tests nuevos**: 13 unitarios puros de `evaluate`
+    (`tests/api/test_alerts_rules.py`), 11 del builder + render
+    deterministas (`tests/api/test_reports_builder.py`), 10 del
+    endpoint `/alerts` (`tests/api/test_alerts_endpoint.py`), 7 del
+    endpoint `/reports/daily` (`tests/api/test_reports_endpoint.py`),
+    5 del helper `day_window_utc` (`tests/api/test_time_window.py`),
+    6 del CLI con verificacion sha256 byte-a-byte
+    (`tests/automation/test_daily_report.py`), 8 del cliente HTTP
+    nuevo (`tests/dashboard/test_api_client.py`). **Total suite
+    proyecto: 404 verde** + 1 skip esperado.
+    Smoke real verificado con `docker compose` (paciente grave
+    inyectado via `/triage/patients` -> alerta `triage_severe`
+    aparece en `/alerts`; 2 ejecuciones consecutivas de
+    `daily_report` con `--date 2026-05-20` -> sha256 identico).
+  - **ADR-009**: justifica la decision de "alertas como vista
+    derivada" en lugar de tabla `alerts` con estado leida/no leida.
+    Documenta cuando se reabriria (auditoria + retrospectiva
+    historica).
+
 - **Feature 14 — Triaje de pacientes en alta manual (sistema basado en reglas):**
   endpoint REST `POST /api/v1/triage/patients` que recibe demograficos +
   signos vitales + sintomas, evalua reglas explicitas (ver

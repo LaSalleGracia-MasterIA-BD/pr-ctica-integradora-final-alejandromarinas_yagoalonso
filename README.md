@@ -130,7 +130,35 @@ curl -X POST http://localhost:8000/api/v1/triage/patients \
 
 # Ver las reglas de triaje vigentes (RF-8)
 curl http://localhost:8000/api/v1/triage/rules
+
+# Alertas activas calculadas en tiempo real (Feature 15, ADR-009)
+# Tipos: pipeline_failed (high), data_quality_low (medium), triage_severe (critical)
+curl http://localhost:8000/api/v1/alerts
+
+# Filtro por severidad (server-side)
+curl "http://localhost:8000/api/v1/alerts?severity=critical"
+
+# Informe diario del dia consultado (ventana estricta [00:00, 23:59:59.999] UTC)
+curl "http://localhost:8000/api/v1/reports/daily?date=2026-05-20"
 ```
+
+### Generar el informe diario en Markdown (CLI reproducible)
+
+```bash
+# Mismo estado + misma fecha => mismo Markdown byte-a-byte (sha256 identico).
+# "Automatizacion" en este proyecto = comando reproducible, NO scheduler.
+docker compose exec api python -m src.automation.daily_report --date 2026-05-20
+
+# Custom output
+docker compose exec api python -m src.automation.daily_report \
+  --date 2026-05-20 --output /tmp/informe.md
+```
+
+El fichero se escribe en `docs/reports/YYYY-MM-DD.md` por defecto. El
+Markdown NO incluye `generated_at` ni nada dinamico — solo datos del
+dia consultado — para garantizar idempotencia byte-a-byte (RNF-6 +
+CA-11 de la Feature 15). El JSON del endpoint si lleva `generated_at`
+dinamico como metadato.
 
 ## Ejecutar los tests
 
@@ -138,7 +166,7 @@ curl http://localhost:8000/api/v1/triage/rules
 docker compose run --rm --entrypoint "" pipeline pytest tests -v
 ```
 
-Suite de **344 tests verdes + 1 skip esperado** distribuidos en:
+Suite de **404 tests verdes + 1 skip esperado** distribuidos en:
 - tests de **pipeline, API, integracion y E2E** que se ejecutan en la
   imagen `hospital-pipeline` (incluye los E2E con stack vivo y los del
   watcher);
@@ -148,7 +176,12 @@ Suite de **344 tests verdes + 1 skip esperado** distribuidos en:
 
 La feature de triaje (`POST /api/v1/triage/patients` + sistema basado
 en reglas) **anadio 70 tests nuevos** al total (reglas + endpoint +
-E2E + writer + cliente HTTP).
+E2E + writer + cliente HTTP). La Feature 15 (alertas + informe diario)
+**anadio otros 60 tests**: 13 unitarios puros de `evaluate`, 11 del
+builder + render deterministas, 17 de los dos endpoints
+(`/alerts` + `/reports/daily`), 5 del helper `day_window_utc`, 6 del
+CLI con verificacion sha256 byte-a-byte y 8 del cliente HTTP nuevo
+(`get_alerts` + `get_daily_report`).
 
 1 test se salta cuando se ejecuta dentro del contenedor `pipeline` (el
 watcher E2E necesita rw sobre `data/incoming/`). Los tests E2E de
@@ -190,7 +223,7 @@ docker compose down -v     # Para y borra TODOS los volumenes: mongo-data, minio
 │   │   └── watcher.py             # IncomingFilesWatcher
 │   ├── ml/                        # Modelo clasificacion radiografias (Keras/TF, CNN — implementado)
 │   ├── dashboard/                 # Visualizacion Streamlit (implementado, ver ADR-007)
-│   └── automation/                # Alertas e informes (pendiente)
+│   └── automation/                # Script CLI informe diario reproducible (Feature 15, ver ADR-009)
 ├── tests/
 │   ├── api/                       # Tests de la API (endpoints + readers)
 │   ├── pipeline/                  # Tests unitarios + integracion del pipeline
@@ -266,12 +299,16 @@ roles cubiertos y reglas operativas).
 
 **Clasificacion de radiografias (Keras/TensorFlow):** 16/16 tareas completadas. Ver `tasks/clasificacion-radiografias.md`, ADR-005 y ADR-006. Modelo entrenado en `data/models/radiography_classifier.keras` (~21 MB, commiteado) + reporte clinico en `docs/model-evaluation/`. Metricas finales (test split de 1.515 imagenes): accuracy=0.872, macro-F1=0.846, recall Normal=0.93, Pneumonia=0.93, COVID-19=0.70.
 
-**Tests:** 344 verdes + 1 skip esperado.
+**Tests:** 404 verdes + 1 skip esperado.
 
 **Roadmap completo:** ver `tasks/backlog.md`. Pendientes principales:
 - ~~Dashboard de visualizacion~~ ✅ **Implementado** (Streamlit en
-  `http://localhost:8501`, 5 vistas + barra persistente de estado del
+  `http://localhost:8501`, 7 vistas + barra persistente de estado del
   sistema, ver `specs/dashboard.md`, `design/dashboard.md`, ADR-007)
-- Automatizaciones de alertas e informes (el watcher YA esta como servicio real en el compose; queda pendiente el flujo de alertas)
+- ~~Automatizaciones de alertas e informes~~ ✅ **Implementado**
+  (Feature 15: `GET /api/v1/alerts` + `GET /api/v1/reports/daily` +
+  CLI `daily_report.py` idempotente + vista dashboard "Alertas",
+  ver `specs/automatizacion-alertas.md`, `design/automatizacion-alertas.md`,
+  ADR-009)
 - ~~Memoria tecnica~~ ✅ **Versión final** en `docs/memoria-tecnica.md` (17 capitulos, incluye etica/legal y reflexion critica como capitulos 13-14)
 - ~~Presentacion final~~ ✅ **Completada** en `docs/presentation/` (13 slides reveal.js + fallback Markdown offline + guion en notas del presentador + preflight y plan B)

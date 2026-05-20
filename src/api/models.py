@@ -258,3 +258,50 @@ class TriagePatientResponse(Patient):
     Garantiza que `triage` queda poblado en la respuesta.
     """
     triage: TriageInfo
+
+
+# -- Alertas + informes operativos (Feature 15) --
+
+class AlertResponse(BaseModel):
+    """Una alerta calculada al vuelo desde las fuentes existentes.
+
+    Ver `src/api/alerts.py::evaluate` para las reglas y
+    `decisions/ADR-009-alertas-como-vista-derivada.md` para la decision
+    de no persistirlas como entidades.
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    type: Literal["pipeline_failed", "data_quality_low", "triage_severe"]
+    severity: Literal["critical", "high", "medium", "low"]
+    title: str
+    detail: str
+    source: str
+    source_id: str | None = None
+    created_at: datetime
+
+
+class AlertsResponse(BaseModel):
+    """Respuesta de GET /api/v1/alerts."""
+    items: list[AlertResponse]
+    total: int
+    generated_at: datetime
+    threshold: float
+    window_start: datetime
+
+
+class DailyReportResponse(BaseModel):
+    """Respuesta de GET /api/v1/reports/daily.
+
+    Estructura segun spec automatizacion-alertas RF-4. El `generated_at`
+    es dinamico (cuando se calculo el informe), por eso el endpoint no
+    es idempotente — la idempotencia byte-a-byte aplica solo al
+    Markdown del script `daily_report.py` (que NO incluye este campo).
+    """
+    date: str
+    generated_at: datetime
+    pipeline: dict
+    quality: dict
+    counts: dict
+    triage: dict
+    alerts: list[AlertResponse]
+    threshold: float

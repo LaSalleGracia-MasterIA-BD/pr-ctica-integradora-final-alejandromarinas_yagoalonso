@@ -1,11 +1,12 @@
 """Read-side access to the hospital MongoDB collections.
 
 Kept separate from `MongoWriter` so read and write surfaces can evolve
-independently (CQRS-light). Mongo connection management mirrors the writer.
+independently. Mongo connection management mirrors the writer.
 """
 from __future__ import annotations
 
 import os
+from datetime import datetime
 
 from pymongo import MongoClient
 
@@ -101,6 +102,70 @@ class MongoReader:
             return None
         classification = docs[0].get("classification")
         return classification if classification else None
+
+    # -- Alertas y reportes operativos (Feature 15, ADR-009) ---------------
+
+    def list_severe_triage_patients_since(self, since: datetime) -> list[dict]:
+        """Pacientes con triage.level='grave' y triage.triaged_at >= since.
+
+        Usado por GET /api/v1/alerts. Ventana abierta por la derecha.
+        """
+        cursor = (
+            self.db.patients.find(
+                {
+                    "triage.level": "grave",
+                    "triage.triaged_at": {"$gte": since},
+                },
+                {"_id": 0},
+            )
+            .sort("triage.triaged_at", -1)
+        )
+        return list(cursor)
+
+    def list_severe_triage_patients_between(
+        self, start: datetime, end: datetime,
+    ) -> list[dict]:
+        """Pacientes con triage.level='grave' y triage.triaged_at en
+        [start, end] (ambos inclusivos). Usado por GET /reports/daily +
+        src/automation/daily_report.py."""
+        cursor = (
+            self.db.patients.find(
+                {
+                    "triage.level": "grave",
+                    "triage.triaged_at": {"$gte": start, "$lte": end},
+                },
+                {"_id": 0},
+            )
+            .sort("triage.triaged_at", 1)  # orden ascendente = determinista
+        )
+        return list(cursor)
+
+    def list_triage_patients_between(
+        self, start: datetime, end: datetime,
+    ) -> list[dict]:
+        """Pacientes con triage.triaged_at en [start, end], cualquier
+        nivel. Usado para contar grave/medio/leve del dia."""
+        cursor = (
+            self.db.patients.find(
+                {"triage.triaged_at": {"$gte": start, "$lte": end}},
+                {"_id": 0},
+            )
+            .sort("triage.triaged_at", 1)
+        )
+        return list(cursor)
+
+    def get_total_counts(self) -> dict:
+        """Snapshot al instante de contadores totales: patients,
+        admissions (embebidos) y radiographies (embebidas). Usado por
+        GET /api/v1/reports/daily.counts."""
+        patients = self.count_patients()
+        admissions = self.count_admissions()
+        radiographies = self.count_radiographies()
+        return {
+            "patients_total": patients,
+            "admissions_total": admissions,
+            "radiographies_total": radiographies,
+        }
 
 
 def get_mongo_reader_from_env(db_name: str | None = None) -> MongoReader:

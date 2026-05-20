@@ -341,3 +341,129 @@ def test_get_triage_rules_maps_503():
     data, err = api.get_triage_rules()
     assert err is not None
     assert err.kind == "unavailable"
+
+
+# ---------------------------------------------------------------------------
+# alerts + reports (Feature 15)
+# ---------------------------------------------------------------------------
+
+def test_get_alerts_maps_200():
+    api = _make_client(_json_handler({
+        "/api/v1/alerts": (200, {
+            "items": [{
+                "type": "triage_severe",
+                "severity": "critical",
+                "title": "Paciente grave",
+                "detail": "x",
+                "source": "patients.triage",
+                "source_id": "P-1",
+                "created_at": "2026-05-20T09:00:00+00:00",
+            }],
+            "total": 1,
+            "generated_at": "2026-05-20T15:00:00+00:00",
+            "threshold": 0.10,
+            "window_start": "2026-05-19T15:00:00+00:00",
+        }),
+    }))
+    data, err = api.get_alerts()
+    assert err is None
+    assert data["total"] == 1
+    assert data["items"][0]["type"] == "triage_severe"
+
+
+def test_get_alerts_passes_severity_param():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={
+            "items": [], "total": 0,
+            "generated_at": "2026-05-20T15:00:00+00:00",
+            "threshold": 0.10,
+            "window_start": "2026-05-19T15:00:00+00:00",
+        })
+
+    api = _make_client(handler)
+    data, err = api.get_alerts(severity="critical")
+    assert err is None
+    assert captured["params"] == {"severity": "critical"}
+
+
+def test_get_alerts_passes_since_param():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={
+            "items": [], "total": 0,
+            "generated_at": "2026-05-20T15:00:00+00:00",
+            "threshold": 0.10,
+            "window_start": "2026-05-01T00:00:00+00:00",
+        })
+
+    api = _make_client(handler)
+    data, err = api.get_alerts(since="2026-05-01T00:00:00Z")
+    assert err is None
+    assert captured["params"]["since"] == "2026-05-01T00:00:00Z"
+
+
+def test_get_alerts_maps_422():
+    api = _make_client(_json_handler({
+        "/api/v1/alerts": (422, {"detail": "invalid severity"}),
+    }))
+    data, err = api.get_alerts(severity="banana")
+    assert data is None
+    assert err is not None
+    assert err.kind == "validation"
+
+
+def test_get_alerts_maps_503():
+    api = _make_client(_json_handler({
+        "/api/v1/alerts": (503, {"detail": "mongo unreachable"}),
+    }))
+    data, err = api.get_alerts()
+    assert err is not None
+    assert err.kind == "unavailable"
+
+
+def test_get_daily_report_maps_200():
+    api = _make_client(_json_handler({
+        "/api/v1/reports/daily": (200, {
+            "date": "2026-05-20",
+            "generated_at": "2026-05-20T15:00:00+00:00",
+            "pipeline": {"runs_in_day": 1, "failed_in_day": 0, "last_run_of_day": None},
+            "quality": {},
+            "counts": {"patients_total": 0, "admissions_total": 0, "radiographies_total": 0},
+            "triage": {"grave": 0, "medio": 0, "leve": 0, "in_day_total": 0},
+            "alerts": [],
+        }),
+    }))
+    data, err = api.get_daily_report(date="2026-05-20")
+    assert err is None
+    assert data["date"] == "2026-05-20"
+
+
+def test_get_daily_report_passes_date_param():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={
+            "date": "2026-05-20",
+            "generated_at": "2026-05-20T15:00:00+00:00",
+            "pipeline": {}, "quality": {}, "counts": {}, "triage": {},
+            "alerts": [],
+        })
+
+    api = _make_client(handler)
+    api.get_daily_report(date="2026-05-20")
+    assert captured["params"] == {"date": "2026-05-20"}
+
+
+def test_get_daily_report_maps_422():
+    api = _make_client(_json_handler({
+        "/api/v1/reports/daily": (422, {"detail": "invalid date"}),
+    }))
+    data, err = api.get_daily_report(date="bad")
+    assert err is not None
+    assert err.kind == "validation"

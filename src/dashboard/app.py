@@ -1,9 +1,11 @@
 """Streamlit entrypoint for the hospital dashboard.
 
-5 views via `st.navigation`:
+Views via `st.navigation`:
   - Overview
   - Calidad de datos
   - Pacientes
+  - Triaje
+  - Alertas
   - Clasificador
   - Pipeline runs
 
@@ -61,6 +63,10 @@ pages = [
     st.Page(
         str(_VIEWS_DIR / "triage.py"),
         title="Triaje",
+    ),
+    st.Page(
+        str(_VIEWS_DIR / "alerts.py"),
+        title="Alertas",
     ),
     st.Page(
         str(_VIEWS_DIR / "classifier.py"),

@@ -52,8 +52,8 @@ Cuatro piezas interdependientes, un único `docker compose up`:
 - **Pipeline ETL** — PySpark ingesta CSVs e imágenes, valida, limpia,
   enriquece.
 - **Modelo de IA** — CNN Keras/TF custom. Sana / Pneumonia / COVID-19.
-- **API REST** — FastAPI: 14 endpoints + Swagger automático.
-- **Dashboard** — Streamlit: centro de control hospitalario, 5 vistas.
+- **API REST** — FastAPI: 17 endpoints + Swagger automático.
+- **Dashboard** — Streamlit: centro de control hospitalario, 7 vistas.
 
 Cifras de referencia:
 
@@ -61,11 +61,11 @@ Cifras de referencia:
 |---|---|
 | Servicios Docker | 7 |
 | Almacenes (Mongo + SQLite + MinIO) | 3 |
-| Tests verdes | 275 |
-| ADRs documentadas | 7 |
+| Tests verdes | 404 (+ 1 skip esperado) |
+| ADRs documentadas | 9 |
 
 > **Notas (1:00):** una frase por pieza. Las cifras de abajo son el "qué se
-> entrega": 7 servicios, 3 almacenes (poliglota), 275 tests, 7 ADRs. Mencionar
+> entrega": 7 servicios, 3 almacenes (poliglota), 404 tests, 9 ADRs. Mencionar
 > que arranca con un único `docker compose up` y queda listo en menos de un
 > minuto.
 
@@ -245,26 +245,33 @@ Abrir en el navegador:
 - API · Swagger: http://localhost:8000/docs
 - MinIO · consola: http://localhost:9001
 
-Recorrido por las 5 vistas: **Overview · Calidad · Pacientes · Clasificador ·
-Pipeline runs**.
+Recorrido por las 7 vistas: **Overview · Calidad · Pacientes · Triaje ·
+Alertas · Clasificador · Pipeline runs**.
 
 ### Guion (sigue `docs/runbooks/presentation-demo.md`)
 
-1. **Overview (30s)** — 4 cards arriba + último run + strip de evaluación +
+1. **Overview (20s)** — 4 cards arriba + último run + strip de evaluación +
    sidebar con 3 chips verdes. Mensaje: "el sistema está arriba, los datos
    cargados, el modelo listo".
-2. **Calidad de datos (20s)** — snapshot por dimensión + gráfico histórico
+2. **Calidad de datos (15s)** — snapshot por dimensión + gráfico histórico
    rejection_rate. Mensaje: "el pipeline rechaza datos malos de forma
    controlada y queda traza".
-3. **Pacientes (20s)** — tabla paginada → click en una fila → detalle con
+3. **Pacientes (15s)** — tabla paginada → click en una fila → detalle con
    admisiones y radiografías embebidas. Mensaje: "MongoDB embebe admisiones
    y radiografías sin joins".
-4. **Clasificador (60s)** — momento clave. Dropdown ordenado: `HOSP-PRES-*`
+4. **Triaje (20s)** — formulario con signos vitales (SpO2 = 85). POST →
+   paciente nuevo con `triage.level=grave` y `reasons=["spo2_lt_92"]`.
+   Mensaje: "reglas IF-THEN deterministas, cada decisión cita la regla
+   (ADR-008)".
+5. **Alertas (15s)** — vista nueva: la alerta `triage_severe`/`critical`
+   del paciente recién creado aparece en tiempo real. Mensaje: "vista
+   derivada, cero estado nuevo persistido (ADR-009)".
+6. **Clasificador (45s)** — momento clave. Dropdown ordenado: `HOSP-PRES-*`
    primero. Seleccionar `HOSP-PRES-001` (COVID real). "Clasificar" → clase +
    probabilidades + `model_version`. Bajar a "Evaluación detallada" → matriz
    de confusión heatmap. PARAR y decir: "el recall de COVID-19 es 0,695. Por
    eso el sistema es asistencia, no diagnóstico."
-5. **Pipeline runs (20s)** — tabla del histórico + opcional run failed con
+7. **Pipeline runs (20s)** — tabla del histórico + opcional run failed con
    `error_message`. Mensaje: "cada ejecución deja traza auditable en SQLite,
    no en ficheros sueltos".
 
@@ -338,9 +345,12 @@ Decisiones técnicas en ADRs. Revisión cruzada con otro proveedor para mitigar
 ### Qué se entrega
 
 - Sistema completo, reproducible: 1 comando.
-- 275 tests verdes + 1 skip esperado.
-- Memoria técnica de 26 pp. + 7 ADRs + 4 specs.
-- Diario IA: 28 sesiones documentadas.
+- 404 tests verdes + 1 skip esperado.
+- Memoria técnica de 26 pp. + 9 ADRs + 6 specs.
+- Diario IA: 30 sesiones documentadas.
+- **Observabilidad accionable (Feature 15)**: `GET /api/v1/alerts`,
+  `GET /api/v1/reports/daily`, script CLI `daily_report.py` con Markdown
+  idempotente byte-a-byte y vista *Alertas* en el dashboard.
 
 ### Trabajo futuro priorizado
 
@@ -348,7 +358,7 @@ Decisiones técnicas en ADRs. Revisión cruzada con otro proveedor para mitigar
 2. Interpretabilidad: Grad-CAM por defecto.
 3. Detección *out-of-domain*.
 4. Auth + cifrado en tránsito.
-5. Alertas + informes (Feature 5 partial).
+5. Persistir alertas como histórico auditable (reabrir ADR-009).
 
 > **Notas (25s):** cerrar lo que se entrega. El orden del trabajo futuro
 > importa, refleja lo que la memoria razona en cap 16.3.
@@ -375,5 +385,5 @@ Decisiones técnicas en ADRs. Revisión cruzada con otro proveedor para mitigar
 >   `class_weight=sqrt`.
 > - "¿Cómo escalaría a producción?" → cap 13 limitaciones + cap 16 trabajo
 >   futuro.
-> - "¿Cómo se mide el éxito del proyecto?" → 275 tests + criterio clínico
+> - "¿Cómo se mide el éxito del proyecto?" → 404 tests + criterio clínico
 >   cualitativo, no accuracy bruta.

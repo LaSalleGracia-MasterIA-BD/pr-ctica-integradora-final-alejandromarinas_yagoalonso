@@ -576,6 +576,33 @@
   - El container `api` precarga el codigo en la imagen Docker, asi que tras anadir el router nuevo hizo falta `docker compose up -d --build api dashboard` para que el endpoint estuviera disponible (no basta con montar `./src` en runtime).
 - **Leccion aprendida:** Los fixtures de tests de integracion contra Mongo deben reproducir **explicitamente** los indices que en produccion crea el init script. Sin esa replica, los tests que dependen del indice unico (como "no sobrescribir") dan falsos verdes.
 
+### Sesion 30 — 2026-05-20: Feature 15 (automatizacion, alertas e informes operativos)
+
+- **Objetivo:** Cerrar las Features 5 y 6 del backlog (de partial a done) cumpliendo el enunciado en su totalidad (alertas + informes + observabilidad accionable) **sin servicios externos**. Spec, design, tasks y ADR-009 ya aprobados; el Alejandro paso 7 guardrails (cero scheduler, cero email real, dashboard API-only, alertas como vista derivada, Markdown idempotente sin `generated_at`, ventana del dia en `/reports/daily`, T17 obligatoria con memoria).
+- **Resultado:**
+  - **`src/api/alerts.py`** funcion pura `evaluate(failed_runs, quality_snapshots, severe_triage_patients, threshold) -> list[Alert]` con `@dataclass(frozen=True) Alert`. 3 tipos: `pipeline_failed`/`high`, `data_quality_low`/`medium`, `triage_severe`/`critical`. Orden severity DESC + created_at DESC. NO conoce el reloj.
+  - **`src/api/reports.py`**: `build_daily_report(day, **state, threshold)` + `render_markdown(report)` deterministico. El render NO incluye `generated_at` ni lee el reloj — garantiza idempotencia byte-a-byte (RNF-6 + CA-11).
+  - **`src/api/time_window.py`**: helper `day_window_utc(day)` que devuelve `[00:00:00.000Z, 23:59:59.999999Z]`. Centralizado para evitar drift entre endpoint y CLI.
+  - **`src/api/sql_reader.py`** + **`src/api/mongo_reader.py`**: 5+4 metodos nuevos. Familia `_since` para `/alerts` (ventana abierta), familia `_between` para `/reports/daily` (ventana cerrada del dia). Mas `get_total_counts()` en Mongo.
+  - **`src/api/routers/alerts.py`** con `GET /api/v1/alerts` (query params `since`, `severity`).
+  - **`src/api/routers/reports.py`** con `GET /api/v1/reports/daily?date=YYYY-MM-DD`.
+  - **`src/automation/daily_report.py`** CLI argparse, lee state via `MongoReader`+`SqlReader`, escribe Markdown en `docs/reports/YYYY-MM-DD.md`. NO arranca FastAPI (DRY: comparte builder con el endpoint).
+  - **Dashboard**: vista nueva `src/dashboard/views/alerts.py` con 4 chips por severity + tabla + detalle con chip HTML + filtro server-side + boton "Recargar". API-only (cero imports de pymongo/sqlite/sqlalchemy/minio). `api_client.py` con 2 metodos nuevos. App.py con `st.Page("alerts.py", title="Alertas")` entre Triaje y Clasificador.
+  - **Tests (60 nuevos verde)**: 13 puros de `evaluate`, 11 del builder + render con sha256 byte-a-byte, 10 del endpoint `/alerts` con fakes, 7 del endpoint `/reports/daily` con fakes (incluido `test_uses_day_window_not_last_24h`), 5 del helper `day_window_utc`, 6 del CLI con sha256 byte-a-byte, 8 del cliente HTTP. **Total proyecto: 404 verdes + 1 skip esperado**.
+  - **Smoke real con `docker compose`**: `/api/v1/health` OK; `/api/v1/alerts` lista vacia + 422 en `severity=banana`; `/api/v1/reports/daily?date=2026-05-20` 200 con 4773 pacientes_total; CLI ejecutado 2 veces -> sha256 identico. Paciente grave inyectado via `POST /api/v1/triage/patients` aparece como alerta `triage_severe`/`critical` en `/api/v1/alerts`. Limpiado.
+  - **ADR-009**: alertas como vista derivada (no se persisten). Documenta cuando se reabriria.
+- **Aciertos de la IA:**
+  - **Patron pure-rules reusado**: `evaluate(state) -> list[Alert]` clon del triaje (ADR-008). Tests unitarios triviales (13 en 0.07s). El esfuerzo del design de separar reglas de orquestacion se paga.
+  - **Doble ventana temporal modelada limpia**: `_since` vs `_between` en los readers + `day_window_utc` helper. El test `test_uses_day_window_not_last_24h` blinda que `/reports/daily` NO reutilice la ventana de `/alerts`.
+  - **Render deterministico**: separar `build_daily_report` (que puede llevar `generated_at` dinamico en el dict) de `render_markdown` (que solo lee el dict, NO toca el reloj) garantiza idempotencia byte-a-byte trivialmente. El test `test_render_markdown_is_deterministic` pasa dos `generated_at` distintos al builder y verifica que el Markdown resultante es identico.
+  - **Tests rapidos con fakes**: `FakeSqlReader`/`FakeMongoReader` con `.calls` permite verificar el contrato del router (que metodo llama, con que `since`) sin arrancar BBDD. Suite de 60 tests nuevos en pocos segundos.
+- **Casos donde hubo que corregir:**
+  - **URL-encoding en httpx tests**: `?since=2026-01-01T00:00:00+00:00` codifica `+` como espacio y FastAPI lo recibe como datetime invalida -> 422. Solucion: usar sufijo `Z` (`T00:00:00Z`) en strings construidas a mano para tests.
+  - **`docker compose run` con la imagen vieja**: tras anadir routers y vista, hubo que `docker compose up -d --build api dashboard` para que recogieran el codigo nuevo (los `COPY src/` se ejecutan en build-time).
+  - **Tentacion inicial de reutilizar la ventana de `/alerts` en `/reports/daily`** para "DRY" (parado por el guardrail del Alejandro en la revision de la spec). El design final separa: ventana abierta (`_since`) para "estado actual", ventana cerrada del dia (`_between`) para "cierre del dia natural". La spec actualizada lo explica en RF-4.
+  - **Tentacion inicial de incluir `generated_at` en el Markdown** (parado en la revision de la spec). El render queda puro y el `generated_at` solo aparece como metadato en el JSON del endpoint (cuya idempotencia byte-a-byte no aplica).
+- **Leccion aprendida:** Cuando dos endpoints comparten **regla de calculo** (`evaluate`) pero **dominio temporal distinto** (estado actual vs cierre de dia), NO se comparte la ventana. Modelar dos familias de queries (`_since` vs `_between`) + helper de ventana + tests blindando que cada endpoint usa la suya correcta. Y para outputs deterministas (Markdown comparable con `git diff`), el render NO puede tocar el reloj — el reloj vive solo en la capa de metadato HTTP.
+
 ## Reflexion critica
 
 ### Que ha aportado la IA
