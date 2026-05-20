@@ -34,6 +34,10 @@ class RadiographyClassification(BaseModel):
     probabilities: dict[str, float]
     predicted_at: datetime
     model_version: str
+    # Optional with a `legacy_argmax` fallback for rows persisted before
+    # Feature 16 (ADR-010). New writes from `POST /classify` always set it
+    # to the active rule (e.g. "covid_threshold_0.35").
+    decision_rule: str = "legacy_argmax"
 
 
 class Radiography(BaseModel):

@@ -83,6 +83,7 @@ def classify_radiography(
         "probabilities": prediction.probabilities,
         "predicted_at": datetime.now(timezone.utc),
         "model_version": prediction.model_version,
+        "decision_rule": prediction.decision_rule,
     }
 
     matched = mongo_writer.set_radiography_classification(key, classification)
@@ -97,8 +98,9 @@ def classify_radiography(
         )
 
     logger.info(
-        "Classified %s as %s (model_version=%s)",
+        "Classified %s as %s (model_version=%s, decision_rule=%s)",
         key, prediction.predicted_class, prediction.model_version,
+        prediction.decision_rule,
     )
     return ClassificationResponse(
         minio_object_key=key,
@@ -106,6 +108,7 @@ def classify_radiography(
         probabilities=prediction.probabilities,
         predicted_at=classification["predicted_at"],
         model_version=prediction.model_version,
+        decision_rule=prediction.decision_rule,
     )
 
 
@@ -131,6 +134,9 @@ def get_classification(
         probabilities=doc["probabilities"],
         predicted_at=doc["predicted_at"],
         model_version=doc["model_version"],
+        # Backfill for classifications persisted before the threshold rule
+        # was introduced (Feature 16). Those rows used pure argmax.
+        decision_rule=doc.get("decision_rule", "legacy_argmax"),
     )
 
 

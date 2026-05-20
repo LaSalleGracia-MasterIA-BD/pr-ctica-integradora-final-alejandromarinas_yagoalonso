@@ -29,13 +29,17 @@ TEST_DB_NAME = "hospital_test_classify"
 
 
 class _FakePrediction:
-    def __init__(self, predicted_class, probabilities, model_version):
+    def __init__(self, predicted_class, probabilities, model_version, decision_rule):
         self.predicted_class = predicted_class
         self.probabilities = probabilities
         self.model_version = model_version
+        self.decision_rule = decision_rule
 
 
-def _make_predictor(return_class: str = "Normal"):
+def _make_predictor(
+    return_class: str = "Normal",
+    decision_rule: str = "covid_threshold_0.35",
+):
     """Return a mock Predictor that returns a known result."""
     predictor = MagicMock()
     predictor.model_version = "test-v1.0"
@@ -43,6 +47,7 @@ def _make_predictor(return_class: str = "Normal"):
         predicted_class=return_class,
         probabilities={"Normal": 0.7, "Pneumonia": 0.2, "COVID-19": 0.1},
         model_version="test-v1.0",
+        decision_rule=decision_rule,
     )
     return predictor
 
@@ -198,13 +203,36 @@ def test_classify_succeeds_and_persists(app_with_predictor, mongo_writer):
     assert body["predicted_class"] == "COVID-19"
     assert body["minio_object_key"] == "HOSP-1/x.png"
     assert body["model_version"] == "test-v1.0"
+    assert body["decision_rule"] == "covid_threshold_0.35"
     assert set(body["probabilities"].keys()) == {"Normal", "Pneumonia", "COVID-19"}
 
-    # Persisted in Mongo
+    # Persisted in Mongo (including decision_rule for full traceability)
     doc = mongo_writer.db.patients.find_one({"external_id": "HOSP-1"})
     radio = doc["radiographies"][0]
     assert radio["classification"]["predicted_class"] == "COVID-19"
     assert radio["classification"]["model_version"] == "test-v1.0"
+    assert radio["classification"]["decision_rule"] == "covid_threshold_0.35"
+
+
+def test_classify_persists_decision_rule_for_traceability(app_with_predictor, mongo_writer):
+    """The decision rule tag MUST be persisted alongside every classification."""
+    mongo_writer.bulk_upsert_patients([{"external_id": "HOSP-T", "name": "Trace"}])
+    mongo_writer.add_radiography_to_patient("HOSP-T", {"minio_object_key": "HOSP-T/x.png"})
+    app_with_predictor.state.predictor = _make_predictor("Normal", decision_rule="covid_threshold_0.35")
+    app_with_predictor.state.minio_client = _make_minio_with_bytes(b"valid-png-bytes")
+    client = TestClient(app_with_predictor)
+
+    response = client.post(
+        "/api/v1/radiographies/classify",
+        json={"minio_object_key": "HOSP-T/x.png"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["decision_rule"] == "covid_threshold_0.35"
+
+    doc = mongo_writer.db.patients.find_one({"external_id": "HOSP-T"})
+    persisted = doc["radiographies"][0]["classification"]
+    assert persisted["decision_rule"] == "covid_threshold_0.35"
 
 
 # === Tests GET /classification ======================================
@@ -218,6 +246,7 @@ def test_get_classification_returns_persisted(app_with_predictor, mongo_writer):
         "probabilities": {"Normal": 0.1, "Pneumonia": 0.8, "COVID-19": 0.1},
         "predicted_at": datetime(2026, 5, 16, 12, 0, tzinfo=timezone.utc),
         "model_version": "test-v1.0",
+        "decision_rule": "covid_threshold_0.35",
     })
 
     client = TestClient(app_with_predictor)
@@ -230,6 +259,33 @@ def test_get_classification_returns_persisted(app_with_predictor, mongo_writer):
     body = response.json()
     assert body["predicted_class"] == "Pneumonia"
     assert body["minio_object_key"] == "HOSP-2/x.png"
+    assert body["decision_rule"] == "covid_threshold_0.35"
+
+
+def test_get_classification_backfills_legacy_argmax_when_field_missing(
+    app_with_predictor, mongo_writer,
+):
+    """Classifications persisted before Feature 16 used pure argmax and have no
+    `decision_rule` field. The GET endpoint must surface them as
+    `legacy_argmax` instead of crashing with a validation error."""
+    mongo_writer.bulk_upsert_patients([{"external_id": "HOSP-L", "name": "Legacy"}])
+    mongo_writer.add_radiography_to_patient("HOSP-L", {"minio_object_key": "HOSP-L/x.png"})
+    # NO decision_rule field — simulates a row persisted under the old contract
+    mongo_writer.set_radiography_classification("HOSP-L/x.png", {
+        "predicted_class": "Normal",
+        "probabilities": {"Normal": 0.6, "Pneumonia": 0.3, "COVID-19": 0.1},
+        "predicted_at": datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
+        "model_version": "v1.0-20260516-192647",
+    })
+
+    client = TestClient(app_with_predictor)
+    response = client.get(
+        "/api/v1/radiographies/classification",
+        params={"key": "HOSP-L/x.png"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["decision_rule"] == "legacy_argmax"
 
 
 def test_get_classification_returns_404_when_not_classified(

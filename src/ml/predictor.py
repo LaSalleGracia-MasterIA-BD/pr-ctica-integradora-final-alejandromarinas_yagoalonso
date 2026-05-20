@@ -29,6 +29,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL_PATH = Path("/app/data/models/radiography_classifier.keras")
 DEFAULT_META_PATH = Path("/app/data/models/radiography_classifier.meta.json")
 
+COVID_CLASS = "COVID-19"
+COVID_THRESHOLD = 0.35
+DECISION_RULE = f"covid_threshold_{COVID_THRESHOLD:.2f}"
+
 
 class ModelNotAvailableError(RuntimeError):
     """Raised when the model artefact or its meta is missing on disk."""
@@ -40,6 +44,7 @@ class Prediction:
     predicted_class: str
     probabilities: dict[str, float]
     model_version: str
+    decision_rule: str
 
 
 class Predictor:
@@ -78,19 +83,35 @@ class Predictor:
         return self._model_version
 
     def predict(self, image_bytes: bytes) -> Prediction:
-        """Run a single-image inference. Raises InvalidImageError on bad input."""
+        """Run a single-image inference. Raises InvalidImageError on bad input.
+
+        Decision rule (post-hoc threshold tuning, see ADR-010):
+          if P(COVID-19) >= COVID_THRESHOLD -> predicted_class = "COVID-19"
+          else                               -> argmax between Normal/Pneumonia
+        The probabilities returned are the raw softmax outputs of the model.
+        """
         x = preprocess_for_inference(image_bytes)
         x_batched = x[np.newaxis, ...]
 
         with self._lock:
             probs = self._model.predict(x_batched, verbose=0)[0]
 
-        idx = int(np.argmax(probs))
+        probabilities = {c: float(p) for c, p in zip(self._classes, probs)}
+        predicted_class = self._apply_decision_rule(probabilities)
+
         return Prediction(
-            predicted_class=self._classes[idx],
-            probabilities={c: float(p) for c, p in zip(self._classes, probs)},
+            predicted_class=predicted_class,
+            probabilities=probabilities,
             model_version=self._model_version,
+            decision_rule=DECISION_RULE,
         )
+
+    def _apply_decision_rule(self, probabilities: dict[str, float]) -> str:
+        """Apply the COVID-threshold decision rule on raw softmax probabilities."""
+        if probabilities.get(COVID_CLASS, 0.0) >= COVID_THRESHOLD:
+            return COVID_CLASS
+        non_covid = {c: p for c, p in probabilities.items() if c != COVID_CLASS}
+        return max(non_covid, key=non_covid.get)
 
     @classmethod
     def from_env(cls) -> "Predictor":

@@ -10,6 +10,11 @@ Produces:
 All metrics are computed on the **test split**. The validation split is
 only used during training (EarlyStopping, ModelCheckpoint, hyperparam
 tuning) — see the regla estricta documented in train.py.
+
+Decision rule (Feature 16, ADR-010): the report's primary metrics apply
+the COVID-threshold rule from the predictor (`covid_threshold_0.35`),
+which is the rule actually served by the API. The argmax baseline is
+preserved under `comparison_argmax` for traceability.
 """
 from __future__ import annotations
 
@@ -21,19 +26,44 @@ from typing import Any
 import numpy as np
 
 from src.ml.dataset import CLASSES
+from src.ml.predictor import COVID_CLASS, COVID_THRESHOLD, DECISION_RULE
 
 logger = logging.getLogger(__name__)
 
 
-def _collect_predictions(model, test_dataset) -> tuple[np.ndarray, np.ndarray]:
-    """Run inference over the whole test dataset and return (y_true, y_pred)."""
+def _collect_probs(model, test_dataset) -> tuple[np.ndarray, np.ndarray]:
+    """Run inference over the test dataset and return (y_true, probs)."""
     y_true_chunks: list[np.ndarray] = []
-    y_pred_chunks: list[np.ndarray] = []
+    probs_chunks: list[np.ndarray] = []
     for batch_x, batch_y in test_dataset:
         probs = model.predict(batch_x, verbose=0)
-        y_pred_chunks.append(np.argmax(probs, axis=1))
+        probs_chunks.append(np.asarray(probs))
         y_true_chunks.append(np.asarray(batch_y))
-    return np.concatenate(y_true_chunks), np.concatenate(y_pred_chunks)
+    return np.concatenate(y_true_chunks), np.concatenate(probs_chunks)
+
+
+def _apply_threshold_rule(probs: np.ndarray) -> np.ndarray:
+    """Apply the same decision rule as Predictor.predict.
+
+    if P(COVID-19) >= COVID_THRESHOLD -> predicted = COVID-19
+    else                               -> argmax(Normal, Pneumonia)
+    """
+    covid_idx = CLASSES.index(COVID_CLASS)
+    non_covid_idx = [i for i in range(len(CLASSES)) if i != covid_idx]
+    preds = np.empty(probs.shape[0], dtype=np.int64)
+    for i in range(probs.shape[0]):
+        if probs[i, covid_idx] >= COVID_THRESHOLD:
+            preds[i] = covid_idx
+        else:
+            non_covid_probs = probs[i, non_covid_idx]
+            preds[i] = non_covid_idx[int(np.argmax(non_covid_probs))]
+    return preds
+
+
+def _collect_predictions(model, test_dataset) -> tuple[np.ndarray, np.ndarray]:
+    """Backward-compatible API: returns (y_true, y_pred) under the threshold rule."""
+    y_true, probs = _collect_probs(model, test_dataset)
+    return y_true, _apply_threshold_rule(probs)
 
 
 def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, Any]:
@@ -144,9 +174,17 @@ def _render_markdown_report(
     md.append(f"# Reporte de evaluacion del clasificador de radiografias")
     md.append("")
     md.append(f"**Version del modelo:** `{model_version}`")
+    decision_rule = metrics.get("decision_rule", "argmax")
+    md.append(f"**Regla de decision:** `{decision_rule}`")
     md.append("")
 
     md.append("## 1. Resumen de metricas (split de test)")
+    md.append("")
+    md.append(
+        "Las cifras de esta seccion corresponden a la **regla de decision "
+        "operativa** (la que sirve la API). Ver seccion 6 para la comparacion "
+        "contra el baseline argmax."
+    )
     md.append("")
     md.append(f"- **Accuracy global:** {accuracy:.4f}")
     md.append(f"- **Macro-F1:** {macro_f1:.4f}")
@@ -258,6 +296,43 @@ def _render_markdown_report(
     )
     md.append("")
 
+    comparison = metrics.get("comparison_argmax")
+    if comparison is not None:
+        md.append("## 6. Comparacion vs argmax (baseline sin threshold)")
+        md.append("")
+        md.append(
+            "El modelo conserva sus pesos: lo unico que cambia entre ambas "
+            "columnas es la regla de decision aplicada sobre las probabilidades "
+            "softmax. La regla `" + decision_rule + "` cuenta como COVID-19 "
+            "todo caso con P(COVID-19) >= " + f"{metrics.get('covid_threshold', 0.0):.2f}"
+            + "; en caso contrario, argmax entre Normal y Pneumonia."
+        )
+        md.append("")
+        md.append(
+            "| Metrica | Argmax | " + decision_rule + " | Delta |"
+        )
+        md.append("|---|---|---|---|")
+        md.append(
+            f"| Accuracy | {comparison['accuracy']:.4f} | {accuracy:.4f} | "
+            f"{accuracy - comparison['accuracy']:+.4f} |"
+        )
+        md.append(
+            f"| Macro-F1 | {comparison['macro_f1']:.4f} | {macro_f1:.4f} | "
+            f"{macro_f1 - comparison['macro_f1']:+.4f} |"
+        )
+        for cls in CLASSES:
+            base_r = comparison["per_class"][cls]["recall"]
+            base_p = comparison["per_class"][cls]["precision"]
+            rule_r = per_class[cls]["recall"]
+            rule_p = per_class[cls]["precision"]
+            md.append(
+                f"| Recall {cls} | {base_r:.4f} | {rule_r:.4f} | {rule_r - base_r:+.4f} |"
+            )
+            md.append(
+                f"| Precision {cls} | {base_p:.4f} | {rule_p:.4f} | {rule_p - base_p:+.4f} |"
+            )
+        md.append("")
+
     return "\n".join(md)
 
 
@@ -269,15 +344,25 @@ def generate_report(
     hyperparams: dict[str, Any],
     model_version: str = "unknown",
 ) -> dict[str, Any]:
-    """Compute metrics on `test_dataset`, persist artefacts, return metrics dict."""
+    """Compute metrics on `test_dataset`, persist artefacts, return metrics dict.
+
+    Primary metrics use the threshold decision rule (the production rule);
+    `comparison_argmax` preserves the baseline for traceability.
+    """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    y_true, y_pred = _collect_predictions(model, test_dataset)
-    metrics = _compute_metrics(y_true, y_pred)
+    y_true, probs = _collect_probs(model, test_dataset)
+    y_pred_threshold = _apply_threshold_rule(probs)
+    y_pred_argmax = np.argmax(probs, axis=1)
+
+    metrics = _compute_metrics(y_true, y_pred_threshold)
     metrics["hyperparameters"] = hyperparams
     metrics["model_version"] = model_version
     metrics["classes"] = list(CLASSES)
+    metrics["decision_rule"] = DECISION_RULE
+    metrics["covid_threshold"] = COVID_THRESHOLD
+    metrics["comparison_argmax"] = _compute_metrics(y_true, y_pred_argmax)
 
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
     _save_confusion_matrix_png(metrics["confusion_matrix"], output_dir / "confusion_matrix.png")
@@ -287,7 +372,7 @@ def generate_report(
     )
 
     logger.info(
-        "Report generated in %s: accuracy=%.4f, macro_f1=%.4f",
-        output_dir, metrics["accuracy"], metrics["macro_f1"],
+        "Report generated in %s: accuracy=%.4f, macro_f1=%.4f, decision_rule=%s",
+        output_dir, metrics["accuracy"], metrics["macro_f1"], DECISION_RULE,
     )
     return metrics

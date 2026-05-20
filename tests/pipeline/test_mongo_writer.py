@@ -184,6 +184,7 @@ def _classification_payload(predicted_class: str = "Normal") -> dict:
         "probabilities": {"Normal": 0.7, "Pneumonia": 0.2, "COVID-19": 0.1},
         "predicted_at": datetime(2026, 5, 16, 12, 0, 0, tzinfo=timezone.utc),
         "model_version": "test-v1.0",
+        "decision_rule": "covid_threshold_0.35",
     }
 
 

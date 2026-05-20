@@ -20,6 +20,9 @@ tf = pytest.importorskip("tensorflow")
 from src.ml.dataset import CLASSES
 from src.ml.model import build_model
 from src.ml.predictor import (
+    COVID_CLASS,
+    COVID_THRESHOLD,
+    DECISION_RULE,
     ModelNotAvailableError,
     Predictor,
     Prediction,
@@ -81,16 +84,29 @@ def test_predict_returns_correct_structure(tiny_trained_model_path):
     assert abs(sum(result.probabilities.values()) - 1.0) < 1e-4
     assert all(0.0 <= p <= 1.0 for p in result.probabilities.values())
     assert result.model_version == "test-v1.0"
+    assert result.decision_rule == DECISION_RULE
 
 
-def test_predicted_class_matches_argmax_of_probabilities(tiny_trained_model_path):
+def test_decision_rule_tag_matches_active_threshold():
+    """The traceability tag must encode the active threshold."""
+    assert COVID_CLASS == "COVID-19"
+    assert COVID_THRESHOLD == 0.35
+    assert DECISION_RULE == "covid_threshold_0.35"
+
+
+def test_predicted_class_follows_threshold_rule(tiny_trained_model_path):
+    """Given the model's raw probs, predicted_class respects the threshold."""
     model_path, meta_path = tiny_trained_model_path
     predictor = Predictor(model_path=model_path, meta_path=meta_path)
 
     result = predictor.predict(_png_bytes())
+    probs = result.probabilities
 
-    best_class = max(result.probabilities, key=result.probabilities.get)
-    assert result.predicted_class == best_class
+    if probs[COVID_CLASS] >= COVID_THRESHOLD:
+        assert result.predicted_class == COVID_CLASS
+    else:
+        non_covid = {c: p for c, p in probs.items() if c != COVID_CLASS}
+        assert result.predicted_class == max(non_covid, key=non_covid.get)
 
 
 def test_predict_propagates_invalid_image_error(tiny_trained_model_path):

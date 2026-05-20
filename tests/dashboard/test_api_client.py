@@ -108,6 +108,7 @@ def test_classify_posts_body_and_returns_prediction():
             "probabilities": {"Normal": 0.05, "Pneumonia": 0.10, "COVID-19": 0.85},
             "predicted_at": "2026-05-17T10:00:00Z",
             "model_version": "v1.0",
+            "decision_rule": "covid_threshold_0.35",
         })
 
     api = _make_client(handler)

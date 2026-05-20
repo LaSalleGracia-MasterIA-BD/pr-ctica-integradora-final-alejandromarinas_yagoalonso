@@ -58,7 +58,7 @@ pantallas (la principal proyecta los slides, la secundaria muestra las notas).
 | 5 | Datos | Sintéticos + Kaggle | 4:00 - 5:00 |
 | 6 | Pipeline ETL | Etapas + idempotencia | 5:00 - 6:00 |
 | 7 | Modelo CNN | Arquitectura + métricas | 6:00 - 7:30 |
-| 8 | Análisis clínico | Matriz + recall COVID 0,695 | 7:30 - 8:30 |
+| 8 | Análisis clínico | Matriz + recall COVID 0,820 (regla `covid_threshold_0.35`) vs 0,695 (argmax) | 7:30 - 8:30 |
 | 9 | **Demo en vivo** | Click → dashboard | 8:30 - 11:00 |
 | 10 | Uso de IA + SDD | Eje obligatorio del enunciado | 11:00 - 11:45 |
 | 11 | Ética + limitaciones | Datos sintéticos, asistencia | 11:45 - 12:05 |

@@ -188,36 +188,38 @@ Input (224x224x1, grayscale)
 - 35 epochs · lr=1e-4 · class_weight=sqrt.
 - Alineación literal con el Bloque 6 del Máster.
 
-### Métricas sobre test (1.515 imágenes)
+### Métricas sobre test (1.515 imágenes, regla `covid_threshold_0.35` · ADR-010)
 
-- **Accuracy:** 0,872
-- **Macro-F1:** 0,846
+- **Accuracy:** 0,877 (argmax: 0,872)
+- **Macro-F1:** 0,859 (argmax: 0,846)
 
 | Clase | Recall | F1 |
 |---|---|---|
-| Normal | 0,926 | 0,912 |
-| Pneumonia | 0,933 | 0,878 |
-| COVID-19 | **0,695** | 0,747 |
+| Normal | 0,890 | 0,911 |
+| Pneumonia | 0,926 | 0,883 |
+| COVID-19 | **0,820** | 0,784 |
 
 > **Notas (1:30):** la arquitectura se ve pero no nos perdemos en detalles.
 > Mensaje clave: CNN custom, no transfer learning, alineada con lo que enseña
 > Jordi en el Bloque 6. 21 MB cabe commiteada al repo (RNF-4 < 50 MB). Las
-> métricas son buenas pero NO son el indicador clave. El recall por clase sí.
-> Normal y Pneumonia bien. COVID-19 0,695 → preparar el siguiente slide.
+> métricas son buenas pero NO son el indicador clave: el recall por clase sí.
+> Normal y Pneumonia bien. COVID-19 0,820 con la regla `covid_threshold_0.35`
+> (post-hoc, sin reentrenar) frente a 0,695 con argmax. ADR-010 documenta la
+> decisión. → preparar el siguiente slide.
 
 ---
 
 ## Slide 8 — Análisis clínico · 7:30 - 8:30
 
-### Matriz de confusión
+### Matriz de confusión (regla operativa `covid_threshold_0.35`)
 
 | Real \ Pred. | Normal | Pneumonia | COVID-19 |
 |---|---|---|---|
-| **Normal** | 944 | 17 | 58 |
-| **Pneumonia** | 7 | 126 | 2 |
-| **COVID-19** | **101** | 9 | 251 |
+| **Normal** | 907 | 17 | 95 |
+| **Pneumonia** | 7 | 125 | 3 |
+| **COVID-19** | **59** | 6 | 296 |
 
-110 COVID-19 mal clasificados de 361 (recall 0,695).
+65 COVID-19 mal clasificados de 361 (recall 0,820). Con argmax eran 110 (recall 0,695).
 
 ### Consecuencia clínica
 
@@ -229,11 +231,12 @@ Input (224x224x1, grayscale)
 diagnóstica**, NUNCA como diagnóstico final. La última palabra es del clínico
 humano.
 
-> **Notas (1:00):** insistir en que el recall COVID 0,695 es el LÍMITE del
-> sistema. 110 COVID-19 mal clasificados / 361 = ~30% de FN. Mensaje clave que
-> se repite en memoria, runbook y UI: ASISTENCIA, no diagnóstico. Mejoras
-> posibles: transfer learning con DenseNet/EfficientNet, Grad-CAM,
-> out-of-domain.
+> **Notas (1:00):** insistir en que el recall COVID 0,820 sigue siendo el
+> LÍMITE del sistema aun después de aplicar la regla `covid_threshold_0.35`
+> (ADR-010, post-hoc sobre las probabilidades, sin reentrenar). 65 COVID-19
+> mal clasificados / 361 = ~18% de FN. Mensaje clave que se repite en memoria,
+> runbook y UI: ASISTENCIA, no diagnóstico. Mejoras siguientes: transfer
+> learning con DenseNet/EfficientNet, Grad-CAM, out-of-domain.
 
 ---
 
@@ -268,9 +271,10 @@ Alertas · Clasificador · Pipeline runs**.
    derivada, cero estado nuevo persistido (ADR-009)".
 6. **Clasificador (45s)** — momento clave. Dropdown ordenado: `HOSP-PRES-*`
    primero. Seleccionar `HOSP-PRES-001` (COVID real). "Clasificar" → clase +
-   probabilidades + `model_version`. Bajar a "Evaluación detallada" → matriz
-   de confusión heatmap. PARAR y decir: "el recall de COVID-19 es 0,695. Por
-   eso el sistema es asistencia, no diagnóstico."
+   probabilidades + `model_version` + `decision_rule = covid_threshold_0.35`.
+   Bajar a "Evaluación detallada" → matriz de confusión heatmap. PARAR y
+   decir: "el recall de COVID-19 es 0,820 con la regla `covid_threshold_0.35`
+   (era 0,695 con argmax). Por eso el sistema es asistencia, no diagnóstico."
 7. **Pipeline runs (20s)** — tabla del histórico + opcional run failed con
    `error_message`. Mensaje: "cada ejecución deja traza auditable en SQLite,
    no en ficheros sueltos".
@@ -329,14 +333,16 @@ Decisiones técnicas en ADRs. Revisión cruzada con otro proveedor para mitigar
 
 ### Limitaciones reconocidas
 
-- Recall COVID **0,695** → ~30% FN clínicamente graves.
+- Recall COVID **0,820** con la regla `covid_threshold_0.35` (ADR-010) → ~18% FN clínicamente graves; era 0,695 con argmax puro (~30% FN).
 - Sin detección *out-of-domain* (rechazar lo que no es radiografía).
 - Sin interpretabilidad (Grad-CAM).
 - Sin auth ni HA: entorno académico de demo.
 
 > **Notas (20s):** datos sintéticos = riesgo de PII neutralizado. Licencia: no
 > citar una licencia concreta sin comprobarla; usar "los términos que publica
-> el autor del dataset". Ser honesto sobre el recall COVID como límite real.
+> el autor del dataset". Ser honesto sobre el recall COVID como límite real;
+> mencionar la regla `covid_threshold_0.35` (post-hoc, ADR-010) si nos
+> preguntan cómo se llegó del 0,695 al 0,820 sin reentrenar.
 
 ---
 
@@ -354,7 +360,7 @@ Decisiones técnicas en ADRs. Revisión cruzada con otro proveedor para mitigar
 
 ### Trabajo futuro priorizado
 
-1. Subir recall COVID via *transfer learning*.
+1. Subir recall COVID por encima del 0,820 actual via *transfer learning* (la regla `covid_threshold_0.35` de ADR-010 ya agotó la ganancia barata sin reentrenar).
 2. Interpretabilidad: Grad-CAM por defecto.
 3. Detección *out-of-domain*.
 4. Auth + cifrado en tránsito.

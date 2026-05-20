@@ -249,15 +249,18 @@ if result and result["key"] == selected_key:
         predicted = data.get("predicted_class", "?")
         probabilities = data.get("probabilities", {})
 
-        meta_cols = st.columns(3)
+        meta_cols = st.columns(4)
         meta_cols[0].metric("Clase predicha", value=predicted)
         meta_cols[1].markdown(
             f"**Version del modelo**\n\n`{data.get('model_version', '?')}`"
         )
+        meta_cols[2].markdown(
+            f"**Regla de decision**\n\n`{data.get('decision_rule', '?')}`"
+        )
         predicted_at = data.get("predicted_at", "")
         if isinstance(predicted_at, str) and len(predicted_at) > 19:
             predicted_at = predicted_at[:19].replace("T", " ")
-        meta_cols[2].markdown(f"**Cuando**\n\n`{predicted_at}`")
+        meta_cols[3].markdown(f"**Cuando**\n\n`{predicted_at}`")
 
         # Bar chart de probabilidades
         if probabilities:

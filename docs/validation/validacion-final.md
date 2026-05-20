@@ -1,8 +1,9 @@
 # Validación final del proyecto
 
 > **Fecha:** 2026-05-20
-> **Validación ejecutada sobre:** `8ccf250`
+> **Validación ejecutada sobre:** `8ccf250` (más Feature 16 sobre threshold COVID)
 > **Modelo en uso:** `v1.0-20260516-192647`
+> **Regla de decisión operativa:** `covid_threshold_0.35` (ADR-010, *post-hoc* sin reentrenar)
 
 Este documento recoge la validación final ejecutada sobre el sistema antes de la entrega. No reentrena el modelo ni modifica la arquitectura; comprueba que el sistema responde como dice la memoria, tanto en el clasificador como en el flujo end-to-end (triaje, alertas, informe diario). Lo que aparece aquí es lo que se puede explicar oralmente en la presentación: cifras concretas, salidas reales y los matices que conviene mencionar.
 
@@ -12,30 +13,30 @@ Este documento recoge la validación final ejecutada sobre el sistema antes de l
 
 ### 1.1. Métricas finales (`docs/model-evaluation/metrics.json`)
 
-Calculadas sobre las **1.515 radiografías** del split de test (1.019 `Normal` + 361 `COVID-19` + 135 `Viral Pneumonia`).
+Calculadas sobre las **1.515 radiografías** del split de test (1.019 `Normal` + 361 `COVID-19` + 135 `Viral Pneumonia`) con la regla operativa `covid_threshold_0.35`.
 
-| Métrica | Valor |
-|---|---|
-| Accuracy global | **0,8719** |
-| Macro-F1 | **0,8456** |
-| Recall Normal | 0,926 (944 / 1.019) |
-| Recall Pneumonia | 0,933 (126 / 135) |
-| Recall **COVID-19** | **0,695** (251 / 361) |
-| Precision Normal | 0,897 |
-| Precision Pneumonia | 0,829 |
-| Precision COVID-19 | 0,807 |
+| Métrica | Valor (regla `covid_threshold_0.35`) | *Baseline* argmax (descartado) |
+|---|---|---|
+| Accuracy global | **0,8766** | 0,8719 |
+| Macro-F1 | **0,8594** | 0,8456 |
+| Recall Normal | 0,890 (907 / 1.019) | 0,926 |
+| Recall Pneumonia | 0,926 (125 / 135) | 0,933 |
+| Recall **COVID-19** | **0,820** (296 / 361) | 0,695 |
+| Precision Normal | 0,932 | 0,897 |
+| Precision Pneumonia | 0,845 | 0,829 |
+| Precision COVID-19 | 0,751 | 0,807 |
 
-**Lectura:** Normal y Pneumonia se detectan bien (recall > 0,92). La principal limitación está en **COVID-19**: el modelo deja pasar como `Normal` un 28 % de los casos (101 de 361). Esto es coherente con lo que la memoria declara desde el principio: **sistema de asistencia, no de diagnóstico**.
+**Lectura:** la regla `covid_threshold_0.35` (ADR-010) sube el *recall* de COVID-19 desde 0,695 hasta 0,820 sin tocar pesos del modelo, a cambio de 3,6 pp menos de *recall* en Normal y 5,6 pp menos de *precision* en COVID-19. La columna *Baseline argmax* se conserva en `metrics.json` (`comparison_argmax`) para auditoría. Aun así, **18 % de los positivos de COVID-19 siguen pasándose por alto** (65 de 361), y por eso el sistema se entrega como **asistencia, no como diagnóstico**.
 
-### 1.2. Matriz de confusión
+### 1.2. Matriz de confusión (regla operativa)
 
 | Real \ Predicha | Normal | Pneumonia | COVID-19 |
 |---|---:|---:|---:|
-| **Normal** | **944** | 17 | 58 |
-| **Pneumonia** | 7 | **126** | 2 |
-| **COVID-19** | 101 | 9 | **251** |
+| **Normal** | **907** | 17 | 95 |
+| **Pneumonia** | 7 | **125** | 3 |
+| **COVID-19** | 59 | 6 | **296** |
 
-La diagonal es fuerte para Normal y Pneumonia. La fila `COVID-19` muestra el principal error: 101 casos clasificados como `Normal` — son los falsos negativos clínicamente más graves (un contagioso que se trataría como sano). 58 Normal se clasifican como COVID-19 (falsos positivos: generan pruebas extra pero no riesgo). La imagen completa con escala de color está en `docs/model-evaluation/confusion_matrix.png`.
+La diagonal sigue siendo dominante para Normal y Pneumonia. La fila `COVID-19` muestra el progreso de la regla `covid_threshold_0.35` frente a argmax: los falsos negativos COVID-19 → Normal bajan de 101 a 59 (-42), y los falsos negativos totales de COVID-19 pasan de 110 a 65 (-45). Como coste, los falsos positivos Normal → COVID-19 suben de 58 a 95 (+37) — son revisiones clínicas extra, no altas indebidas de contagiosos. La imagen completa con escala de color está en `docs/model-evaluation/confusion_matrix.png`.
 
 ### 1.3. Curva de entrenamiento
 
@@ -76,17 +77,17 @@ Las 17 imágenes `HOSP-NNNNNN` son PNGs dummy de 1 píxel commiteados al repo co
 
 **Lo que la validación demuestra:**
 
-- El modelo entregado **no está degenerado**. En cuatro pruebas seguidas predice tres clases distintas (Normal, Pneumonia, COVID-19, Normal) y devuelve probabilidades muy variadas (0,9075 / 0,9980 / 0,9716 / 0,9526), no uniformes ni concentradas en una sola clase. Las métricas globales del split de test lo confirman: macro-F1 = 0,8456 frente a 0,267 del baseline "predecir siempre Normal".
+- El modelo entregado **no está degenerado**. En cuatro pruebas seguidas predice tres clases distintas (Normal, Pneumonia, COVID-19, Normal) y devuelve probabilidades muy variadas (0,9075 / 0,9980 / 0,9716 / 0,9526), no uniformes ni concentradas en una sola clase. Las métricas globales del split de test lo confirman: macro-F1 = 0,8594 con la regla `covid_threshold_0.35` (0,8456 con argmax) frente a 0,267 del baseline "predecir siempre Normal".
 - La clasificación de las **tres radiografías reales** del subset de presentación coincide con la clase esperada por nombre del fichero, lo que valida la cadena completa de inferencia.
 - El **control de errores** funciona: una imagen no clasificable devuelve 422 con mensaje claro, no excepción ni crash.
 
 **Lo que la validación NO demuestra:**
 
-- **No demuestra utilidad clínica real.** Cuatro casos individuales pueden ir bien y el modelo seguir perdiendo el 30 % de los COVID-19 reales (recall = 0,695). Las cifras del split de test son la fuente de verdad, no los smokes aislados.
+- **No demuestra utilidad clínica real.** Cuatro casos individuales pueden ir bien y el modelo seguir perdiendo el 18 % de los COVID-19 reales (recall = 0,820 con la regla `covid_threshold_0.35`, o 0,695 con argmax). Las cifras del split de test son la fuente de verdad, no los smokes aislados.
 - **No demuestra generalización** a otros equipos, hospitales o poblaciones. El entrenamiento se hace solo sobre el *COVID-19 Radiography Database*.
 - **No demuestra calibración** de las probabilidades. Un `predicted_class=COVID-19 / 0,9075` se interpreta como ranking entre clases, no como "9 de cada 10 con esta confianza son COVID reales".
 
-**Para la presentación oral:** mostrar el smoke real con HOSP-PRES y, en cuanto se mencione "el modelo acierta", abrir el reporte y enseñar el recall = 0,695 de COVID-19 con la matriz de confusión. La franqueza sobre la limitación principal está alineada con la postura de la memoria.
+**Para la presentación oral:** mostrar el smoke real con HOSP-PRES y, en cuanto se mencione "el modelo acierta", abrir el reporte y enseñar el recall = 0,820 de COVID-19 con la matriz de confusión, explicando el camino desde 0,695 (argmax) hasta 0,820 (regla `covid_threshold_0.35`, ADR-010) y por qué no se reentrenó el modelo. La franqueza sobre la limitación principal está alineada con la postura de la memoria.
 
 ---
 
@@ -163,8 +164,8 @@ El audit previo de cierre de la Feature 15 (commit `9898d22`) obtuvo el mismo co
 
 | Prueba | Demuestra |
 |---|---|
-| Métricas del split de test (cap 1.1) | Que el modelo entrenado **no es trivial**: macro-F1 = 0,8456 muy por encima del baseline "predecir siempre Normal" (0,267). |
-| Matriz de confusión (cap 1.2) | Que los errores **no se reparten al azar**: 101 COVID-19 → Normal es el patrón dominante (falsos negativos clínicamente graves). |
+| Métricas del split de test (cap 1.1) | Que el modelo entrenado **no es trivial**: macro-F1 = 0,8594 con la regla `covid_threshold_0.35` (0,8456 con argmax) muy por encima del baseline "predecir siempre Normal" (0,267). |
+| Matriz de confusión (cap 1.2) | Que los errores **no se reparten al azar**: con la regla operativa, 59 COVID-19 → Normal sigue siendo el patrón dominante de falsos negativos clínicamente graves (45 menos que con argmax, pero 59 sigue siendo > 0). |
 | Smoke real HOSP-PRES (cap 1.4) | Que la **cadena MinIO → API → predictor → respuesta** funciona end-to-end con imágenes reales. |
 | HOSP-DEMO-001 (cap 1.5) | Que el flujo del dashboard funciona sin necesidad del dataset Kaggle descargado. Nada más. |
 | Dummy 1 × 1 (cap 1.6) | Que el sistema **gestiona errores con código HTTP correcto** y mensaje legible (no crash, no excepción no controlada). |
@@ -174,7 +175,7 @@ El audit previo de cierre de la Feature 15 (commit `9898d22`) obtuvo el mismo co
 
 ### 3.2. Qué NO demuestra esta validación
 
-- **No demuestra valor clínico real.** Cuatro radiografías acertadas en un smoke no compensan un recall COVID-19 de 0,695 sobre 361 casos reales del split de test.
+- **No demuestra valor clínico real.** Cuatro radiografías acertadas en un smoke no compensan un recall COVID-19 de 0,820 (con la regla `covid_threshold_0.35`) sobre 361 casos reales del split de test: aún se pierden 65 de cada 361.
 - **No demuestra que las reglas de triaje sean clínicamente correctas.** Los umbrales son académicos, no han sido revisados por personal sanitario. Si en una sesión se ajustasen los umbrales, los tests del triaje irían a romperse y se sabría — pero eso solo prueba que **el sistema hace lo que sus reglas dicen**, no que las reglas estén bien clínicamente.
 - **No demuestra robustez en producción.** El sistema corre en local con un solo nodo de Mongo y un solo nodo de MinIO. No hay réplicas, ni autenticación, ni *failover*, ni tests de carga.
 - **No demuestra generalización del modelo.** El entrenamiento es sobre un único dataset (COVID-19 Radiography Database). Otro equipo radiológico u otra población podrían dar caídas de rendimiento no medidas.
@@ -183,7 +184,7 @@ El audit previo de cierre de la Feature 15 (commit `9898d22`) obtuvo el mismo co
 
 **Sobre el modelo:**
 
-> El modelo alcanza accuracy global de 0,87 y macro-F1 de 0,85 sobre 1.515 radiografías de test. En clasificar Normal y Pneumonia va bien — recalls de 0,93 y 0,93. **La principal limitación es el recall de COVID-19, que es 0,695**: alrededor de un 30 % de los casos de COVID-19 se clasifican como Normal. Por eso el sistema se entrega como **asistencia, no como diagnóstico**, y por eso en la memoria proponemos *transfer learning* como mejora prioritaria si el proyecto siguiera.
+> El modelo alcanza accuracy global de 0,88 y macro-F1 de 0,86 sobre 1.515 radiografías de test, aplicando una regla de decisión `covid_threshold_0.35` documentada en ADR-010 que se decide *post-hoc*, sobre las probabilidades del modelo, sin reentrenar nada. Esa regla sube el *recall* de COVID-19 de 0,695 (argmax puro) a **0,820**, a cambio de 3,6 pp menos de *recall* en Normal. **La principal limitación sigue siendo COVID-19**: aún se pierden alrededor del 18 % de los casos reales (65 de 361). Por eso el sistema se entrega como **asistencia, no como diagnóstico**, y por eso en la memoria proponemos *transfer learning* como siguiente paso si el proyecto continuara — el umbral *post-hoc* es la mejora barata, el reentrenamiento es la mejora cara.
 
 **Sobre la demo:**
 

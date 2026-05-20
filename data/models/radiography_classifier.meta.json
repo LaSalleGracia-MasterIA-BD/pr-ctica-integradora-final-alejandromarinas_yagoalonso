@@ -13,7 +13,39 @@
   ],
   "framework": "tensorflow",
   "framework_version": "2.16.1",
+  "decision_rule": {
+    "name": "covid_threshold_0.35",
+    "type": "post_hoc_threshold",
+    "threshold": 0.35,
+    "target_class": "COVID-19",
+    "description": "if P(COVID-19) >= 0.35 -> COVID-19; else argmax(Normal, Pneumonia). Applied on raw softmax outputs; model weights unchanged.",
+    "introduced_in_feature": 16
+  },
   "metrics": {
+    "accuracy": 0.8765676567656766,
+    "macro_f1": 0.8593802522314783,
+    "per_class": {
+      "Normal": {
+        "precision": 0.9321892393320965,
+        "recall": 0.8900882237487733,
+        "f1": 0.9106499246606335,
+        "support": 1019
+      },
+      "Pneumonia": {
+        "precision": 0.8445945945945946,
+        "recall": 0.9259259259259259,
+        "f1": 0.8833922261484098,
+        "support": 135
+      },
+      "COVID-19": {
+        "precision": 0.7512690355329949,
+        "recall": 0.8199445983379502,
+        "f1": 0.7841059602649006,
+        "support": 361
+      }
+    }
+  },
+  "metrics_argmax_baseline": {
     "accuracy": 0.8719471947194719,
     "macro_f1": 0.8455698268009101,
     "per_class": {
@@ -35,7 +67,8 @@
         "f1": 0.7470238095238095,
         "support": 361
       }
-    }
+    },
+    "note": "Argmax baseline preserved for traceability — NOT the rule served by the API since Feature 16."
   },
   "training": {
     "seed": 42,

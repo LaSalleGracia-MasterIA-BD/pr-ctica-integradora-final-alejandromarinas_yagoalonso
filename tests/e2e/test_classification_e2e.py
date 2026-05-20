@@ -102,11 +102,13 @@ def test_classify_endpoint_returns_prediction_and_persists(
     assert set(body["probabilities"].keys()) == {"Normal", "Pneumonia", "COVID-19"}
     assert abs(sum(body["probabilities"].values()) - 1.0) < 1e-3
     assert body["model_version"]
+    assert body["decision_rule"] == "covid_threshold_0.35"
 
-    # Persisted in Mongo
+    # Persisted in Mongo (decision rule travels with the row)
     doc = mongo_db.patients.find_one({"external_id": E2E_PATIENT_ID})
     radio = doc["radiographies"][0]
     assert radio["classification"]["predicted_class"] == body["predicted_class"]
+    assert radio["classification"]["decision_rule"] == "covid_threshold_0.35"
 
 
 def test_get_classification_after_classify(
@@ -132,6 +134,7 @@ def test_get_classification_after_classify(
     assert get_body["minio_object_key"] == key
     assert get_body["predicted_class"] == post_body["predicted_class"]
     assert get_body["model_version"] == post_body["model_version"]
+    assert get_body["decision_rule"] == post_body["decision_rule"]
 
 
 def test_get_classification_returns_404_before_classify(

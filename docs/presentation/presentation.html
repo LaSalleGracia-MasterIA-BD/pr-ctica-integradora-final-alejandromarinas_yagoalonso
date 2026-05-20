@@ -331,27 +331,29 @@ SqlWriter envuelve toda la ejecución:
             <p class="tiny">Alineación literal con el Bloque 6 del Máster (ADR-005).</p>
           </div>
           <div>
-            <h3>Métricas sobre test (1.515 imágenes)</h3>
+            <h3>Métricas test · regla <code>covid_threshold_0.35</code></h3>
             <div class="metric-grid" style="grid-template-columns: 1fr 1fr;">
-              <div class="metric"><div class="value">0,872</div><div class="label">accuracy</div></div>
-              <div class="metric"><div class="value">0,846</div><div class="label">macro-F1</div></div>
+              <div class="metric"><div class="value">0,877</div><div class="label">accuracy (argmax: 0,872)</div></div>
+              <div class="metric"><div class="value">0,859</div><div class="label">macro-F1 (argmax: 0,846)</div></div>
             </div>
             <table style="margin-top: 14px;">
               <thead><tr><th>Clase</th><th>Recall</th><th>F1</th></tr></thead>
               <tbody>
-                <tr><td>Normal</td><td class="good">0,926</td><td>0,912</td></tr>
-                <tr><td>Pneumonia</td><td class="good">0,933</td><td>0,878</td></tr>
-                <tr><td>COVID-19</td><td class="danger">0,695</td><td>0,747</td></tr>
+                <tr><td>Normal</td><td>0,890</td><td>0,911</td></tr>
+                <tr><td>Pneumonia</td><td class="good">0,926</td><td>0,883</td></tr>
+                <tr><td>COVID-19</td><td class="good">0,820</td><td>0,784</td></tr>
               </tbody>
             </table>
+            <p class="tiny" style="margin-top: 8px;">Argmax puro daba recall COVID-19 = 0,695 → la regla <code>covid_threshold_0.35</code> (ADR-010, post-hoc, sin reentrenar) lo sube a 0,820.</p>
           </div>
         </div>
         <aside class="notes">
           [6:00 - 7:30] Modelo — 1 minuto 30 segundos.
           - Arquitectura: la mostramos pero no nos perdemos en detalles. Mensaje clave: CNN custom, no transfer learning, alineada con lo que enseña Jordi en el Bloque 6.
           - 21 MB → cabe commiteada al repo (RNF-4 dice <50 MB).
-          - Métricas: accuracy 0,872 y macro-F1 0,846 son buenos pero NO es el indicador clave.
-          - El recall por clase sí. Normal y Pneumonia bien. COVID-19 0,695 → preparar el siguiente slide.
+          - Métricas: accuracy 0,877 y macro-F1 0,859 son buenos pero NO es el indicador clave.
+          - El recall por clase sí. Normal 0,890 (bajó 3,6 pp), Pneumonia 0,926 (estable), COVID-19 0,820 (subió 12,5 pp).
+          - La regla covid_threshold_0.35 (ADR-010) se aplica POST-HOC sobre las probabilidades softmax — el modelo es el mismo, los pesos son los mismos.
         </aside>
       </section>
 
@@ -362,16 +364,16 @@ SqlWriter envuelve toda la ejecución:
         <h2>Análisis clínico — el límite del sistema</h2>
         <div class="two-col">
           <div>
-            <h3>Matriz de confusión</h3>
+            <h3>Matriz de confusión (regla <code>covid_threshold_0.35</code>)</h3>
             <table>
               <thead><tr><th>Real \ Pred.</th><th>Normal</th><th>Pneumonia</th><th>COVID-19</th></tr></thead>
               <tbody>
-                <tr><td><strong>Normal</strong></td><td class="good">944</td><td>17</td><td>58</td></tr>
-                <tr><td><strong>Pneumonia</strong></td><td>7</td><td class="good">126</td><td>2</td></tr>
-                <tr><td><strong>COVID-19</strong></td><td class="danger">101</td><td>9</td><td class="good">251</td></tr>
+                <tr><td><strong>Normal</strong></td><td class="good">907</td><td>17</td><td>95</td></tr>
+                <tr><td><strong>Pneumonia</strong></td><td>7</td><td class="good">125</td><td>3</td></tr>
+                <tr><td><strong>COVID-19</strong></td><td class="danger">59</td><td>6</td><td class="good">296</td></tr>
               </tbody>
             </table>
-            <p class="small" style="margin-top: 8px;"><span class="danger">110 COVID-19 mal clasificados</span> de 361 (recall 0,695).</p>
+            <p class="small" style="margin-top: 8px;"><span class="danger">65 COVID-19 mal clasificados</span> de 361 (recall 0,820). Argmax puro: 110 mal (recall 0,695).</p>
           </div>
           <div>
             <h3>Consecuencia clínica</h3>
@@ -386,10 +388,11 @@ SqlWriter envuelve toda la ejecución:
         </div>
         <aside class="notes">
           [7:30 - 8:30] Análisis clínico — 1 minuto.
-          - Insistir: el recall COVID de 0,695 es el LÍMITE del sistema, lo decimos antes de que nos lo pregunten.
-          - 110 COVID-19 mal clasificados / 361 = ~30% de falsos negativos.
+          - Insistir: el recall COVID de 0,820 con la regla covid_threshold_0.35 (era 0,695 con argmax) sigue siendo el LÍMITE del sistema, lo decimos antes de que nos lo pregunten.
+          - 65 COVID-19 mal clasificados / 361 = ~18% de falsos negativos (frente al ~30% con argmax).
           - Mensaje clave que se repite en memoria, runbook y UI del dashboard: ASISTENCIA, no diagnóstico.
-          - Si preguntan cómo mejoraríamos: transfer learning con DenseNet/EfficientNet, Grad-CAM para interpretabilidad, detección out-of-domain.
+          - ADR-010 documenta la regla y la elección concreta del umbral 0,35 sobre validación.
+          - Si preguntan cómo seguir mejorando: transfer learning con DenseNet/EfficientNet (ya con el umbral aplicado), Grad-CAM para interpretabilidad, detección out-of-domain.
         </aside>
       </section>
 
@@ -449,9 +452,9 @@ SqlWriter envuelve toda la ejecución:
           6) Clasificador (45s — el momento clave):
              - Dropdown ordenado: HOSP-PRES-* primero (reales).
              - Selecciona HOSP-PRES-001 (COVID real).
-             - "Clasificar" → predicción + probabilidades + model_version.
+             - "Clasificar" → predicción + probabilidades + model_version + decision_rule (covid_threshold_0.35).
              - Bajar a la sub-sección "Evaluación detallada" → matriz de confusión heatmap.
-             - PARAR aquí y decir: "el recall de COVID-19 es 0,695. Por eso el sistema es asistencia, no diagnóstico."
+             - PARAR aquí y decir: "el recall de COVID-19 es 0,820 con la regla covid_threshold_0.35 (era 0,695 con argmax, ADR-010). Por eso el sistema es asistencia, no diagnóstico."
 
           7) Pipeline runs (20s): tabla del histórico ETL + opcional mostrar un run failed con su error_message.
              Mensaje: "cada ejecución deja traza auditable en SQLite, no en ficheros sueltos".
@@ -476,9 +479,9 @@ SqlWriter envuelve toda la ejecución:
 
         <div class="metric-grid" style="margin-top: 18px;">
           <div class="metric"><div class="value">6</div><div class="label">specs aprobadas</div></div>
-          <div class="metric"><div class="value">9</div><div class="label">ADRs</div></div>
-          <div class="metric"><div class="value">30</div><div class="label">sesiones IA documentadas</div></div>
-          <div class="metric"><div class="value">57</div><div class="label">lecciones registradas</div></div>
+          <div class="metric"><div class="value">10</div><div class="label">ADRs</div></div>
+          <div class="metric"><div class="value">31</div><div class="label">sesiones IA documentadas</div></div>
+          <div class="metric"><div class="value">58</div><div class="label">lecciones registradas</div></div>
         </div>
 
         <p class="small" style="margin-top: 20px;">
@@ -512,7 +515,7 @@ SqlWriter envuelve toda la ejecución:
           <div>
             <h3>Limitaciones reconocidas</h3>
             <ul class="small">
-              <li><span class="danger">Recall COVID 0,695</span> → ~30% FN clínicamente graves.</li>
+              <li><span class="danger">Recall COVID 0,820</span> con la regla <code>covid_threshold_0.35</code> (ADR-010) → ~18% FN clínicamente graves; era 0,695 (~30%) con argmax.</li>
               <li>Sin detección <em>out-of-domain</em> (rechazar lo que no es radiografía).</li>
               <li>Sin interpretabilidad (Grad-CAM).</li>
               <li>Sin auth ni HA: entorno académico de demo.</li>
@@ -537,16 +540,17 @@ SqlWriter envuelve toda la ejecución:
             <h3>Qué se entrega</h3>
             <ul class="small">
               <li>Sistema completo, reproducible: 1 comando.</li>
-              <li>404 tests verdes + 1 skip esperado.</li>
-              <li>Memoria técnica de 26 pp. + 9 ADRs + 6 specs.</li>
-              <li>Diario IA: 30 sesiones documentadas.</li>
+              <li>413 tests verdes + 1 skip esperado.</li>
+              <li>Memoria técnica + 10 ADRs + 6 specs.</li>
+              <li>Diario IA: 31 sesiones documentadas.</li>
               <li>Observabilidad: <code>/alerts</code>, <code>/reports/daily</code> y CLI idempotente (Feature 15).</li>
+              <li>Regla de decisión <code>covid_threshold_0.35</code> trazada en cada predicción (Feature 16, ADR-010).</li>
             </ul>
           </div>
           <div>
             <h3>Trabajo futuro priorizado</h3>
             <ol class="small">
-              <li>Subir recall COVID via <em>transfer learning</em>.</li>
+              <li>Subir recall COVID por encima del 0,820 actual via <em>transfer learning</em>.</li>
               <li>Interpretabilidad: Grad-CAM por defecto.</li>
               <li>Detección <em>out-of-domain</em>.</li>
               <li>Auth + cifrado en tránsito.</li>

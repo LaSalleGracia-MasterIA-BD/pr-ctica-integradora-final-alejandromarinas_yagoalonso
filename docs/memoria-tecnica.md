@@ -43,7 +43,7 @@ Este proyecto implementa, para el hospital ficticio **laSalle Health Center**, u
 
 La arquitectura se despliega como un único `docker compose up` que orquesta siete servicios (MongoDB, MinIO, inicializador de buckets, pipeline, API, watcher y dashboard) y deja el sistema listo en menos de un minuto. El estado actual del repositorio contiene **404 tests automáticos verdes** (más un skip controlado), nueve ADRs documentadas y artefactos vivos de la metodología SDD aplicada durante todo el desarrollo.
 
-El **modelo entrenado** sobre el split de test (1.515 radiografías del *COVID-19 Radiography Database* de Kaggle) alcanza una *accuracy* de **0,8719** y un **macro-F1 de 0,8456**, con un *recall* por clase de 0,926 (Normal), 0,933 (Pneumonia) y **0,695 (COVID-19)**. Esta última cifra es la principal limitación del sistema de cara a un uso clínico y se discute en detalle en los capítulos de resultados, limitaciones y ética: el sistema se entrega como herramienta de **asistencia**, nunca como diagnóstico final.
+El **modelo entrenado** sobre el split de test (1.515 radiografías del *COVID-19 Radiography Database* de Kaggle) alcanza una *accuracy* de **0,8766** y un **macro-F1 de 0,8594**, con un *recall* por clase de 0,890 (Normal), 0,926 (Pneumonia) y **0,820 (COVID-19)** aplicando la regla de decisión `covid_threshold_0.35` documentada en ADR-010 (umbral *post-hoc* sobre la probabilidad softmax de COVID-19 que NO modifica los pesos del modelo). El *recall* de COVID-19 sigue siendo la dimensión clínicamente más sensible y se discute en detalle en los capítulos de resultados, limitaciones y ética: el sistema se entrega como herramienta de **asistencia**, nunca como diagnóstico final.
 
 El proyecto está construido con metodología **SDD (Spec-Driven Development)**: cada feature pasa por las fases `/spec -> /planificar -> /tareas -> /implementar -> /revisar`, con artefactos versionados en `specs/`, `design/`, `tasks/` y `decisions/`. El uso de IA generativa como herramienta de pareo en el desarrollo está documentado sesión a sesión en `docs/diario-ia.md` y se trata explícitamente en el capítulo 16.
 
@@ -56,11 +56,11 @@ El proyecto está construido con metodología **SDD (Spec-Driven Development)**:
 | Almacenes de datos heterogéneos | 3 (MongoDB, SQLite, MinIO) |
 | Pacientes procesados desde el dataset sintético | 4.745 |
 | Admisiones embebidas en MongoDB | 8.569 |
-| Tests automáticos verdes | 404 (+ 1 skip esperado) |
-| ADRs documentadas | 9 |
+| Tests automáticos verdes | 413 (+ 1 skip esperado) |
+| ADRs documentadas | 10 |
 | Specs aprobadas | 6 (`pipeline-datos`, `sqlite-pipeline-metadata`, `clasificacion-radiografias`, `dashboard`, `triage-pacientes`, `automatizacion-alertas`) |
-| Accuracy del modelo (test split) | 0,8719 |
-| Macro-F1 del modelo (test split) | 0,8456 |
+| Accuracy del modelo (test split, regla `covid_threshold_0.35`) | 0,8766 |
+| Macro-F1 del modelo (test split, regla `covid_threshold_0.35`) | 0,8594 |
 | Tamaño del artefacto del modelo | 21 MB (formato `.keras`) |
 
 ### 1.2. Estructura del documento
@@ -217,7 +217,7 @@ A modo de resumen, las decisiones arquitectónicas con mayor impacto son:
 | Una imagen compartida pipeline/api/watcher | Tres imágenes distintas | Evitar duplicación de capas y desincronización de versiones entre componentes que comparten código. ADR-006 |
 | Dashboard *API-only* en imagen independiente | Dashboard accediendo a Mongo/SQLite/MinIO directamente | Aislamiento de capa, imagen ligera (~240 MB), reutiliza los contratos HTTP ya implementados. ADR-007 |
 
-Estas decisiones se desarrollan formalmente en los ADR-001 a ADR-009 (capítulo 10) y se referencian a lo largo de los siguientes capítulos cuando se justifica una elección concreta.
+Estas decisiones se desarrollan formalmente en los ADR-001 a ADR-010 (capítulo 10) y se referencian a lo largo de los siguientes capítulos cuando se justifica una elección concreta.
 
 ---
 
@@ -471,47 +471,52 @@ El primer intento de entrenamiento (con `learning_rate=1e-3` y `class_weight` li
 
 ### 6.5. Resultados sobre el split de test
 
-Sobre las **1.515 radiografías** del split de test (1.019 `Normal` + 361 `COVID-19` + 135 `Pneumonia`):
+Sobre las **1.515 radiografías** del split de test (1.019 `Normal` + 361 `COVID-19` + 135 `Pneumonia`), con la regla de decisión operativa `covid_threshold_0.35` (ADR-010):
 
-- **Accuracy global:** 0,8719
-- **Macro-F1:** 0,8456
+- **Accuracy global:** 0,8766
+- **Macro-F1:** 0,8594
 
 Métricas por clase (con el *recall* destacado por su relevancia clínica):
 
 | Clase | Precision | Recall | F1 | Soporte |
 |---|---|---|---|---|
-| Normal | 0,897 | **0,926** | 0,912 | 1.019 |
-| Pneumonia | 0,829 | **0,933** | 0,878 | 135 |
-| COVID-19 | 0,807 | **0,695** | 0,747 | 361 |
+| Normal | 0,932 | **0,890** | 0,911 | 1.019 |
+| Pneumonia | 0,845 | **0,926** | 0,883 | 135 |
+| COVID-19 | 0,751 | **0,820** | 0,784 | 361 |
 
-Matriz de confusión 3x3 (filas = clase real, columnas = clase predicha):
+Matriz de confusión 3x3 con la regla operativa (filas = clase real, columnas = clase predicha):
 
 | Real \\ Predicha | Normal | Pneumonia | COVID-19 |
 |---|---|---|---|
-| **Normal** | 944 | 17 | 58 |
-| **Pneumonia** | 7 | 126 | 2 |
-| **COVID-19** | **101** | 9 | 251 |
+| **Normal** | 907 | 17 | 95 |
+| **Pneumonia** | 7 | 125 | 3 |
+| **COVID-19** | **59** | 6 | 296 |
 
-Los artefactos visuales completos están en `docs/model-evaluation/confusion_matrix.png` (mapa de calor de la matriz) y `docs/model-evaluation/learning_curves.png` (curvas de *loss* y *accuracy* por *epoch* para *train* y *val*).
+A modo de trazabilidad y *baseline* descartado, las mismas probabilidades evaluadas con `argmax` puro daban *accuracy* 0,8719, macro-F1 0,8456 y *recall* COVID-19 de 0,695 (110 falsos negativos COVID-19 frente a 65 con el umbral). La comparación completa argmax vs umbral se preserva en `docs/model-evaluation/metrics.json` (bloque `comparison_argmax`) y en `docs/model-evaluation/report.md`. La justificación formal de la regla, la elección concreta del umbral 0,35 frente a 0,30 y 0,40 y el alcance limitado (post-hoc, sin reentrenamiento) viven en **ADR-010** y en `docs/model-evaluation/threshold-analysis.md`.
+
+Los artefactos visuales completos están en `docs/model-evaluation/confusion_matrix.png` (mapa de calor de la matriz con la regla operativa) y `docs/model-evaluation/learning_curves.png` (curvas de *loss* y *accuracy* por *epoch* para *train* y *val*).
 
 ### 6.6. Lectura cualitativa de los errores (CA-3)
 
 La matriz de confusión tiene seis tipos de error y no todos pesan igual en un hospital. El más grave es el **falso negativo de COVID-19** (un paciente que sí lo es y el modelo lo clasifica como `Normal`), porque ese paciente no se aislaría. Por debajo se sitúan los **falsos negativos de Pneumonia** (neumonía no detectada) y las **confusiones COVID ↔ Pneumonia** (al menos llevan a un protocolo respiratorio aunque la etiqueta exacta esté mal). Los **falsos positivos** son los menos graves: generan pruebas adicionales pero no ponen al paciente en riesgo.
 
-Con la matriz obtenida, el modelo deja **101 COVID-19 clasificados como Normal y 9 como Pneumonia (110 COVID-19 que se pierden como tal)**, lo que se traduce en un *recall* de **0,695** para esa clase. Es la principal limitación del modelo de cara a un uso clínico, y se discute con franqueza en los capítulos 14 (limitaciones) y 15 (ética). La conclusión es directa: el modelo no es apto para tomar decisiones por sí solo; se entrega como herramienta de asistencia que prioriza casos para que los revise un profesional, no como sustituto del juicio clínico.
+Con la regla operativa `covid_threshold_0.35`, el modelo deja **59 COVID-19 clasificados como Normal y 6 como Pneumonia (65 COVID-19 que se pierden como tal)**, lo que se traduce en un *recall* de **0,820** para esa clase — frente a los 110 falsos negativos y *recall* 0,695 del *baseline* argmax. La mejora paga un coste cuantificado: 95 falsos positivos COVID-19 sobre Normal (frente a 58 con argmax), 37 confusiones más que generan revisiones clínicas adicionales pero no implican alta de un contagioso. Aun así, el *recall* COVID-19 = 0,820 sigue lejos de la sensibilidad exigible en un entorno asistencial real, y por eso el sistema se entrega como herramienta de asistencia que prioriza casos para que los revise un profesional, no como sustituto del juicio clínico.
 
 ### 6.7. Ciclo de vida del modelo en producción
 
 El modelo se integra con la API mediante un *predictor* cargado al arrancar (`lifespan` de FastAPI). Si el artefacto `.keras` está presente, los endpoints de clasificación responden normalmente; si no, la API arranca igualmente y los endpoints de clasificación devuelven HTTP 503 con mensaje claro (CB-4), pero el resto de endpoints siguen funcionando (CA-7).
 
-El campo `patients.radiographies[].classification` en MongoDB pasa de `null` a un objeto con cuatro campos:
+El campo `patients.radiographies[].classification` en MongoDB pasa de `null` a un objeto con cinco campos (desde Feature 16; el quinto se rellena por defecto con `covid_threshold_0.35`):
 
 ```
 predicted_class:  "Normal" | "Pneumonia" | "COVID-19"
-probabilities:    {Normal: 0.94, Pneumonia: 0.02, COVID-19: 0.04}
+probabilities:    {Normal: 0.62, Pneumonia: 0.02, COVID-19: 0.36}
 predicted_at:     "2026-05-17T18:42:11Z"
 model_version:    "v1.0-20260516-192647"
+decision_rule:    "covid_threshold_0.35"
 ```
+
+Las `probabilities` son las salidas softmax brutas del modelo (no se renormalizan tras aplicar el umbral). El campo `decision_rule` queda persistido para que cualquier auditoría posterior pueda reconstruir cómo se obtuvo `predicted_class` a partir de las probabilidades. Las clasificaciones persistidas antes de Feature 16 no tienen este campo: la API las devuelve con `decision_rule="legacy_argmax"` al leerlas, en lugar de fallar la validación de Pydantic.
 
 La idempotencia se garantiza con `matched_count > 0` (no `modified_count`) en el update, de modo que clasificar dos veces la misma imagen con el mismo modelo no provoca falsos negativos al verificar que la operación ha llegado a la base.
 
@@ -828,6 +833,7 @@ Las decisiones técnicas no triviales están documentadas en `decisions/` como A
 | **ADR-007** | Streamlit + imagen Docker independiente para el dashboard | Plotly Dash / React / reutilizar `hospital-pipeline` | A 3 días de la entrega, Streamlit corta ~70 % del tiempo de implementación vs React; imagen ligera (~240 MB) cumple holgadamente RNF-5 | aceptada |
 | **ADR-008** | Triaje de pacientes implementado como **sistema basado en reglas** (no ML) | Modelo de clasificación clínica entrenado | Trazabilidad explícita clínico → predicción (cada decisión cita la regla); alineación con la Sesión 07 de Yuri (`ruleBasedSystem/`); ML no aporta valor sin etiquetas reales | aceptada |
 | **ADR-009** | Alertas y vista del informe diario como **vista derivada** (cero estado nuevo) | Tabla `alerts` en SQLite con estado leída/no leída | Cero superficie de estado nuevo; las fuentes (`pipeline_runs`, `data_quality_summary`, `patients.triage`) ya tienen lo necesario; encaja con la separación lectura/escritura del proyecto (`MongoReader`/`MongoWriter`, `SqlReader`/`SqlWriter`). Si fuera producción real, se reabriría para auditoría histórica | aceptada |
+| **ADR-010** | Regla de decisión `covid_threshold_0.35` aplicada *post-hoc* sobre las probabilidades softmax (sin reentrenar) | Reentrenar con `class_weight` más agresivo o con *transfer learning* | Subir el *recall* COVID-19 de 0,695 a 0,820 (+12,5 pp) sin tocar pesos del modelo ni arquitectura, manteniendo trazabilidad (`decision_rule` se persiste en cada clasificación). Coste: -3,6 pp de *recall* Normal. *Baseline* argmax se conserva en `metrics.json` para auditoría | aceptada |
 
 Las ADRs son **vivas**: cuando una decisión cambia, se crea un ADR nuevo que *supersede* la anterior, dejando trazabilidad histórica (caso ADR-001 -> ADR-003 para la migración de PyTorch a Keras).
 
@@ -934,21 +940,22 @@ Sobre el dataset sintético commiteado (`patients.csv` 5.150 filas + `admissions
 
 ### 13.2. Modelo de clasificación — métricas finales
 
-Sobre las 1.515 radiografías del *split* de test:
+Sobre las 1.515 radiografías del *split* de test, con la regla operativa `covid_threshold_0.35` (ADR-010):
 
-- **Accuracy global**: 0,8719
-- **Macro-F1**: 0,8456
-- **Recall por clase**: Normal = 0,926; Pneumonia = 0,933; **COVID-19 = 0,695**
+- **Accuracy global**: 0,8766
+- **Macro-F1**: 0,8594
+- **Recall por clase**: Normal = 0,890; Pneumonia = 0,926; **COVID-19 = 0,820**
 
-Comparativa con dos *baselines* triviales:
+Comparativa con dos *baselines* triviales y con el *baseline* argmax descartado:
 
 | Sistema | Accuracy | Macro-F1 |
 |---|---|---|
 | Predicción aleatoria uniforme (3 clases) | ~0,333 | ~0,33 |
 | Predecir siempre `Normal` (clase mayoritaria) | 0,6726 | 0,267 |
-| **Modelo entregado** | **0,8719** | **0,8456** |
+| Modelo entregado — *baseline* argmax | 0,8719 | 0,8456 |
+| **Modelo entregado — regla `covid_threshold_0.35`** | **0,8766** | **0,8594** |
 
-El modelo supera ampliamente los *baselines* triviales. El proceso que llevó al modelo actual incluyó un primer entrenamiento degenerado (el modelo predecía siempre `Normal` y su *accuracy* coincidía con la del *baseline* de la clase mayoritaria), detectado por los *sanity checks* documentados en `lessons.md` y corregido bajando el *learning rate* a `1e-4` y suavizando el `class_weight` con la raíz cuadrada.
+El modelo supera ampliamente los *baselines* triviales. La regla `covid_threshold_0.35` sube el *recall* de COVID-19 de 0,695 a 0,820 (+12,5 pp) a cambio de perder 3,6 pp de *recall* en Normal, manteniendo el modelo y sus pesos intactos. El cambio es estrictamente *post-hoc*: aplica un umbral sobre la probabilidad de COVID-19 antes de tomar la decisión y se documenta en ADR-010 con la comparación cuantitativa entre umbrales 0,30 / 0,35 / 0,40 sobre el split de validación. El proceso que llevó al modelo actual incluyó un primer entrenamiento degenerado (el modelo predecía siempre `Normal` y su *accuracy* coincidía con la del *baseline* de la clase mayoritaria), detectado por los *sanity checks* documentados en `lessons.md` y corregido bajando el *learning rate* a `1e-4` y suavizando el `class_weight` con la raíz cuadrada.
 
 El detalle de la matriz de confusión y la interpretación clínica de los errores están en la sección 6.6.
 
@@ -1016,9 +1023,9 @@ Este capítulo recorre las limitaciones reales del sistema en el orden que impor
 
 ### 14.1. Limitaciones del clasificador de radiografías
 
-El clasificador alcanza *accuracy* global de **0,8719** y macro-F1 de **0,8456** sobre el split de test, pero las cifras agregadas esconden comportamientos que conviene declarar antes de que un evaluador los descubra leyendo la matriz de confusión.
+El clasificador alcanza *accuracy* global de **0,8766** y macro-F1 de **0,8594** sobre el split de test con la regla operativa `covid_threshold_0.35` (ADR-010), pero las cifras agregadas esconden comportamientos que conviene declarar antes de que un evaluador los descubra leyendo la matriz de confusión.
 
-- **Recall de COVID-19 = 0,695 — el límite clínico principal.** El modelo deja de detectar como tales aproximadamente el 30 % de los positivos reales de COVID-19 del split de test (101 clasificados como Normal y 9 como Pneumonia). Es el motivo central por el que el sistema **no se diseña para autonomía** (RNF-2 de la spec): si se usara sin un profesional que valide cada predicción, dejaría escapar 3 de cada 10 contagiosos sin alarma.
+- **Recall de COVID-19 = 0,820 — el límite clínico principal.** Incluso después de aplicar la regla `covid_threshold_0.35` (que sube el *recall* de COVID-19 desde 0,695 hasta 0,820, +12,5 pp), el modelo deja de detectar como tales aproximadamente el 18 % de los positivos reales de COVID-19 del split de test (59 clasificados como Normal y 6 como Pneumonia, 65 falsos negativos en total frente a los 110 del *baseline* argmax). Es el motivo central por el que el sistema **no se diseña para autonomía** (RNF-2 de la spec): aun con el umbral, sin un profesional que valide cada predicción se dejarían escapar casi 2 de cada 10 contagiosos sin alarma. Subir más el *recall* exigiría reentrenamiento (*transfer learning*, *data augmentation* dirigido) y queda como trabajo futuro.
 - **Sin detección *out-of-domain*.** Si llegara una imagen que no es una radiografía de tórax — una resonancia, una foto de una mano, una captura de pantalla — el modelo devolvería igualmente una de las tres clases con la confianza que tocase. No hay un verificador previo "esto es realmente una radiografía / no lo es". Para una demo controlada esto no afecta; para un despliegue real es un agujero abierto.
 - **Sin interpretabilidad.** El modelo dice qué clase predice y con qué probabilidad, pero no muestra dónde está mirando. No hay Grad-CAM, ni mapas de saliencia, ni SHAP. Un radiólogo que recibiera la predicción no tendría forma de validar si la atención del modelo cae sobre el parénquima pulmonar o sobre artefactos del marcador de la radiografía.
 - **Generalización a otros equipos y poblaciones no medida.** El entrenamiento se hace exclusivamente sobre el *COVID-19 Radiography Database* (Kaggle). El comportamiento sobre radiografías capturadas con otros equipos, otras poblaciones, otras calibraciones de exposición o con artefactos clínicos distintos (drenajes, sondas, marcapasos visibles) no se ha evaluado. Lo razonable es asumir caída de rendimiento.
@@ -1062,13 +1069,13 @@ Conviene cerrar el bloque de limitaciones con una posición clara sobre los esce
 
 **Dónde tiene sentido este sistema, tal cual:**
 
-- **Demostración académica del flujo completo**, exactamente lo que es esta entrega. Un hospital ficticio, datos sintéticos, un comando para arrancar, métricas reportadas honestamente, *recall* COVID-19 declarado.
+- **Demostración académica del flujo completo**, exactamente lo que es esta entrega. Un hospital ficticio, datos sintéticos, un comando para arrancar, métricas reportadas honestamente, *recall* COVID-19 declarado (0,820 con la regla operativa `covid_threshold_0.35`, 0,695 con argmax puro, ambas cifras conservadas en el reporte).
 - **Plantilla para construir sobre ella**: pipeline ETL con calidad medida, persistencia poliglota, API con separación lectura/escritura, dashboard *API-only*, automatización por evento y por reproducibilidad. La arquitectura es generalizable; lo que habría que cambiar son los datos, los modelos y las políticas, no la estructura.
 - **Ejercicio formativo sobre Spec-Driven Development con asistencia de IA**: el repositorio entero está escrito para que el siguiente programador (humano o IA) pueda recoger el testigo leyendo `specs/`, `design/`, `decisions/` y `progress/` sin tener que reconstruir el razonamiento.
 
 **Dónde NO usaríamos este sistema sin cambios estructurales:**
 
-- **Decisiones clínicas reales con consecuencia para un paciente.** Ni el clasificador (recall COVID-19 ≈ 0,70) ni el triaje (reglas académicas no validadas) ofrecen las garantías que exige el ámbito clínico. Un despliegue real requeriría certificación como producto sanitario (CE/FDA), auditoría con datos del centro, interpretabilidad, protocolos de incertidumbre y, sobre todo, un radiólogo o un médico de urgencias que mantenga siempre la última palabra.
+- **Decisiones clínicas reales con consecuencia para un paciente.** Ni el clasificador (recall COVID-19 ≈ 0,82 incluso con la regla `covid_threshold_0.35`) ni el triaje (reglas académicas no validadas) ofrecen las garantías que exige el ámbito clínico. Un despliegue real requeriría certificación como producto sanitario (CE/FDA), auditoría con datos del centro, interpretabilidad, protocolos de incertidumbre y, sobre todo, un radiólogo o un médico de urgencias que mantenga siempre la última palabra.
 - **Entornos con PII real o regulación de datos personales.** El sistema no implementa cifrado en tránsito ni en reposo, no tiene gestión de roles, no firma logs, no audita accesos. Aplicarlo sobre datos reales sería incumplimiento directo de GDPR equivalente.
 - **Operación 24/7 sin observabilidad *push*.** El modelo *pull* del dashboard sirve para una demo o para un operador que mira la pantalla; no sirve para un hospital donde la alerta tiene que llegar a un busca clínico. Antes de plantearlo habría que añadir un canal de notificación y, como consecuencia, persistir las alertas con estado para no inundar.
 - **Hospital con volumen real y SLA.** MongoDB y MinIO como nodos únicos no aguantan operación crítica; cualquier caída es indisponibilidad total. Antes de operación real, replicación, *failover* y *backups* automatizados son requisitos previos.
@@ -1080,7 +1087,7 @@ La línea divisoria no es "este proyecto es bueno o malo": es **para qué se ha 
 
 Si el proyecto continuara, el orden natural de las siguientes mejoras sería:
 
-1. **Transfer learning** (EfficientNet, MobileNetV2 o DenseNet121 con pesos médicos como *CheXNet*) para subir el *recall* de COVID-19 entre 5 y 10 puntos. ADR-005 ya lo previó como contingencia.
+1. **Transfer learning** (EfficientNet, MobileNetV2 o DenseNet121 con pesos médicos como *CheXNet*) para subir el *recall* de COVID-19 por encima del 0,820 que da la regla `covid_threshold_0.35` sin sacrificar más *recall* en Normal. ADR-005 ya lo previó como contingencia y ADR-010 lo deja como continuación natural una vez agotada la ganancia del umbral *post-hoc*.
 2. **Detección *out-of-domain***: clasificador binario previo "es radiografía de tórax / no" para rechazar imágenes que no encajan en el dominio.
 3. **Interpretabilidad**: Grad-CAM por defecto en cada predicción del clasificador, con el mapa de calor visible en la vista *Clasificador*.
 4. **Validación clínica del triaje**: comparar las reglas vigentes contra triaje observado en datos reales (cuando estén disponibles) y refinar los umbrales con evidencia, no con elección del equipo.
@@ -1148,7 +1155,7 @@ Los sesgos no son sólo del modelo aprendido: las reglas también tienen sesgos,
 
 ### 15.4. Uso clínico del clasificador — asistencia, no diagnóstico
 
-El clasificador propone una clase y unas probabilidades; **la decisión clínica la mantiene siempre el profesional**. Esta posición se materializa como **RNF-2** de la spec de clasificación, se recuerda en el runbook de presentación, queda visible en la UI cuando una predicción se ejecuta sobre `HOSP-DEMO-001` y se discute con cifras concretas en el reporte del modelo (`docs/model-evaluation/report.md`). La métrica que la sostiene es el *recall* de COVID-19 = 0,695: el modelo pierde el 30 % de los positivos reales, así que sin revisión humana de cada predicción se dejarían pasar casos contagiosos.
+El clasificador propone una clase y unas probabilidades; **la decisión clínica la mantiene siempre el profesional**. Esta posición se materializa como **RNF-2** de la spec de clasificación, se recuerda en el runbook de presentación, queda visible en la UI cuando una predicción se ejecuta sobre `HOSP-DEMO-001` y se discute con cifras concretas en el reporte del modelo (`docs/model-evaluation/report.md`). La métrica que la sostiene es el *recall* de COVID-19 = 0,820 con la regla operativa `covid_threshold_0.35` (ADR-010): incluso con esa regla aplicada, el modelo pierde el 18 % de los positivos reales, así que sin revisión humana de cada predicción se dejarían pasar casos contagiosos. Antes de Feature 16 ese *recall* era 0,695 (30 % de positivos perdidos); la regla *post-hoc* lo mejora sin tocar los pesos del modelo, pero no resuelve el problema clínico de fondo.
 
 Cualquier despliegue clínico real requeriría, además: (a) certificación como producto sanitario (CE/FDA), (b) auditoría con datos representativos del centro, (c) interpretabilidad (Grad-CAM como mínimo), (d) protocolos de incertidumbre (no clasificar cuando la confianza es baja) y (e) integración con el flujo del radiólogo humano que mantenga la última palabra clínica siempre en la persona.
 
@@ -1223,7 +1230,7 @@ El flujo de una feature típica (ejemplo: dashboard) ha sido:
 | Indicador | Valor |
 |---|---|
 | Sesiones documentadas en `docs/diario-ia.md` | 30 |
-| ADRs producidos | 9 |
+| ADRs producidos | 10 |
 | Specs aprobadas | 6 (`pipeline-datos`, `sqlite-pipeline-metadata`, `clasificacion-radiografias`, `dashboard`, `triage-pacientes`, `automatizacion-alertas`) |
 | Lecciones registradas en `tasks/lessons.md` | 57 entradas (patrones a evitar, decisiones, cosas que funcionan) |
 | Revisión técnica del equipo y contraste contra la spec | sí, durante el desarrollo de las features grandes; sin un documento aparte de revisión por feature (los hallazgos quedan en `tasks/lessons.md` y en los commits) |
@@ -1281,7 +1288,7 @@ El despliegue se realiza con un único `docker compose up` y deja el sistema ope
 
 Si el proyecto evolucionara más allá de la entrega académica, las prioridades naturales serían, por orden:
 
-1. **Subir el *recall* de COVID-19** mediante *transfer learning* (EfficientNet o DenseNet121 con pesos médicos) y/o *ensembling*.
+1. **Subir el *recall* de COVID-19** por encima del 0,820 que da la regla `covid_threshold_0.35` (ADR-010), mediante *transfer learning* (EfficientNet o DenseNet121 con pesos médicos) y/o *ensembling*. El umbral *post-hoc* es el primer paso barato; el segundo paso es reentrenar.
 2. **Añadir interpretabilidad** (Grad-CAM por defecto en cada predicción).
 3. **Detección *out-of-domain***: clasificador binario previo "es radiografía de tórax / no".
 4. **Autenticación + autorización** (OAuth2/JWT) y cifrado en tránsito.
@@ -1304,7 +1311,7 @@ El proyecto demuestra que es posible llegar a un sistema completo, reproducible 
 | Specs | `specs/{pipeline-datos,sqlite-pipeline-metadata,clasificacion-radiografias,dashboard,triage-pacientes,automatizacion-alertas}.md` | Qué construir + criterios de aceptación |
 | Designs | `design/*.md` | Cómo construirlo + trazabilidad spec -> componente |
 | Tareas | `tasks/*.md` + `tasks/backlog.md` | Trabajo descompuesto, prioridad, estado |
-| ADRs | `decisions/ADR-001..ADR-009.md` | Decisiones técnicas con alternativas |
+| ADRs | `decisions/ADR-001..ADR-010.md` | Decisiones técnicas con alternativas |
 | Lecciones | `tasks/lessons.md` | 57 entradas: patrones a evitar, decisiones, cosas que funcionan |
 | Diario IA | `docs/diario-ia.md` | 30 sesiones documentadas |
 | Reporte del modelo | `docs/model-evaluation/{report.md,metrics.json,confusion_matrix.png,learning_curves.png}` | Métricas + lectura cualitativa de los errores + curvas + matriz de confusión |

@@ -111,3 +111,29 @@ def test_report_md_documents_split_strategy(tmp_path: Path):
     md = (tmp_path / "report.md").read_text().lower()
     assert "split" in md
     assert "80" in md or "stratified" in md
+
+
+def test_metrics_json_includes_decision_rule_and_argmax_comparison(tmp_path: Path):
+    """Feature 16: report must surface the operative decision rule and
+    preserve the argmax baseline for traceability."""
+    model = build_model()
+    ds = _tiny_dataset()
+
+    generate_report(
+        model, ds, output_dir=tmp_path, history=_fake_history(),
+        hyperparams={"seed": 42}, model_version="test-v0",
+    )
+
+    metrics = json.loads((tmp_path / "metrics.json").read_text())
+    assert metrics["decision_rule"] == "covid_threshold_0.35"
+    assert metrics["covid_threshold"] == 0.35
+    assert "comparison_argmax" in metrics
+    arg = metrics["comparison_argmax"]
+    assert "accuracy" in arg
+    assert "macro_f1" in arg
+    assert "per_class" in arg
+    assert "confusion_matrix" in arg
+
+    md = (tmp_path / "report.md").read_text().lower()
+    assert "covid_threshold_0.35" in md
+    assert "argmax" in md
