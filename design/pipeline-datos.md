@@ -235,5 +235,5 @@ GET  /api/v1/radiographies       → Metadatos de radiografias
 | Watcher por polling (watchdog) | inotify / evento S3 | Mas portable entre OS, mas simple en Docker |
 | MinIO en vez de S3 real | AWS S3 | Gratis, local, compatible S3 — perfecto para proyecto academico |
 | Rejected records en MongoDB | Log file con rechazados | Mas consultable, permite dashboard de calidad de datos |
-| MongoDB (NoSQL) | PostgreSQL (relacional) | El enunciado indica preferencia por NoSQL. Documentos JSON encajan con datos clinicos semi-estructurados |
+| MongoDB (documental) | PostgreSQL (relacional) | El enunciado pide al menos dos tipos de almacenamiento y pone PostgreSQL como ejemplo, no como obligacion. Los documentos JSON encajan con la jerarquia paciente -> admisiones -> radiografias y con los `raw_data` heterogeneos de `rejected_records`. Ver ADR-002 |
 | Admissions embebidas en patient | Colecciones separadas con referencias | Evita lookups, refleja relacion natural paciente-ingresos |

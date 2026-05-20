@@ -63,4 +63,4 @@ Disenar e implementar un pipeline de datos completo que cubra ingesta, almacenam
 |-------|--------|--------|------|
 | 2026-04-14 | Creacion inicial | Arranque del proyecto | spec |
 | 2026-04-14 | Dudas cerradas, spec aprobada | Alejandro confirma: datos generados + trigger dual | spec |
-| 2026-04-14 | PostgreSQL reemplazado por MongoDB | Texto oculto en enunciado indica preferencia NoSQL | spec/design |
+| 2026-04-14 | PostgreSQL reemplazado por MongoDB | PostgreSQL aparece en el enunciado como ejemplo (no como obligacion); la jerarquia paciente -> admisiones -> radiografias encaja mejor en documental. Ver ADR-002 | spec/design |

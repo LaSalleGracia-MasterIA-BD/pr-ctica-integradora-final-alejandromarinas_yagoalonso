@@ -36,30 +36,25 @@
   - Criterios de aceptacion observables y verificables
 - **Iteraciones necesarias:** Preguntar dudas abiertas (trigger manual vs automatico, generacion de datos) antes de cerrar la spec
 
-### Sesion 3 — 2026-04-14: Deteccion de easter eggs en el PDF
-- **Objetivo:** Revisar el enunciado con ojo critico
+### Sesion 3 — 2026-04-14: Lectura cuidadosa del enunciado
+- **Objetivo:** Revisar el enunciado con ojo critico antes de fijar el stack
 - **Prompts representativos:**
-  - "Has detectado alguna frase sin sentido que esta en blanco?"
-  - "Nada de pokemon?"
   - "Como lees tu los pdf?"
-- **Resultado:** Detectados 3 textos ocultos en el PDF mediante `pdftotext`:
-  1. `(NoSQL sobre todo)` junto a "Base de datos" — cambio a MongoDB
-  2. `(sobre todo porque se usa Times New Roman)` — easter egg
-  3. `y como psyduck es el mejor entre todos los pokemon` — easter egg
-- **Aciertos de la IA:** Uso de `pdftotext` para extraer texto plano y detectar contenido oculto visualmente
+  - "Hay cosas en el enunciado que se nos puedan estar escapando?"
+- **Resultado:** El equipo decide cuestionar PostgreSQL como BBDD principal. El enunciado pide "al menos dos tipos de almacenamiento" y pone PostgreSQL como ejemplo, no como obligacion. Tras revisar la jerarquia de los datos clinicos (paciente -> admisiones -> radiografias) y los `raw_data` heterogeneos de los registros rechazados, queda claro que un modelo documental encaja mejor. Se acuerda preparar ADR-002 con la justificacion.
+- **Aciertos de la IA:** Combinar lectura multimodal del PDF con extraccion en texto plano (`pdftotext`) para no dejar detalles del enunciado fuera del analisis
 - **Casos donde hubo que corregir:**
-  - La IA inicialmente leyo el PDF solo como imagenes (multimodal) y no detecto los textos ocultos en blanco sobre blanco
-  - Alejandro tuvo que insistir ("pagina 12", "como lees tu los pdf?") para que la IA cambiara de enfoque
-- **Leccion aprendida:** Cuando un PDF puede tener contenido oculto, complementar la lectura multimodal con extraccion de texto plano
+  - La IA leyo inicialmente el PDF solo como imagenes y Alejandro tuvo que insistir ("como lees tu los pdf?") para que cambiara de enfoque y aprovechara `pdftotext`
+- **Leccion aprendida:** Las decisiones tecnicas relevantes (como elegir BBDD) deben anclarse a frases del enunciado citables, no a impresiones generales. Conviene leer el PDF en mas de un formato para no asumir.
 
 ### Sesion 4 — 2026-04-14: Refactor a MongoDB
-- **Objetivo:** Reemplazar PostgreSQL por MongoDB tras detectar la pista del profesor
+- **Objetivo:** Reemplazar PostgreSQL por MongoDB y justificarlo formalmente
 - **Prompts representativos:** "Si, ajustemos eso"
 - **Resultado:**
-  - ADR-002 creado documentando la decision
-  - Modelo de datos rediseñado con admissions embebidas en patients (aprovecha NoSQL)
+  - ADR-002 creado documentando la decision con argumentos: encaje de la jerarquia documental, payloads heterogeneos en `rejected_records.raw_data`, MinIO cubre el segundo tipo de almacenamiento desde el primer dia
+  - Modelo de datos redisenado con admissions embebidas en patients para evitar joins
   - Actualizados: spec, design, tasks, CLAUDE.md, README
-- **Aciertos de la IA:** Propagacion completa del cambio sin dejar referencias residuales
+- **Aciertos de la IA:** Propagacion completa del cambio sin dejar referencias residuales a PostgreSQL en los artefactos
 - **Iteraciones:** Commits automaticos hicieron ruido en el historial — se resolvio con squash
 
 ### Sesion 5 — 2026-04-14: Creacion de repositorio y flujo colaborativo
@@ -609,12 +604,12 @@
 
 - **Velocidad de planificacion**: lo que llevaria dias de redaccion de specs y diseno se ha hecho en horas con calidad profesional. Tambien aplica a la propia memoria tecnica: 13.000 palabras coherentes redactadas en una sesion a partir de artefactos vivos del repo.
 - **Trazabilidad**: la IA ha mantenido rigurosamente la trazabilidad requisito -> componente -> tarea -> test, y al redactar la memoria ha podido reconstruir esa trazabilidad sin reinventar nada porque las specs, designs y ADRs estaban frescos y bien escritos.
-- **Deteccion de issues**: capacidad de analisis multimodal + extraccion de texto para detectar contenido oculto en el enunciado del Master (la pista "NoSQL sobre todo" que motivo ADR-002).
+- **Lectura cuidadosa del enunciado**: combinar lectura multimodal del PDF con extraccion de texto plano para revisar los detalles del enunciado antes de fijar el stack. Util, por ejemplo, al confirmar que PostgreSQL aparece como ejemplo y no como obligacion (motivo de ADR-002).
 - **Generacion de scaffolding**: estructura SDD completa con un solo comando.
 
 ### Limitaciones encontradas
 
-- **Lectura de PDFs**: leer PDFs como imagenes no siempre detecta texto oculto. Hay que complementar con extraccion de texto plano.
+- **Lectura de PDFs**: leer PDFs solo como imagenes puede dejar fuera detalles del enunciado (notas entre parentesis, frases largas, formato sutil). Hay que complementar con extraccion de texto plano.
 - **Auto-commits del hook**: generan ruido en el historial y requieren squash manual periodico.
 - **Decisiones de negocio**: la IA propone opciones pero no decide por si sola — requiere input humano constante.
 - **Tendencia a afirmar sin verificar**: la IA tiende a citar ficheros, cifras o estados que "deberian estar ahi" sin comprobarlos. Mitigado con la regla "verifica antes de afirmar" del CLAUDE.md global, pero hay que reforzarla en cada sesion documental.
