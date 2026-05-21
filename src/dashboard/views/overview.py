@@ -171,18 +171,36 @@ def _shift_label(now: datetime) -> str:
 
 
 def _render_critical_bar(criticals: list[dict]) -> None:
-    """Barra horizontal coral si hay alertas criticas activas."""
+    """Barra horizontal coral si hay alertas criticas activas.
+
+    El resumen prioriza el `title` (humano) sobre `detail/body/message`.
+    Si solo hay disponible un `detail` con apariencia tecnica
+    (`reasons=[...]`, JSON, contadores con `=`) se sustituye por la
+    etiqueta neutra "ver detalle en Alertas" para no escupir strings
+    crudos en la cabecera de Inicio.
+    """
     n = len(criticals)
     if n == 0:
         return
-    # Resumen de los pacientes/IDs implicados (top 3 para no desbordar)
-    summary_parts = []
-    for alert in criticals[:3]:
-        body = (alert.get("body") or alert.get("message") or "").strip()
-        # Cortar antes del primer guion largo si existe (formato del backend)
-        head = body.split(" - ")[0].split(" — ")[0].strip()
-        if head:
-            summary_parts.append(head)
+
+    def _looks_technical(text: str) -> bool:
+        t = (text or "")
+        return any(tok in t for tok in ("=", "[", "{", ";"))
+
+    def _summary_for(alert: dict) -> str:
+        title = (alert.get("title") or "").strip()
+        if title:
+            return title
+        for key in ("detail", "body", "message"):
+            v = (alert.get(key) or "").strip()
+            if v and not _looks_technical(v):
+                # Cortar antes del primer guion largo si existe
+                head = v.split(" - ")[0].split(" — ")[0].strip()
+                if head:
+                    return head
+        return ""
+
+    summary_parts = [s for s in (_summary_for(a) for a in criticals[:3]) if s]
     summary = " · ".join(summary_parts) if summary_parts else "ver detalle en Alertas"
     if n > 3:
         summary += f" · y {n - 3} mas"

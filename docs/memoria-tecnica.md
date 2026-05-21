@@ -41,7 +41,7 @@ Este proyecto implementa, para el hospital ficticio **laSalle Health Center**, u
 3. Una **API REST** en FastAPI que expone los datos procesados, la inferencia del modelo y la capa de observabilidad (alertas operativas e informe diario).
 4. Un **dashboard** en Streamlit con **siete vistas** que actúa como centro de control hospitalario: pacientes, calidad del pipeline, runs operativos, **triaje**, **alertas**, demo del clasificador y resumen general. La generación del **informe diario** complementa la observabilidad accionable desde la línea de comandos.
 
-La arquitectura se despliega como un único `docker compose up` que orquesta siete servicios (MongoDB, MinIO, inicializador de buckets, pipeline, API, watcher y dashboard) y deja el sistema listo en menos de un minuto. El estado actual del repositorio contiene **404 tests automáticos verdes** (más un skip controlado), nueve ADRs documentadas y artefactos vivos de la metodología SDD aplicada durante todo el desarrollo.
+La arquitectura se despliega como un único `docker compose up` que orquesta siete servicios (MongoDB, MinIO, inicializador de buckets, pipeline, API, watcher y dashboard) y deja el sistema listo en menos de un minuto. El estado actual del repositorio contiene **417 tests automáticos verdes** (más un skip controlado), diez ADRs documentadas y artefactos vivos de la metodología SDD aplicada durante todo el desarrollo.
 
 El **modelo entrenado** sobre el split de test (1.515 radiografías del *COVID-19 Radiography Database* de Kaggle) alcanza una *accuracy* de **0,8766** y un **macro-F1 de 0,8594**, con un *recall* por clase de 0,890 (Normal), 0,926 (Pneumonia) y **0,820 (COVID-19)** aplicando la regla de decisión `covid_threshold_0.35` documentada en ADR-010 (umbral *post-hoc* sobre la probabilidad softmax de COVID-19 que NO modifica los pesos del modelo). El *recall* de COVID-19 sigue siendo la dimensión clínicamente más sensible y se discute en detalle en los capítulos de resultados, limitaciones y ética: el sistema se entrega como herramienta de **asistencia**, nunca como diagnóstico final.
 
@@ -899,7 +899,7 @@ La ausencia de autenticación es deliberada para el entorno de demostración; ve
 
 ### 12.1. Estado de la suite
 
-El estado actual del repositorio contiene **404 tests automáticos verdes** (+ 1 skip esperado), distribuidos en las siguientes capas:
+El estado actual del repositorio contiene **417 tests automáticos verdes** (+ 1 skip esperado), distribuidos en las siguientes capas:
 
 | Capa | Carpeta | Ficheros | Cobertura |
 |---|---|---|---|
@@ -992,7 +992,7 @@ El sistema de alertas y observabilidad (Feature 15, ver capítulo 9) calcula **3
 - `data_quality_low` (severidad `medium`) — el `rejection_rate` de algún *snapshot* de calidad supera el umbral configurado (por defecto 0,10).
 - `triage_severe` (severidad `critical`) — algún paciente ha sido clasificado como `grave` por el triaje dentro de la ventana consultada.
 
-Cifras de tests aportadas por la feature: **60 tests nuevos verdes** (unitarios puros de `evaluate()`, *builder* y *render* del informe, endpoints `/alerts` y `/reports/daily`, helper de ventana, CLI del informe y cliente HTTP del dashboard). **La suite total del proyecto queda en 404 tests + 1 *skip* esperado** (este último corresponde al test del *watcher* que necesita permisos `rw` sobre `data/incoming/` que el contenedor `pipeline` no tiene; está documentado).
+Cifras de tests aportadas por la feature: **60 tests nuevos verdes** (unitarios puros de `evaluate()`, *builder* y *render* del informe, endpoints `/alerts` y `/reports/daily`, helper de ventana, CLI del informe y cliente HTTP del dashboard). Tras Feature 16 (umbral COVID + tests del *threshold rule* + ajustes en tests del clasificador), **la suite total del proyecto queda en 417 tests + 1 *skip* esperado** (este último corresponde al test del *watcher* que necesita permisos `rw` sobre `data/incoming/` que el contenedor `pipeline` no tiene; está documentado).
 
 Smoke real ejecutado contra el stack vivo:
 
@@ -1274,7 +1274,7 @@ Un sistema **funcional, contenedorizado y reproducible** que cubre los cuatro su
 3. API REST en FastAPI con 17 endpoints versionados, documentación Swagger automática y separación lectura/escritura.
 4. Dashboard Streamlit con siete vistas, *API-only*, imagen Docker independiente (~240 MB), barra persistente de estado del sistema.
 
-El despliegue se realiza con un único `docker compose up` y deja el sistema operativo en menos de un minuto. El estado actual del repositorio contiene 404 tests verdes, 9 ADRs y 6 specs aprobadas con trazabilidad spec -> design -> tareas -> tests -> criterios de aceptación.
+El despliegue se realiza con un único `docker compose up` y deja el sistema operativo en menos de un minuto. El estado actual del repositorio contiene 417 tests verdes (+ 1 skip esperado), 10 ADRs (incluida ADR-010 sobre la regla `covid_threshold_0.35`) y 6 specs aprobadas con trazabilidad spec -> design -> tareas -> tests -> criterios de aceptación.
 
 ### 17.2. Qué no se entrega y por qué
 

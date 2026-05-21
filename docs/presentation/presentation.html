@@ -447,7 +447,7 @@
         ofrezca <strong>asistencia diagnostica</strong> sobre imagen y exponga
         un cuadro de mando que un operador no tecnico pueda usar en turno.
       </p>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">01 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">02 / 14</span></div>
       <aside class="notes">
         [00:30 - 01:15] Tres fuentes, tres problemas. Datos tabulares + imagen + operacion.
         Encuadre: NO es diagnostico vinculante. Es asistencia. Decirlo aqui ya.
@@ -487,7 +487,7 @@
           y diario IA por sesion.
         </p>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">02 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">03 / 14</span></div>
       <aside class="notes">
         [01:15 - 02:00] Cumplimiento literal del enunciado. La frase importante: 3 almacenamientos
         (no 2), 2 paradigmas (no 1), automatizacion accionable, dashboard que funciona en turno.
@@ -572,7 +572,7 @@
       <p style="margin-top: 12px; color: var(--text-mute); font-size: 11px; letter-spacing: 0.06em;">
         Siete servicios Docker · una sola imagen compartida para pipeline/api/watcher (ADR-006) · dashboard en imagen separada (ADR-007).
       </p>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">03 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">04 / 14</span></div>
       <aside class="notes">
         [02:00 - 03:00] Recorrer la izquierda (entradas) -> centro (pipeline) -> derecha (stores + API + dashboard).
         Decisiones encapsuladas en ADRs 001-010. Mantener el ritmo, no pararse en cada caja.
@@ -622,7 +622,7 @@
           </p>
         </div>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">04 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">05 / 14</span></div>
       <aside class="notes">
         [03:00 - 03:45] No es "porque puedo". Cada base resuelve un encaje natural distinto.
         MongoDB para jerarquias paciente -> admisiones -> radios. SQLite para metricas de run.
@@ -665,7 +665,7 @@
           </div>
         </div>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">05 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">06 / 14</span></div>
       <aside class="notes">
         [03:45 - 04:30] Big Data del temario, alineado con Bloque 5. El watcher en filesystem
         complementa el bootstrap manual. No hay streaming real (fuera de alcance, lo declaramos).
@@ -706,7 +706,7 @@
           </div>
         </div>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">06 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">07 / 14</span></div>
       <aside class="notes">
         [04:30 - 05:30] Cifras finales del split de test. Accuracy y macro-F1 son utiles pero
         no son la clave; la clave es el recall por clase, y en particular el de COVID-19.
@@ -750,7 +750,7 @@ si no                   → argmax(Normal, Pneumonia)
         respuesta. El baseline argmax se conserva en <code>metrics.json</code> bajo
         <code>comparison_argmax</code> para auditoria.
       </p>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">07 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">08 / 14</span></div>
       <aside class="notes">
         [05:30 - 06:30] Es el aprendizaje mas honesto del proyecto. No reentrenamos: ajustamos la regla
         de decision sobre las probabilidades. Subimos recall COVID 12,5 pp a cambio de 5,6 pp menos de precision
@@ -802,7 +802,7 @@ si no                   → argmax(Normal, Pneumonia)
           recomendaciones operativas son genericas.
         </p>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">08 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">09 / 14</span></div>
       <aside class="notes">
         [06:30 - 07:15] Por que dos paradigmas: el enunciado lo pide, pero ademas son tecnicamente
         complementarios. Una CNN aprende lo que tiene datos; reglas escritas explicitan lo que NO tiene
@@ -851,7 +851,7 @@ si no                   → argmax(Normal, Pneumonia)
           identico entre ejecuciones del mismo dia. Sin <code>generated_at</code> en el cuerpo.
         </p>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">09 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">10 / 14</span></div>
       <aside class="notes">
         [07:15 - 08:00] Tres reglas, dos endpoints, un CLI. Cero estado persistido nuevo: las alertas
         no se guardan, se calculan al consultar. Si quiero auditar historico de alertas, abro la fuente
@@ -894,7 +894,7 @@ si no                   → argmax(Normal, Pneumonia)
           </div>
         </div>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">10 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">11 / 14</span></div>
       <aside class="notes">
         [08:00 - 11:00] Demo en vivo. Bloque mas largo. Orden fijo. Si una vista cae, decirlo y seguir.
         Si la imagen no aparece: HOSP-DEMO-001 con disclaimer. Si la API esta caida: chips rojos
@@ -923,7 +923,7 @@ si no                   → argmax(Normal, Pneumonia)
         Diario IA por sesion en <code>docs/diario-ia.md</code>. Lecciones en <code>tasks/lessons.md</code>.
         La disciplina SDD es lo que ha permitido escribir esta memoria leyendo el repo, no recordando.
       </p>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">11 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">12 / 14</span></div>
       <aside class="notes">
         [11:00 - 11:45] Eje obligatorio del enunciado. SDD descompone en 5 fases con artefacto revisable
         por fase. La IA no inventa requisitos: trabaja sobre una spec aprobada. Mensaje final:
@@ -965,7 +965,7 @@ si no                   → argmax(Normal, Pneumonia)
           nodos unicos) · generalizacion geografica del clasificador.
         </p>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">12 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">13 / 14</span></div>
       <aside class="notes">
         [11:45 - 12:30] Honestidad total. La limitacion principal sigue siendo el recall COVID,
         ahora 0,820. Mejor que antes; insuficiente para uso clinico real. Por eso el sistema se
@@ -1018,7 +1018,7 @@ si no                   → argmax(Normal, Pneumonia)
           </div>
         </div>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">13 / 13</span></div>
+      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">14 / 14</span></div>
       <aside class="notes">
         [12:30 - cierre] Tres cifras finales en un panel. Trabajo futuro priorizado (refleja la memoria).
         Q&A. Si preguntan por SDD o IA: remitir al diario y al CHANGELOG.

@@ -215,7 +215,7 @@ El audit previo de cierre de la Feature 15 (commit `9898d22`) obtuvo el mismo co
 - **Memoria técnica:** cerrada y revisada en estilo natural (commit `5e8047e`).
 - **Justificación de bases de datos:** basada solo en el texto visible del enunciado (commit `044137c`).
 - **Informes diarios:** ignorados localmente (commit `8ccf250`).
-- **Suite de tests:** 404 verdes + 1 *skip* esperado.
+- **Suite de tests:** 417 verdes + 1 *skip* esperado.
 - **Modelo entrenado:** `v1.0-20260516-192647`, 21 MB, commiteado al repo.
 - **Documentación viva:** memoria, ADRs (9), specs (6), diario IA (30 sesiones), changelog, runbooks, fallback de presentación.
 

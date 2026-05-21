@@ -166,7 +166,7 @@ dinamico como metadato.
 docker compose run --rm --entrypoint "" pipeline pytest tests -v
 ```
 
-Suite de **404 tests verdes + 1 skip esperado** distribuidos en:
+Suite de **417 tests verdes + 1 skip esperado** distribuidos en:
 - tests de **pipeline, API, integracion y E2E** que se ejecutan en la
   imagen `hospital-pipeline` (incluye los E2E con stack vivo y los del
   watcher);
@@ -297,9 +297,9 @@ roles cubiertos y reglas operativas).
 
 **Polyglot persistence (SQLite + SQLAlchemy):** 15/15 tareas completadas. Ver `tasks/sqlite-pipeline-metadata.md` y ADR-004.
 
-**Clasificacion de radiografias (Keras/TensorFlow):** 16/16 tareas completadas. Ver `tasks/clasificacion-radiografias.md`, ADR-005 y ADR-006. Modelo entrenado en `data/models/radiography_classifier.keras` (~21 MB, commiteado) + reporte clinico en `docs/model-evaluation/`. Metricas finales (test split de 1.515 imagenes): accuracy=0.872, macro-F1=0.846, recall Normal=0.93, Pneumonia=0.93, COVID-19=0.70.
+**Clasificacion de radiografias (Keras/TensorFlow):** 16/16 tareas completadas. Ver `tasks/clasificacion-radiografias.md`, ADR-005, ADR-006 y ADR-010. Modelo entrenado en `data/models/radiography_classifier.keras` (~21 MB, commiteado) + reporte clinico en `docs/model-evaluation/`. Metricas finales sobre test split (1.515 imagenes) con la regla operativa `covid_threshold_0.35`: accuracy=0.8766, macro-F1=0.8594, recall Normal=0.890, Pneumonia=0.926, **COVID-19=0.820** (baseline argmax descartado: 0.695). Trazabilidad completa en ADR-010 y `docs/model-evaluation/threshold-analysis.md`.
 
-**Tests:** 404 verdes + 1 skip esperado.
+**Tests:** 417 verdes + 1 skip esperado.
 
 **Roadmap completo:** ver `tasks/backlog.md`. Pendientes principales:
 - ~~Dashboard de visualizacion~~ ✅ **Implementado** (Streamlit en
