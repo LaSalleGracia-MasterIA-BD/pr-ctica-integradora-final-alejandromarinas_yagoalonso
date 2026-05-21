@@ -52,18 +52,19 @@ pantallas (la principal proyecta los slides, la secundaria muestra las notas).
 | # | Slide | Tema | Tiempo objetivo |
 |---|-------|------|---|
 | 1 | Portada | Identidad + autoría | 0:00 - 0:30 |
-| 2 | El problema | Tres tipos de información fragmentada | 0:30 - 1:30 |
-| 3 | Qué hemos construido | 4 piezas + cifras macro | 1:30 - 2:30 |
-| 4 | Arquitectura | Diagrama + persistencia poliglota | 2:30 - 4:00 |
-| 5 | Datos | Sintéticos + Kaggle | 4:00 - 5:00 |
-| 6 | Pipeline ETL | Etapas + idempotencia | 5:00 - 6:00 |
-| 7 | Modelo CNN | Arquitectura + métricas | 6:00 - 7:30 |
-| 8 | Análisis clínico | Matriz + recall COVID 0,820 (regla `covid_threshold_0.35`) vs 0,695 (argmax) | 7:30 - 8:30 |
-| 9 | **Demo en vivo** | Click → dashboard | 8:30 - 11:00 |
-| 10 | Uso de IA + SDD | Eje obligatorio del enunciado | 11:00 - 11:45 |
-| 11 | Ética + limitaciones | Datos sintéticos, asistencia | 11:45 - 12:05 |
-| 12 | Conclusiones | Qué se entrega + futuro | 12:05 - 12:30 |
-| 13 | Gracias + Q&A | Cierre y preguntas | Q&A / cierre |
+| 2 | El problema | Tres fuentes fragmentadas | 0:30 - 1:15 |
+| 3 | Qué pedía el enunciado | 8 ejes + cómo los cubrimos | 1:15 - 2:00 |
+| 4 | Arquitectura general | Diagrama + 7 servicios Docker | 2:00 - 3:00 |
+| 5 | Datos | Persistencia poliglota (Mongo + SQLite + MinIO) | 3:00 - 3:45 |
+| 6 | Pipeline ETL | Etapas + idempotencia + performance | 3:45 - 4:30 |
+| 7 | Modelo CNN | Arquitectura + métricas (acc 0,8766, macro-F1 0,8594) | 4:30 - 5:30 |
+| 8 | Threshold COVID 0,35 | ADR-010, +12,5 pp recall vs baseline argmax 0,695 | 5:30 - 6:30 |
+| 9 | Triaje por reglas | ADR-008, sin ground truth → reglas IF-THEN | 6:30 - 7:15 |
+| 10 | Alertas + informe | ADR-009, vista derivada, CLI idempotente | 7:15 - 8:00 |
+| 11 | **Dashboard / demo** | 7 vistas, demo en vivo | 8:00 - 11:00 |
+| 12 | IA + SDD | Eje obligatorio del enunciado | 11:00 - 11:45 |
+| 13 | Ética + limitaciones | Datos sintéticos, asistencia, no diagnóstico | 11:45 - 12:30 |
+| 14 | Conclusión + Q&A | Tres cifras finales, trabajo futuro, preguntas | 12:30 - cierre |
 
 ## Preflight checklist — antes de presentar
 
@@ -115,7 +116,7 @@ curl -sI http://localhost:8501/_stcore/health | head -1
 # Total de pacientes
 curl -s "http://localhost:8000/api/v1/patients?limit=1" | python3 -c \
   "import sys,json; print('Total pacientes:', json.load(sys.stdin)['total'])"
-# Esperado: ~4.745
+# Esperado: ~4.790 (el numero exacto depende de la generacion sintetica)
 
 # Radiografías HOSP-PRES-* (solo si tienes el dataset Kaggle descargado)
 curl -s "http://localhost:8000/api/v1/radiographies?limit=50" | python3 -c \

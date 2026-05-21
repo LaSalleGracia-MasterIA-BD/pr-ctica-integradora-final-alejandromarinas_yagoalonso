@@ -1,395 +1,295 @@
-# Presentación final — Fallback en Markdown plano
+# Presentacion final — fallback en Markdown
 
-> **Versión offline / sin reveal.js.** Mismo contenido que `presentation.html`,
-> en Markdown plano. Pensado para usar como respaldo si no hay conexión y no
-> se ha vendorizado reveal.js en `docs/presentation/vendor/`.
->
-> Cada bloque empieza con el **número de slide** + **título** + **tiempo
-> objetivo**. Las notas del presentador van en bloques `> ` debajo del contenido.
-
----
-
-## Slide 1 — Portada · 0:00 - 0:30
-
-# Sistema Inteligente de Soporte Hospitalario
-
-**laSalle Health Center** — Asistencia diagnóstica con Big Data e IA.
-
-- **Alejandro Marinas** · **Yago**
-- Máster en AI & Big Data · Proyecto final del Máster
-- Defensa · 2026-05-18
-
-> **Notas (0:30):** saludo breve. Presentación del equipo y del proyecto.
-> Avisar de que en 12 minutos cubriremos problema, solución, demo en vivo,
-> modelo, uso de IA y SDD.
+> Mismo guion y cifras que `presentation.html`. Sirve si reveal.js o el
+> navegador no van.
+> Tiempos orientativos: ~12 min + Q&A.
+> Sin emojis, sin frases tipo "UCI" o "notificar medico"; el sistema es
+> **asistencia, no diagnostico**.
 
 ---
 
-## Slide 2 — El problema · 0:30 - 1:30
+## Slide 1 — Portada · 00:00 - 00:30
 
-El hospital ficticio **laSalle Health Center** tiene tres tipos de información
-que hoy gestiona de forma fragmentada:
+**laSalle Health Center · Sistema Inteligente de Soporte Hospitalario**
 
-- **Datos clínicos tabulares**: pacientes, admisiones, diagnósticos. Sin
-  procesamiento sistemático.
-- **Radiografías de tórax**: PNG en disco. Sin clasificación automatizada.
-- **Logs y trazas**: sin cuadro de mando que consolide el estado.
+Trabajo final del Master IA & Big Data. Alejandro Marinas + Yago Alonso. v1.0.
 
-Falta un sistema que **procese a escala**, **asista al diagnóstico por imagen**
-y **presente todo en un cuadro de mando único**.
-
-> **Notas (1:00):** insistir en que el hospital es ficticio. Los datos son
-> sintéticos (clave para la sección de ética/legal). Cerrar con la idea
-> "asistencia diagnóstica, no diagnóstico final" — la repetiremos en el bloque
-> del modelo.
+> **Notas (30s):** abrir con el encuadre del proyecto: hospital ficticio,
+> sistema completo de soporte clinico, reproducible con un solo
+> `docker compose up`. No es diagnostico vinculante, es asistencia.
 
 ---
 
-## Slide 3 — Qué hemos construido · 1:30 - 2:30
+## Slide 2 — Problema · 00:30 - 01:15
 
-Cuatro piezas interdependientes, un único `docker compose up`:
+El hospital tiene datos en tres formas:
 
-- **Pipeline ETL** — PySpark ingesta CSVs e imágenes, valida, limpia,
-  enriquece.
-- **Modelo de IA** — CNN Keras/TF custom. Sana / Pneumonia / COVID-19.
-- **API REST** — FastAPI: 17 endpoints + Swagger automático.
-- **Dashboard** — Streamlit: centro de control hospitalario, 7 vistas.
+- **Historias clinicas tabulares** (pacientes + admisiones).
+- **Imagen medica** (radiografias de torax sin clasificacion automatizada).
+- **Observabilidad** dispersa (logs y trazas sin cuadro de mando).
 
-Cifras de referencia:
+**Reto:** sistema que ingiera datos a escala, ofrezca asistencia
+diagnostica por imagen, exponga un cuadro de mando que un operador no
+tecnico use en turno.
 
-| Indicador | Valor |
-|---|---|
-| Servicios Docker | 7 |
-| Almacenes (Mongo + SQLite + MinIO) | 3 |
-| Tests verdes | 404 (+ 1 skip esperado) |
-| ADRs documentadas | 9 |
-
-> **Notas (1:00):** una frase por pieza. Las cifras de abajo son el "qué se
-> entrega": 7 servicios, 3 almacenes (poliglota), 404 tests, 9 ADRs. Mencionar
-> que arranca con un único `docker compose up` y queda listo en menos de un
-> minuto.
+> **Notas (45s):** tres fuentes, tres problemas. Mensaje desde el primer
+> momento: asistencia, no diagnostico.
 
 ---
 
-## Slide 4 — Arquitectura · 2:30 - 4:00
+## Slide 3 — Que pedia el enunciado · 01:15 - 02:00
 
-```
-   Usuario --HTTP-->  Dashboard (Streamlit, :8501)
-   (navegador)              |
-                            | HTTP (api_client)
-                            v
-                        +------------------------+
-                        |     API REST           |
-                        |   (FastAPI, :8000)     |
-                        |   readers + classify   |
-                        +------------------------+
-                          |        |        |
-                  lee/inf | lee    | lee    |
-                          v        v        v
-                       MongoDB  SQLite    MinIO
-                       (docs)   (runs +   (PNGs)
-                                quality)
-                          ^        ^        ^
-                          | write  | write  | write
-                          +-----+--+--------+
-                                |
-                  +-------------+--------------+
-                  |                            |
-            Pipeline ETL                   Watcher
-            (PySpark, batch)               (watchdog)
-```
+- Big Data + framework de calculo distribuido.
+- IA aplicada con al menos dos paradigmas.
+- Persistencia poliglota (>= 2 tipos).
+- API REST documentada.
+- Dashboard con vista operativa.
+- Automatizacion (alertas + informes).
+- Despliegue reproducible.
+- Uso de IA generativa documentado.
 
-Polyglot persistence (**ADR-004**): cada dato vive donde su forma encaja. El
-dashboard **nunca** accede directamente a los almacenes.
+**Como lo cubrimos:** PySpark + CNN custom (Keras) + reglas IF-THEN + MongoDB
++ SQLite + MinIO + FastAPI + Streamlit + `/alerts` + informe diario + SDD.
 
-> **Notas (1:30):** señalar el diagrama: dashboard arriba, API en el medio,
-> tres almacenes abajo. Las únicas escrituras directas a los almacenes son del
-> pipeline y del watcher. El dashboard es API-only (ADR-007) — eso permite
-> imagen Docker ligera (~240 MB). Polyglot persistence (ADR-004): MongoDB para
-> datos clínicos jerárquicos, SQLite para metadatos tabulares del pipeline,
-> MinIO para binarios. Si preguntan por qué tres BBDD: cada dato donde su
-> forma encaja, sin duplicar fuente de verdad.
+> **Notas (45s):** cumplimiento literal del enunciado. Entregamos 3
+> almacenamientos (no 2), 2 paradigmas (no 1).
 
 ---
 
-## Slide 5 — Datos · 4:00 - 5:00
+## Slide 4 — Arquitectura general · 02:00 - 03:00
 
-### Datos clínicos tabulares (Faker, seed 42)
+Siete servicios Docker: mongodb, minio, minio-init, pipeline, api, watcher,
+dashboard. Una imagen compartida para pipeline/api/watcher (ADR-006) y
+imagen aparte para dashboard (ADR-007).
 
-| RAW | Final | Motivo del descarte |
+Flujo: CSV + PNG → pipeline PySpark → MongoDB + SQLite + MinIO → API REST →
+dashboard Streamlit (+ CLI informe diario).
+
+> **Notas (1:00):** recorrer izquierda (entradas) → centro (pipeline) →
+> derecha (stores + API + dashboard). ADR-001 a ADR-010 documentan las
+> decisiones. No pararse mucho en cada caja.
+
+---
+
+## Slide 5 — Datos y almacenamiento · 03:00 - 03:45
+
+Persistencia poliglota (ADR-004). Cada tipo de dato donde encaja.
+
+| Almacen | Que contiene | Cifras |
 |---|---|---|
-| 5.150 pacientes | **4.745** | 264 validación + 141 dedup |
-| 10.000 admisiones | **8.569** | 493 validación + 3 dedup + 935 huérfanas |
+| MongoDB | patients (admissions + radiografias embebidas) | 4.790 pacientes |
+| SQLite | pipeline_runs + data_quality_summary | 2 tablas |
+| MinIO | PNG radiografias + descartes | bucket dedicado |
 
-No hay PII real. **Decisión ética por diseño.**
+Volumen procesado: 4.790 pacientes, 8.569 admisiones, 1.692 registros
+rechazados con motivo persistido.
 
-### Radiografías de tórax
-
-COVID-19 Radiography Database (Kaggle, ~0,9 GB local).
-
-| Clase | Imágenes |
-|---|---|
-| Normal | 10.192 |
-| COVID-19 | 3.616 |
-| Viral Pneumonia | 1.345 |
-| Lung_Opacity (descartada) | 6.012 |
-
-Split estratificado 80 / 10 / 10, seed 42. Test = **1.515 imágenes**.
-
-> **Notas (1:00):** decir cifras altas sin perderse en detalles. Insistir:
-> datos sintéticos por ética. Lung_Opacity descartada porque "opacidad
-> pulmonar" es un hallazgo radiológico, no una categoría diagnóstica.
+> **Notas (45s):** ADR-002 (Mongo vs Postgres) y ADR-004 (polyglot)
+> razonan la decision. Calidad medida con `rejection_rate` por dimension.
 
 ---
 
-## Slide 6 — Pipeline ETL · 5:00 - 6:00
+## Slide 6 — Pipeline PySpark · 03:45 - 04:30
 
-```
-CSVIngester -> DataValidator -> DataCleaner -> DataTransformer -> MongoWriter
-                     |                                            ^
-                     v                                            |
-              rejected_records                              patients + admisiones
-                  (Mongo)                                      embebidas
+- Validacion + deduplicacion por external_id.
+- Enriquecimiento de admisiones (categoria diagnostico, edad calculada).
+- Image ingester: PNG → MinIO → embebido en su paciente.
+- Idempotente (re-bootstrap NO duplica).
+- Auditoria por run en SQLite.
 
-SqlWriter envuelve toda la ejecución:
-  start_pipeline_run  ->  finish_pipeline_run + write_quality_summary
-```
+**Performance:** bootstrap en frio ~50 s, warm restart ~1 s.
+`docker compose up` deja el sistema en menos de 1 min.
 
-- **Validación**: reglas *first-failure-wins*. **1.692** rechazados con motivo
-  trazable.
-- **Idempotente**: reejecutar = mismo estado. CA-6 cubierto.
-- **Auditoría completa**: cada ejecución deja huella en SQLite
-  (`pipeline_runs`).
-
-Cuatro *triggers*: bootstrap, watcher (`data/incoming/`), API
-(`POST /pipeline/trigger`), tests E2E.
-
-> **Notas (1:00):** recorrer rápido la cadena de etapas. Insistir en
-> idempotencia (CA-6): re-ejecutar no duplica. Mencionar los 4 triggers. Si
-> preguntan: el rechazo de las 935 admisiones huérfanas (cross-entity
-> validation) fue uno de los bugs que detectamos cuadrando los números.
+> **Notas (45s):** Big Data del temario, alineado con Bloque 5. El
+> watcher en filesystem complementa el bootstrap manual.
 
 ---
 
-## Slide 7 — Modelo CNN · 6:00 - 7:30
+## Slide 7 — Modelo CNN · 04:30 - 05:30
 
-### Arquitectura (ADR-005)
+CNN custom desde cero, sin transfer learning (ADR-005). 21 MB en disco.
+Conv2D + MaxPooling2D + Dropout + Dense. Alineada con Bloque 6 del Master.
 
-```
-Input (224x224x1, grayscale)
-  4 x Conv2D + MaxPool (32, 64, 128, 128)
-  Dropout(0.3) + Flatten
-  Dense(64) + Dropout(0.3)
-  Dense(3, softmax)
-```
+**Metricas sobre test (1.515 imagenes, regla `covid_threshold_0.35`):**
 
-- CNN custom, sin transfer learning.
-- ~1,8M params · 21 MB en disco.
-- 35 epochs · lr=1e-4 · class_weight=sqrt.
-- Alineación literal con el Bloque 6 del Máster.
-
-### Métricas sobre test (1.515 imágenes, regla `covid_threshold_0.35` · ADR-010)
-
-- **Accuracy:** 0,877 (argmax: 0,872)
-- **Macro-F1:** 0,859 (argmax: 0,846)
-
-| Clase | Recall | F1 |
+| Metrica | Valor (operativo) | Baseline argmax |
 |---|---|---|
-| Normal | 0,890 | 0,911 |
-| Pneumonia | 0,926 | 0,883 |
-| COVID-19 | **0,820** | 0,784 |
+| Accuracy | **0,8766** | 0,8719 |
+| Macro-F1 | **0,8594** | 0,8456 |
+| Recall Normal | 0,890 | 0,926 |
+| Recall Pneumonia | 0,926 | 0,933 |
+| **Recall COVID-19** | **0,820** | 0,695 |
 
-> **Notas (1:30):** la arquitectura se ve pero no nos perdemos en detalles.
-> Mensaje clave: CNN custom, no transfer learning, alineada con lo que enseña
-> Jordi en el Bloque 6. 21 MB cabe commiteada al repo (RNF-4 < 50 MB). Las
-> métricas son buenas pero NO son el indicador clave: el recall por clase sí.
-> Normal y Pneumonia bien. COVID-19 0,820 con la regla `covid_threshold_0.35`
-> (post-hoc, sin reentrenar) frente a 0,695 con argmax. ADR-010 documenta la
-> decisión. → preparar el siguiente slide.
+> **Notas (1:00):** accuracy y macro-F1 son utiles pero la clave es el
+> recall por clase, especialmente COVID-19.
 
 ---
 
-## Slide 8 — Análisis clínico · 7:30 - 8:30
+## Slide 8 — Threshold COVID 0,35 · 05:30 - 06:30
 
-### Matriz de confusión (regla operativa `covid_threshold_0.35`)
+Regla `covid_threshold_0.35` (ADR-010): **post-hoc, NO reentrena**.
 
-| Real \ Pred. | Normal | Pneumonia | COVID-19 |
+```
+si P(COVID-19) >= 0,35  ->  predicted = COVID-19
+si no                    ->  argmax(Normal, Pneumonia)
+```
+
+| Metrica | Argmax | Threshold 0,35 | Delta |
 |---|---|---|---|
-| **Normal** | 907 | 17 | 95 |
-| **Pneumonia** | 7 | 125 | 3 |
-| **COVID-19** | **59** | 6 | 296 |
+| Accuracy | 0,8719 | **0,8766** | +0,005 |
+| Macro-F1 | 0,8456 | **0,8594** | +0,014 |
+| Recall COVID-19 | 0,6953 | **0,8199** | **+0,125** |
+| Precision COVID-19 | 0,8071 | 0,7513 | -0,056 |
+| FN COVID-19 | 110 / 361 | **65 / 361** | -45 |
 
-65 COVID-19 mal clasificados de 361 (recall 0,820). Con argmax eran 110 (recall 0,695).
+El campo `decision_rule` se persiste en MongoDB y la API lo devuelve.
+Baseline argmax se conserva en `metrics.json` (`comparison_argmax`).
 
-### Consecuencia clínica
-
-- **FN COVID → "Normal"**: no se aísla a un contagioso. **Error más grave.**
-- FN Pneumonia: paciente sin tratamiento adecuado.
-- FP: pruebas adicionales innecesarias, pero sin riesgo clínico.
-
-**Posicionamiento del sistema:** el modelo se entrega como **asistencia
-diagnóstica**, NUNCA como diagnóstico final. La última palabra es del clínico
-humano.
-
-> **Notas (1:00):** insistir en que el recall COVID 0,820 sigue siendo el
-> LÍMITE del sistema aun después de aplicar la regla `covid_threshold_0.35`
-> (ADR-010, post-hoc sobre las probabilidades, sin reentrenar). 65 COVID-19
-> mal clasificados / 361 = ~18% de FN. Mensaje clave que se repite en memoria,
-> runbook y UI: ASISTENCIA, no diagnóstico. Mejoras siguientes: transfer
-> learning con DenseNet/EfficientNet, Grad-CAM, out-of-domain.
+> **Notas (1:00):** insistir en que el modelo es el mismo, los pesos son
+> los mismos. Lo que cambia es la regla de decision sobre las probabilidades
+> softmax. Es reversible en una constante de `predictor.py`. ADR-010
+> documenta alternativas descartadas.
 
 ---
 
-## Slide 9 — Demo en vivo · 8:30 - 11:00
+## Slide 9 — Triaje basado en reglas · 06:30 - 07:15
 
-Abrir en el navegador:
+Segundo paradigma de IA (ADR-008). No hay dataset etiquetado con gravedad
+real; entrenar sobre etiquetas inventadas seria fabricar ground truth.
 
-- **Dashboard:** http://localhost:8501
-- API · Swagger: http://localhost:8000/docs
-- MinIO · consola: http://localhost:9001
-
-Recorrido por las 7 vistas: **Overview · Calidad · Pacientes · Triaje ·
-Alertas · Clasificador · Pipeline runs**.
-
-### Guion (sigue `docs/runbooks/presentation-demo.md`)
-
-1. **Overview (20s)** — 4 cards arriba + último run + strip de evaluación +
-   sidebar con 3 chips verdes. Mensaje: "el sistema está arriba, los datos
-   cargados, el modelo listo".
-2. **Calidad de datos (15s)** — snapshot por dimensión + gráfico histórico
-   rejection_rate. Mensaje: "el pipeline rechaza datos malos de forma
-   controlada y queda traza".
-3. **Pacientes (15s)** — tabla paginada → click en una fila → detalle con
-   admisiones y radiografías embebidas. Mensaje: "MongoDB embebe admisiones
-   y radiografías sin joins".
-4. **Triaje (20s)** — formulario con signos vitales (SpO2 = 85). POST →
-   paciente nuevo con `triage.level=grave` y `reasons=["spo2_lt_92"]`.
-   Mensaje: "reglas IF-THEN deterministas, cada decisión cita la regla
-   (ADR-008)".
-5. **Alertas (15s)** — vista nueva: la alerta `triage_severe`/`critical`
-   del paciente recién creado aparece en tiempo real. Mensaje: "vista
-   derivada, cero estado nuevo persistido (ADR-009)".
-6. **Clasificador (45s)** — momento clave. Dropdown ordenado: `HOSP-PRES-*`
-   primero. Seleccionar `HOSP-PRES-001` (COVID real). "Clasificar" → clase +
-   probabilidades + `model_version` + `decision_rule = covid_threshold_0.35`.
-   Bajar a "Evaluación detallada" → matriz de confusión heatmap. PARAR y
-   decir: "el recall de COVID-19 es 0,820 con la regla `covid_threshold_0.35`
-   (era 0,695 con argmax). Por eso el sistema es asistencia, no diagnóstico."
-7. **Pipeline runs (20s)** — tabla del histórico + opcional run failed con
-   `error_message`. Mensaje: "cada ejecución deja traza auditable en SQLite,
-   no en ficheros sueltos".
-
-### Plan B si algo falla
-
-- Si la API no responde: enseñar los chips rojos del sidebar como ejemplo de
-  manejo de errores.
-- Si `HOSP-PRES-*` no aparece: usar `HOSP-DEMO-001` y AVISAR explícitamente
-  que es sintética.
-- Si la demo no arranca: capturas en `docs/model-evaluation/` + ir directo al
-  slide 10.
-
-> **Pre-demo checklist (preflight):** ver `README.md` de esta carpeta.
-
----
-
-## Slide 10 — Uso de IA + SDD · 11:00 - 11:45
-
-El proyecto se ha desarrollado en pareo con asistentes de IA + revisión
-técnica del equipo y contraste contra la spec, bajo metodología
-**Spec-Driven Development**.
-
-```
-/spec  ->  /planificar  ->  /tareas  ->  /implementar  ->  /revisar
- QUÉ         CÓMO          EN QUÉ        CÓDIGO          ¿CUMPLE?
-                           ORDEN
-```
-
-| Indicador | Valor |
+| Nivel | Cuando |
 |---|---|
-| Specs aprobadas | 4 |
-| ADRs | 7 |
-| Sesiones IA documentadas | 28 |
-| Lecciones registradas | 57 |
+| Grave | 6 reglas criticas (SpO2 / FR / FC / PAS / T) o sintoma critico |
+| Medio | 5 reglas intermedias (franjas + combinacion edad-riesgo) |
+| Leve | Por defecto |
 
-**Disciplina:** dudas marcadas como `[NEEDS CLARIFICATION]`, no se asumen.
-Decisiones técnicas en ADRs. Revisión cruzada con otro proveedor para mitigar
-*sycophancy* del LLM.
+**Trazabilidad directa:** cada decision lleva la lista exacta de reglas
+disparadas. No requiere SHAP ni Grad-CAM, las reglas son legibles.
 
-> **Notas (45s):** eje obligatorio del enunciado. SDD descompone en 5 fases con
-> artefacto revisable por fase. La IA no inventa requisitos: trabaja sobre una
-> spec aprobada. Cierre: "la IA es un multiplicador de capacidad, no un
-> sustituto; SDD es la disciplina que hace seguro ese multiplicador".
+Umbrales **academicos**, no validados clinicamente. UI con disclaimer
+permanente. Recomendaciones operativas genericas (sin "UCI", sin "notificar
+medico").
 
----
-
-## Slide 11 — Ética + Limitaciones · 11:45 - 12:05
-
-### Ético y legal
-
-- **Datos sintéticos por diseño**: ninguna PII real. Faker + seed 42.
-- Dataset Kaggle: licencia tal como la publica el proveedor. **No asumimos
-  licencia genérica.**
-- **Asistencia, no diagnóstico.** La última palabra es del clínico.
-
-### Limitaciones reconocidas
-
-- Recall COVID **0,820** con la regla `covid_threshold_0.35` (ADR-010) → ~18% FN clínicamente graves; era 0,695 con argmax puro (~30% FN).
-- Sin detección *out-of-domain* (rechazar lo que no es radiografía).
-- Sin interpretabilidad (Grad-CAM).
-- Sin auth ni HA: entorno académico de demo.
-
-> **Notas (20s):** datos sintéticos = riesgo de PII neutralizado. Licencia: no
-> citar una licencia concreta sin comprobarla; usar "los términos que publica
-> el autor del dataset". Ser honesto sobre el recall COVID como límite real;
-> mencionar la regla `covid_threshold_0.35` (post-hoc, ADR-010) si nos
-> preguntan cómo se llegó del 0,695 al 0,820 sin reentrenar.
+> **Notas (45s):** los dos paradigmas son complementarios. CNN aprende
+> donde hay datos; reglas formalizan conocimiento de dominio sin
+> ground truth.
 
 ---
 
-## Slide 12 — Conclusiones · 12:05 - 12:30
+## Slide 10 — Alertas e informe diario · 07:15 - 08:00
 
-### Qué se entrega
+**Vista derivada** (ADR-009). Cero estado nuevo: se calcula al consultar.
 
-- Sistema completo, reproducible: 1 comando.
-- 404 tests verdes + 1 skip esperado.
-- Memoria técnica de 26 pp. + 9 ADRs + 6 specs.
-- Diario IA: 30 sesiones documentadas.
-- **Observabilidad accionable (Feature 15)**: `GET /api/v1/alerts`,
-  `GET /api/v1/reports/daily`, script CLI `daily_report.py` con Markdown
-  idempotente byte-a-byte y vista *Alertas* en el dashboard.
+| Tipo | Severidad | Fuente |
+|---|---|---|
+| `pipeline_failed` | HIGH | `pipeline_runs.status='failed'` |
+| `data_quality_low` | MEDIUM | `rejection_rate > 0,10` |
+| `triage_severe` | CRITICAL | `patients.triage.level='grave'` |
 
-### Trabajo futuro priorizado
+**Informe diario reproducible:**
+`python -m src.automation.daily_report --date YYYY-MM-DD` genera
+`docs/reports/YYYY-MM-DD.md` con sha256 byte-a-byte identico entre
+ejecuciones del mismo dia (sin `generated_at` en el cuerpo).
 
-1. Subir recall COVID por encima del 0,820 actual via *transfer learning* (la regla `covid_threshold_0.35` de ADR-010 ya agotó la ganancia barata sin reentrenar).
-2. Interpretabilidad: Grad-CAM por defecto.
-3. Detección *out-of-domain*.
-4. Auth + cifrado en tránsito.
-5. Persistir alertas como histórico auditable (reabrir ADR-009).
-
-> **Notas (25s):** cerrar lo que se entrega. El orden del trabajo futuro
-> importa, refleja lo que la memoria razona en cap 16.3.
+> **Notas (45s):** tres reglas, dos endpoints, un CLI. Cero estado nuevo.
+> Si se quisiera historico auditable de alertas, ADR-009 documenta como
+> se reabriria (tabla alerts en SQLite).
 
 ---
 
-## Slide 13 — Gracias + Q&A · cierre
+## Slide 11 — Dashboard · 08:00 - 11:00
 
-# Gracias
+Streamlit en imagen Docker aparte (ADR-007). **API-only**: cero imports
+de pymongo / sqlite / sqlalchemy / minio en `src/dashboard/`.
 
-**Preguntas y comentarios.**
+**Navegacion:**
 
-- Repositorio: `github.com/MarinasAlejandro/lasalle-hospital`
-- Memoria técnica: `docs/memoria-tecnica.md`
-- Diario IA: `docs/diario-ia.md`
-- Runbook demo: `docs/runbooks/presentation-demo.md`
+- Operacion: Inicio · Triaje · Alertas · Pacientes · Clasificador
+- Sistema: Calidad de datos · Pipeline runs
 
-*Alejandro Marinas · Yago · Máster en AI & Big Data · 2026-05-18*
+**Demo (orden fijo):**
 
-> **Preguntas frecuentes esperables:**
-> - "¿Por qué CNN custom y no transfer learning?" → ADR-005, alineación con
->   Bloque 6 + tamaño <50 MB.
-> - "¿Cómo afecta el desbalance de clases?" → CB-6 mitigado con
->   `class_weight=sqrt`.
-> - "¿Cómo escalaría a producción?" → cap 13 limitaciones + cap 16 trabajo
->   futuro.
-> - "¿Cómo se mide el éxito del proyecto?" → 404 tests + criterio clínico
->   cualitativo, no accuracy bruta.
+1. **Inicio (15s)** — barra critica + 3 chips de estado + actividad + accesos rapidos.
+2. **Triaje (20s)** — formulario con SpO2 = 85 → grave. Recomendacion generica + motivos humanizados.
+3. **Alertas (15s)** — la alerta `triage_severe / critical` del paciente recien creado.
+4. **Pacientes (15s)** — paginar y abrir detalle.
+5. **Clasificador (45s)** — `HOSP-PRES-001/COVID-1.png` → predicted COVID-19, mostrar `decision_rule = covid_threshold_0.35` en la respuesta. Bajar a "Ver detalle del modelo" → matriz de confusion.
+6. **Calidad / Runs (opcional)** — solo si queda tiempo.
+
+> **Notas (3:00):** bloque mas largo. Si la API esta caida, ensenar
+> chips rojos del sidebar como ejemplo de error handling. Si la imagen
+> no aparece, fallback a HOSP-DEMO-001 con disclaimer.
+
+---
+
+## Slide 12 — IA generativa + SDD · 11:00 - 11:45
+
+`/spec → /planificar → /tareas → /implementar → /revisar`. Dudas
+marcadas `[NEEDS CLARIFICATION]`, decisiones en ADRs.
+
+| | |
+|---|---|
+| Specs aprobadas | 6 |
+| ADRs | 10 |
+| Sesiones IA documentadas | 31 |
+| Tests verde | 417 (+ 1 skip esperado) |
+
+Cross-provider review con Codex cuando aporta valor. Diario IA en
+`docs/diario-ia.md`. Lecciones en `tasks/lessons.md`.
+
+> **Notas (45s):** eje obligatorio del enunciado. Mensaje final: la IA es
+> multiplicador, SDD es la disciplina que hace seguro ese multiplicador.
+
+---
+
+## Slide 13 — Etica, limitaciones · 11:45 - 12:30
+
+**Etico:**
+
+- Datos sinteticos (Faker + seed). Sin PII real.
+- Dataset Kaggle: licencia del autor; no asumimos generica.
+- Asistencia, no diagnostico. Decision clinica siempre humana.
+
+**Limitaciones declaradas:**
+
+- Recall COVID-19 = 0,820 con threshold (era 0,695 con argmax). Aun 65 / 361 perdidos.
+- Sin deteccion out-of-domain.
+- Sin interpretabilidad (Grad-CAM como mejora prioritaria).
+- Sin auth, sin replicacion, sin HA.
+- Triaje con umbrales academicos, no validados clinicamente.
+
+> **Notas (45s):** honestidad total. La limitacion principal es el
+> recall COVID. Por eso el sistema se entrega como asistencia.
+
+---
+
+## Slide 14 — Conclusion + Q&A · 12:30 - cierre
+
+**Tres cifras finales:**
+
+- Modelo: accuracy 0,8766 con threshold 0,35.
+- Recall COVID-19: 0,820 (+12,5 pp vs argmax baseline).
+- Suite: 417 verde + 1 skip esperado.
+
+**Trabajo futuro priorizado:**
+
+1. Subir recall COVID via transfer learning (la regla post-hoc ya agoto la ganancia barata).
+2. Grad-CAM por defecto.
+3. Deteccion out-of-domain.
+4. Persistir alertas con historico auditable.
+
+**Preguntas.**
+
+> **Notas (cierre):** repositorio en `github.com/MarinasAlejandro/lasalle-hospital`.
+> Si preguntan por SDD o IA: remitir al diario y al CHANGELOG.
+
+---
+
+## Plan B si algo falla
+
+- Si la API no responde: ensenar chips rojos del sidebar como ejemplo de
+  manejo de errores. CB-4 cubierto.
+- Si `HOSP-PRES-*` no aparece: usar `HOSP-DEMO-001` y avisar explicitamente
+  que es sintetica.
+- Si la demo no arranca: capturas y matriz de confusion en
+  `docs/model-evaluation/`, saltar al slide 12.
