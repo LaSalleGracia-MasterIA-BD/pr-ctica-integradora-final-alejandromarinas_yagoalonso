@@ -27,15 +27,75 @@ html, body, [class*="css"] {
     background: #F4F6FA;
 }
 section[data-testid="stMain"] .block-container {
-    max-width: 1180px;
-    padding-top: 1.6rem;
-    padding-bottom: 3rem;
+    max-width: 1140px;
+    padding-top: 1.4rem;
+    padding-bottom: 2.4rem;
+}
+
+/* Header de Streamlit transparente y aligerado (la barra blanca alta
+   por defecto rompe la sensacion de centro de control). */
+header[data-testid="stHeader"] {
+    background: transparent;
+    box-shadow: none;
+    height: 0;
+}
+[data-testid="stToolbar"] { right: 8px; top: 8px; }
+
+/* Shell visual: a partir de h1 de la cabecera de pagina, el resto del
+   contenido del main vive dentro de un panel con sombra suave. */
+.lasalle-shell {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 14px;
+    padding: 22px 26px 24px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+                0 12px 30px -18px rgba(15, 23, 42, 0.12);
 }
 
 /* Sidebar */
 section[data-testid="stSidebar"] {
     background: #FFFFFF;
     border-right: 1px solid #E2E8F0;
+}
+
+/* Brand del sidebar */
+.lasalle-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px 14px;
+    margin: 4px 0 6px;
+    border-bottom: 1px solid #EEF2F7;
+}
+.lasalle-brand-mark {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #1D4ED8 0%, #4F8AF2 100%);
+    position: relative;
+    flex: none;
+    box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25);
+}
+.lasalle-brand-mark::after {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    border-radius: 3px;
+    border: 1.5px solid rgba(255, 255, 255, 0.85);
+}
+.lasalle-brand-text { line-height: 1.1; }
+.lasalle-brand-name {
+    color: #0F172A;
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+}
+.lasalle-brand-sub {
+    color: #94A3B8;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 1px;
 }
 section[data-testid="stSidebar"] [data-testid="stSidebarNav"] ul {
     padding: 6px 4px 8px;
@@ -182,8 +242,10 @@ section[data-testid="stSidebar"] .lasalle-status-footer-label {
     padding: 12px 16px;
     background: #FEF2F2;
     border: 1px solid #FECACA;
-    border-radius: 10px;
+    border-radius: 12px;
     color: #7F1D1D;
+    box-shadow: 0 1px 2px rgba(185, 28, 28, 0.06),
+                0 8px 24px -12px rgba(185, 28, 28, 0.18);
 }
 .lasalle-critical-bar .lcb-dot {
     width: 10px;
@@ -213,6 +275,7 @@ section[data-testid="stSidebar"] .lasalle-status-footer-label {
     border-radius: 999px;
     font-size: 13px;
     color: #334155;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 .lasalle-status-line .lsl-dot {
     width: 8px;
@@ -248,6 +311,12 @@ section[data-testid="stSidebar"] .lasalle-status-footer-label {
     border-radius: 10px;
     padding: 14px 16px;
     height: 100%;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    transition: box-shadow 0.16s ease, transform 0.16s ease;
+}
+.lasalle-stat-card:hover {
+    box-shadow: 0 4px 12px -4px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
 }
 .lasalle-stat-card .lsc-label {
     text-transform: uppercase;
@@ -268,24 +337,42 @@ section[data-testid="stSidebar"] .lasalle-status-footer-label {
 .lasalle-stat-card.warn     .lsc-value { color: #B45309; }
 .lasalle-stat-card.muted    .lsc-value { color: #475569; }
 
-/* Accesos rapidos: todos los st.page_link del main quedan como cards.
+/* Accesos rapidos: todos los st.page_link del main quedan como action
+   cards con flecha indicadora a la derecha.
    (En Inicio los hay como atajos; en otras paginas no hay page_links en
    main, solo en la sidebar nativa). */
 section[data-testid="stMain"] [data-testid="stPageLink"] a {
-    display: block;
-    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
-    border-radius: 10px;
+    border-radius: 12px;
     color: #0F172A;
     font-weight: 500;
     text-decoration: none;
-    transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    transition: border-color 0.16s ease, background 0.16s ease,
+                transform 0.16s ease, box-shadow 0.16s ease;
+}
+section[data-testid="stMain"] [data-testid="stPageLink"] a::after {
+    content: "→";
+    color: #94A3B8;
+    font-size: 16px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    transition: transform 0.16s ease, color 0.16s ease;
 }
 section[data-testid="stMain"] [data-testid="stPageLink"] a:hover {
     border-color: #1D4ED8;
     background: rgba(29, 78, 216, 0.04);
     transform: translateY(-1px);
+    box-shadow: 0 6px 16px -8px rgba(29, 78, 216, 0.25);
+}
+section[data-testid="stMain"] [data-testid="stPageLink"] a:hover::after {
+    color: #1D4ED8;
+    transform: translateX(2px);
 }
 section[data-testid="stMain"] [data-testid="stPageLink"] a p {
     margin: 0;
@@ -297,9 +384,10 @@ section[data-testid="stMain"] [data-testid="stPageLink"] a p {
 .lasalle-card {
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 18px 20px;
     margin: 10px 0 14px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 /* Disclaimer */
@@ -324,10 +412,12 @@ section[data-testid="stMain"] [data-testid="stPageLink"] a p {
 /* Panel de prioridad (Triaje) */
 .lasalle-priority {
     margin-top: 18px;
-    padding: 16px 18px;
+    padding: 18px 20px;
     border-radius: 12px;
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+                0 12px 28px -16px rgba(15, 23, 42, 0.18);
 }
 .lasalle-priority.grave  { background: #FEF2F2; border-color: #FECACA; }
 .lasalle-priority.medio  { background: #FFFBEB; border-color: #FDE68A; }
@@ -374,8 +464,14 @@ section[data-testid="stMain"] [data-testid="stPageLink"] a p {
     display: flex;
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
-    border-radius: 10px;
+    border-radius: 12px;
     overflow: hidden;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: box-shadow 0.16s ease, transform 0.16s ease;
+}
+.lasalle-alert-list article.lalert:hover {
+    box-shadow: 0 6px 16px -8px rgba(15, 23, 42, 0.12);
+    transform: translateY(-1px);
 }
 .lasalle-alert-list article.lalert .lalert-marker {
     width: 4px;
@@ -463,11 +559,16 @@ section[data-testid="stMain"] [data-testid="stPageLink"] a p {
 /* Clasificador */
 .lasalle-prediction {
     margin-top: 16px;
-    padding: 16px 18px;
+    padding: 18px 20px;
     border-radius: 12px;
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+                0 12px 28px -16px rgba(15, 23, 42, 0.18);
 }
+.lasalle-prediction.normal    { box-shadow: 0 1px 2px rgba(21, 128, 61, 0.06), 0 8px 24px -12px rgba(21, 128, 61, 0.18); }
+.lasalle-prediction.pneumonia { box-shadow: 0 1px 2px rgba(180, 83, 9, 0.06),  0 8px 24px -12px rgba(180, 83, 9, 0.20); }
+.lasalle-prediction.covid     { box-shadow: 0 1px 2px rgba(185, 28, 28, 0.06), 0 8px 24px -12px rgba(185, 28, 28, 0.22); }
 .lasalle-prediction.normal    { background: #ECFDF5; border-color: #BBF7D0; }
 .lasalle-prediction.pneumonia { background: #FFFBEB; border-color: #FDE68A; }
 .lasalle-prediction.covid     { background: #FEF2F2; border-color: #FECACA; }
@@ -517,9 +618,92 @@ section[data-testid="stMain"] [data-testid="stPageLink"] a p {
     color: #0F172A;
 }
 
-/* Ajustes Streamlit pequenos */
-button[kind="primary"], button[kind="secondary"] { border-radius: 8px; font-weight: 500; }
-details[data-testid="stExpander"] > summary { font-size: 13.5px; }
+/* ============================================================
+   Ajustes Streamlit (botones, inputs, expanders) — menos crudo,
+   mas cercano a UI de producto. Sin cambiar comportamiento.
+   ============================================================ */
+
+/* Botones */
+button[kind="primary"], button[kind="secondary"],
+button[kind="primaryFormSubmit"], button[kind="secondaryFormSubmit"] {
+    border-radius: 9px;
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+button[kind="primary"]:hover, button[kind="primaryFormSubmit"]:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px -6px rgba(29, 78, 216, 0.45);
+}
+
+/* Inputs: text_input, number_input, selectbox y textarea heredan el
+   mismo aspecto sobrio. */
+section[data-testid="stMain"] [data-baseweb="input"],
+section[data-testid="stMain"] [data-baseweb="select"] > div,
+section[data-testid="stMain"] textarea,
+section[data-testid="stMain"] [data-testid="stNumberInputContainer"] {
+    background: #FFFFFF;
+    border-radius: 8px;
+}
+section[data-testid="stMain"] [data-baseweb="input"]:hover,
+section[data-testid="stMain"] [data-baseweb="select"] > div:hover {
+    border-color: #CBD5E1;
+}
+section[data-testid="stMain"] [data-baseweb="input"]:focus-within,
+section[data-testid="stMain"] [data-baseweb="select"] > div:focus-within {
+    border-color: #1D4ED8;
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+}
+
+/* Selectbox / multiselect: que su superficie sea blanca consistente */
+section[data-testid="stMain"] [data-baseweb="popover"] {
+    border-radius: 10px;
+    box-shadow: 0 12px 32px -8px rgba(15, 23, 42, 0.18);
+}
+
+/* Labels */
+section[data-testid="stMain"] label,
+section[data-testid="stMain"] [data-testid="stWidgetLabel"] {
+    color: #475569;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Expanders */
+details[data-testid="stExpander"] {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+details[data-testid="stExpander"] > summary {
+    font-size: 13.5px;
+    padding: 10px 14px;
+    color: #0F172A;
+}
+details[data-testid="stExpander"] > summary:hover {
+    background: rgba(29, 78, 216, 0.03);
+}
+details[data-testid="stExpander"][open] > summary {
+    border-bottom: 1px solid #EEF2F7;
+}
+
+/* Plotly: contener en card */
+section[data-testid="stMain"] [data-testid="stPlotlyChart"] {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 8px 6px 0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+/* Dataframe table */
+section[data-testid="stMain"] [data-testid="stDataFrame"] {
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* Metric (en caso de quedar algun st.metric usado puntualmente) */
 [data-testid="stMetric"] { padding: 0; }
 
 /* Caption discreto bajo la imagen del clasificador */
@@ -531,3 +715,16 @@ details[data-testid="stExpander"] > summary { font-size: 13.5px; }
     word-break: break-all;
 }
 .lasalle-img-caption.mono { font-family: ui-monospace, SFMono-Regular, monospace; }
+
+/* Imagen del clasificador en card */
+.lasalle-image-frame {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+                0 16px 36px -20px rgba(15, 23, 42, 0.22);
+}
+.lasalle-image-frame [data-testid="stImage"] img {
+    border-radius: 8px;
+}

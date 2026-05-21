@@ -199,6 +199,12 @@ st.markdown("<div style='height: 14px'></div>", unsafe_allow_html=True)
 # `st.image`, asi que envolvemos en columnas con espaciador a ambos lados.
 img_l, img_c, img_r = st.columns([1, 6, 1])
 with img_c:
+    # Envolvemos el render de la imagen en un st.container con clase
+    # `lasalle-image-frame` para que aparezca dentro de un panel con
+    # borde y sombra ligera, no flotando sobre el fondo. La clase la
+    # aplica el CSS al `[data-testid="stVerticalBlockBorderWrapper"]`
+    # mas cercano via la marca HTML inline que insertamos justo antes.
+    st.markdown('<div class="lasalle-image-frame">', unsafe_allow_html=True)
     image_bytes, image_err = _cached_image(api.base_url, selected_key)
     if image_err is not None:
         show_api_error(image_err, context="")
@@ -221,6 +227,7 @@ with img_c:
             f'<div class="lasalle-img-caption mono">{selected_key}</div>',
             unsafe_allow_html=True,
         )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # Accion: boton centrado debajo de la imagen

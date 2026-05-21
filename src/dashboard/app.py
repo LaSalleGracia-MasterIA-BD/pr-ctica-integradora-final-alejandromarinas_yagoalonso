@@ -78,6 +78,20 @@ pages = {
     ],
 }
 
+# Brand de la sidebar: cabecera pequena con nombre del producto. Se
+# inserta ANTES de la navegacion para que aparezca arriba del todo.
+with st.sidebar:
+    st.markdown(
+        '<div class="lasalle-brand">'
+        '<div class="lasalle-brand-mark"></div>'
+        '<div class="lasalle-brand-text">'
+        '<div class="lasalle-brand-name">laSalle Health</div>'
+        '<div class="lasalle-brand-sub">Centro de control</div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
 # Ejecuta la pagina seleccionada
 st.navigation(pages).run()
 
