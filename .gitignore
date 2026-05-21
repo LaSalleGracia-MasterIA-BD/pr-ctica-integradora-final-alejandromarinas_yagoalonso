@@ -57,6 +57,11 @@ Thumbs.db
 # Solo sirven en local mientras se inspecciona; no aportan valor en el repo.
 .playwright-mcp/
 dashboard-*.png
+v[0-9]*-*.png
+
+# Paquetes de handoff externo (zips entregados por revisores como
+# "Claude Design"). Se descomprimen en /tmp y solo se commitea lo aplicado.
+Hospital*.zip
 
 # Model weights (too large for git)
 *.h5

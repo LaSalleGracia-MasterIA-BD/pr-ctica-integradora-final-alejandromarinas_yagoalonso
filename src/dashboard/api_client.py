@@ -185,6 +185,12 @@ class ApiClient:
             params={"limit": limit, "offset": offset},
         )
 
+    def list_admissions(self, limit: int, offset: int) -> ResultJson:
+        return self._request_json(
+            "GET", "/api/v1/admissions",
+            params={"limit": limit, "offset": offset},
+        )
+
     def get_patient(self, external_id: str) -> ResultJson:
         return self._request_json("GET", f"/api/v1/patients/{external_id}")
 

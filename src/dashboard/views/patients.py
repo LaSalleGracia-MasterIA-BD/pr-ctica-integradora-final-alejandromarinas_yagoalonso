@@ -1,7 +1,20 @@
-"""Pacientes view.
+"""Vista Pacientes (rediseno UX fase 4).
 
-RF-3: tabla paginada (server-side via limit/offset) + detalle del
-paciente seleccionado con admissions y radiografias embebidas.
+Buscador prominente, tabla simple, detalle compacto. Sin grids
+densos en la cabecera del detalle.
+
+Cambios respecto a la version anterior:
+  - Buscador como input grande arriba del listado (no a media pagina).
+    Cuando hay valor, gana sobre la seleccion de la tabla.
+  - Tabla con 5 columnas (external_id, nombre, edad, genero,
+    admisiones); blood_type y radiografias se quitan de la tabla y
+    pasan al detalle.
+  - Detalle: header compacto en una linea (ID + nombre + edad / genero
+    como meta), no 5 metric grandes en fila.
+  - Admisiones y radiografias en expanders, igual que antes. Se quita
+    el caption tecnico del top.
+
+API-only: solo `list_patients` y `get_patient`. Sin escritura.
 """
 from __future__ import annotations
 
@@ -33,122 +46,150 @@ def _cached_patient(_base_url: str, external_id: str):
 # Render
 # ---------------------------------------------------------------------------
 
-st.title("Pacientes")
-st.caption(
-    "Lista paginada de pacientes registrados en MongoDB. Cada paciente "
-    "trae sus admisiones y radiografias embebidas."
+st.markdown(
+    '<div class="lasalle-page-head">'
+    '<h1>Pacientes</h1>'
+    '<div class="lph-meta">Buscar por ID o consultar el detalle.</div>'
+    '</div>',
+    unsafe_allow_html=True,
 )
 
-
-# Buscador rapido por external_id (util tras crear un paciente nuevo en
-# la vista Triaje y querer comprobar que esta persistido sin necesidad
-# de paginar). NO sustituye al click en fila — coexisten.
+# Buscador prominente
+st.markdown("<div style='height: 14px'></div>", unsafe_allow_html=True)
 search_id = st.text_input(
-    "Buscar por external_id (opcional)",
+    "Buscar paciente",
     value="",
-    placeholder="HOSP-000123, TRIAGE-20260519-0001, ...",
-    help=(
-        "Si introduces un external_id valido, se muestra su detalle "
-        "directamente, saltandose la paginacion. Deja vacio para usar "
-        "el listado paginado de abajo."
-    ),
+    placeholder="HOSP-000123, TRIAGE-20260519-0001 ...",
+    label_visibility="collapsed",
 ).strip()
 
 
-# Paginacion en sidebar de la pagina (no en el sidebar global del app)
-col_left, col_right = st.columns([3, 1])
-with col_right:
-    page = st.number_input(
-        "Pagina",
-        min_value=1,
-        value=1,
-        step=1,
-        help=f"{PAGE_SIZE} pacientes por pagina",
-    )
+# Paginacion solo cuando NO hay busqueda activa
+page = 1
+if not search_id:
+    p_col, _ = st.columns([1, 5])
+    with p_col:
+        page = st.number_input(
+            "Pagina",
+            min_value=1,
+            value=1,
+            step=1,
+            label_visibility="collapsed",
+            help=f"{PAGE_SIZE} pacientes por pagina",
+        )
+
 offset = int((page - 1) * PAGE_SIZE)
 
-with col_left:
-    st.markdown(f"**Pacientes — pagina {int(page)}**")
 
-data, err = _cached_list(api.base_url, limit=PAGE_SIZE, offset=offset)
-if err is not None:
-    show_api_error(err, context="")
-    st.stop()
-
-items = data.get("items", []) if data else []
-total = data.get("total", 0) if data else 0
+# ---------------------------------------------------------------------------
+# Listado (cuando no hay busqueda activa)
+# ---------------------------------------------------------------------------
 
 selected_external_id: str | None = None
+total = 0
+last_page = 1
 
-if not items:
-    st.info("Sin pacientes en esta pagina.")
-else:
-    rows = []
-    for p in items:
-        rows.append({
-            "external_id": p.get("external_id"),
-            "name": p.get("name"),
-            "age": p.get("age"),
-            "gender": p.get("gender"),
-            "blood_type": p.get("blood_type"),
-            "admissions": len(p.get("admissions") or []),
-            "radiografias": len(p.get("radiographies") or []),
-        })
-    df = pd.DataFrame(rows)
+if not search_id:
+    data, err = _cached_list(api.base_url, limit=PAGE_SIZE, offset=offset)
+    if err is not None:
+        show_api_error(err, context="")
+        st.stop()
 
-    # Tabla con seleccion de fila (Streamlit 1.30+). Al pulsar una fila,
-    # `event.selection.rows` contiene su indice; usamos eso para abrir
-    # el detalle automaticamente (RF-3, sin input manual).
-    event = st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        key="patients_table",
-    )
-    selected_rows = event.selection.rows if event and event.selection else []
-    if selected_rows:
-        idx = selected_rows[0]
-        selected_external_id = rows[idx]["external_id"]
-
+    items = data.get("items", []) if data else []
+    total = data.get("total", 0) if data else 0
     last_page = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
-    st.caption(
-        f"Total: {total:,} pacientes — pagina {int(page)} de {last_page}. "
-        "Haz click en una fila para ver el detalle del paciente."
-    )
+
+    if not items:
+        st.markdown(
+            '<div class="lasalle-empty">Sin pacientes en esta pagina.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        rows = []
+        for p in items:
+            rows.append({
+                "external_id": p.get("external_id"),
+                "Nombre": p.get("name"),
+                "Edad": p.get("age"),
+                "Genero": p.get("gender"),
+                "Admisiones": len(p.get("admissions") or []),
+            })
+        df = pd.DataFrame(rows)
+
+        event = st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            on_select="rerun",
+            selection_mode="single-row",
+            key="patients_table",
+            column_config={
+                "external_id": st.column_config.TextColumn(
+                    "ID",
+                    help="external_id en MongoDB",
+                ),
+            },
+        )
+        selected_rows = event.selection.rows if event and event.selection else []
+        if selected_rows:
+            idx = selected_rows[0]
+            selected_external_id = rows[idx]["external_id"]
+
+        st.caption(
+            f"Pagina {int(page)} de {last_page} · {total:,} pacientes en total. "
+            "Selecciona una fila para ver el detalle."
+        )
 
 
-# --- Detalle ---
-st.markdown("---")
-st.subheader("Detalle del paciente seleccionado")
+# ---------------------------------------------------------------------------
+# Detalle
+# ---------------------------------------------------------------------------
 
-# Prioridad: si el buscador esta informado, gana sobre la seleccion por
-# fila. Esto permite buscar un external_id concreto (p. ej. uno recien
-# creado en la vista Triaje) sin tener que paginar.
 effective_external_id = search_id or selected_external_id
 
-if not effective_external_id:
-    st.info(
-        "Selecciona un paciente en la tabla, o usa el buscador de arriba "
-        "para abrir el detalle por external_id."
-    )
-else:
+if effective_external_id:
+    st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True)
+
     detail, det_err = _cached_patient(api.base_url, effective_external_id)
     if det_err is not None:
         if det_err.kind == "not_found":
-            st.info(f"No existe el paciente `{effective_external_id}`.")
+            st.markdown(
+                f'<div class="lasalle-empty">No existe el paciente '
+                f'<span class="mono">{effective_external_id}</span>.</div>',
+                unsafe_allow_html=True,
+            )
         else:
             show_api_error(det_err, context="")
     elif detail:
-        cols = st.columns(5)
-        cols[0].markdown(f"**ID**\n\n`{detail.get('external_id')}`")
-        cols[1].markdown(f"**Nombre**\n\n{detail.get('name') or '—'}")
-        cols[2].metric("Edad", value=detail.get("age") or "—")
-        cols[3].markdown(f"**Genero**\n\n{detail.get('gender') or '—'}")
-        cols[4].markdown(f"**Grupo sanguineo**\n\n{detail.get('blood_type') or '—'}")
+        # Cabecera compacta del paciente: nombre grande, meta en una linea
+        name = detail.get("name") or "—"
+        age = detail.get("age")
+        gender = detail.get("gender") or "—"
+        blood = detail.get("blood_type") or None
+        ext_id = detail.get("external_id") or "?"
+
+        meta_bits = [
+            f'<span class="mono">{ext_id}</span>',
+            f"{age} anos" if age is not None else None,
+            f"genero {gender}",
+        ]
+        if blood:
+            meta_bits.append(f"grupo {blood}")
+        # Separadores tipograficos sutiles
+        meta_html = ' <span style="color:#CBD5E1;">·</span> '.join(
+            b for b in meta_bits if b
+        )
+        st.markdown(
+            f'<div class="lasalle-patient-head">'
+            f'<div class="lph-name">{name}</div>'
+            f'<div class="lph-meta">{meta_html}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
         admissions = detail.get("admissions") or []
+        radios = detail.get("radiographies") or []
+
         with st.expander(f"Admisiones ({len(admissions)})", expanded=False):
             if admissions:
                 df_adm = pd.DataFrame([
@@ -166,7 +207,6 @@ else:
             else:
                 st.caption("Sin admisiones.")
 
-        radios = detail.get("radiographies") or []
         with st.expander(f"Radiografias ({len(radios)})", expanded=False):
             if radios:
                 df_rad = pd.DataFrame([
@@ -184,9 +224,19 @@ else:
                 st.dataframe(df_rad, use_container_width=True, hide_index=True)
             else:
                 st.caption("Sin radiografias.")
+else:
+    if not search_id:
+        st.markdown("<div style='height: 14px'></div>", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="lasalle-empty">'
+            'Selecciona un paciente en la tabla, o usa el buscador.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
 
-st.markdown("---")
+# Recarga sutil al final
+st.markdown("<div style='height: 20px'></div>", unsafe_allow_html=True)
 if st.button("Recargar"):
     _cached_list.clear()
     _cached_patient.clear()

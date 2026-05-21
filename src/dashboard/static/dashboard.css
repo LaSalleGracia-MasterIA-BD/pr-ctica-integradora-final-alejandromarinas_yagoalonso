@@ -1,0 +1,533 @@
+/* ============================================================
+   laSalle Health Center — Dashboard v2 (refinado)
+
+   Paleta sobria, ligera, hospitalaria. Sin emojis, sin decoracion
+   gratuita. Toda clase propia tiene prefijo .lasalle-* o .lalert-*
+   para no chocar con futuras versiones de Streamlit.
+
+   Familias de color:
+     fondo app          #F4F6FA   (gris azulado muy claro)
+     card               #FFFFFF
+     border             #E2E8F0
+     border-strong      #CBD5E1
+     text-strong        #0F172A
+     text               #1E293B
+     muted              #64748B
+     muted-soft         #94A3B8
+     accent             #1D4ED8   (azul medico sobrio)
+     ok                 #15803D
+     warn               #B45309
+     critical           #B91C1C
+   ============================================================ */
+
+html, body, [class*="css"] {
+    font-family: "Inter", "Helvetica Neue", -apple-system, system-ui, sans-serif;
+}
+.stApp {
+    background: #F4F6FA;
+}
+section[data-testid="stMain"] .block-container {
+    max-width: 1180px;
+    padding-top: 1.6rem;
+    padding-bottom: 3rem;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background: #FFFFFF;
+    border-right: 1px solid #E2E8F0;
+}
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] ul {
+    padding: 6px 4px 8px;
+}
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a,
+section[data-testid="stSidebar"] [data-testid="stSidebarNavLink"] {
+    position: relative;
+    border-radius: 6px;
+    padding: 7px 12px;
+    margin: 1px 6px;
+    color: #475569;
+    font-size: 13.5px;
+    text-decoration: none;
+    transition: background-color 0.16s ease, color 0.16s ease, padding-left 0.20s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a:hover,
+section[data-testid="stSidebar"] [data-testid="stSidebarNavLink"]:hover {
+    background-color: rgba(29, 78, 216, 0.06);
+    color: #0F172A;
+    padding-left: 14px;
+}
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a[aria-current="page"],
+section[data-testid="stSidebar"] [data-testid="stSidebarNavLink"][aria-current="page"] {
+    background-color: rgba(29, 78, 216, 0.10);
+    color: #0F172A;
+    font-weight: 500;
+}
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a[aria-current="page"]::before,
+section[data-testid="stSidebar"] [data-testid="stSidebarNavLink"][aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    left: -3px;
+    top: 7px;
+    bottom: 7px;
+    width: 2px;
+    border-radius: 2px;
+    background: #1D4ED8;
+}
+
+/* Cabeceras "Operacion" / "Sistema" */
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] ul > div {
+    margin: 14px 12px 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #94A3B8;
+    font-weight: 500;
+}
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] ul > div:nth-of-type(2) {
+    color: #CBD5E1;
+}
+
+section[data-testid="stSidebar"] hr {
+    border-color: #E2E8F0;
+    margin: 18px 12px 10px;
+}
+section[data-testid="stSidebar"] .lasalle-status-footer-label {
+    color: #94A3B8;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 12px 8px;
+}
+
+/* Chips sobrios */
+.lasalle-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    line-height: 1.3;
+    font-weight: 500;
+    background: #F1F5F9;
+    color: #334155;
+    border: 1px solid #E2E8F0;
+    margin: 2px 4px 2px 0;
+}
+.lasalle-chip .ldot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #94A3B8;
+    flex: none;
+}
+.lasalle-chip.ok    { background: #ECFDF5; color: #14532D; border-color: #BBF7D0; }
+.lasalle-chip.ok .ldot    { background: #15803D; }
+.lasalle-chip.warn  { background: #FEF3C7; color: #78350F; border-color: #FDE68A; }
+.lasalle-chip.warn .ldot  { background: #B45309; }
+.lasalle-chip.fail  { background: #FEE2E2; color: #7F1D1D; border-color: #FECACA; }
+.lasalle-chip.fail .ldot  { background: #B91C1C; }
+
+/* Cabecera de pagina */
+.lasalle-page-head { margin-bottom: 18px; }
+.lasalle-page-head h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 600;
+    color: #0F172A;
+    line-height: 1.15;
+}
+.lasalle-page-head .lph-meta {
+    color: #64748B;
+    font-size: 13.5px;
+    margin-top: 4px;
+}
+
+/* Inicio: saludo + volumen */
+.lasalle-greeting h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: #0F172A;
+    line-height: 1.1;
+}
+.lasalle-greeting .lg-meta {
+    color: #64748B;
+    font-size: 13.5px;
+    margin-top: 4px;
+}
+.lasalle-greeting .lg-meta .mono {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    color: #1E293B;
+}
+.lasalle-volume-line {
+    margin-top: 4px;
+    color: #64748B;
+    font-size: 13px;
+}
+.lasalle-volume-line .mono {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    color: #334155;
+    font-weight: 500;
+}
+.lasalle-volume-line .lvl-sep { color: #CBD5E1; margin: 0 6px; }
+
+/* Barra critica */
+.lasalle-critical-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0 6px;
+    padding: 12px 16px;
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    border-radius: 10px;
+    color: #7F1D1D;
+}
+.lasalle-critical-bar .lcb-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #B91C1C;
+    flex: none;
+}
+.lasalle-critical-bar .lcb-msg { flex: 1; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.lasalle-critical-bar .lcb-msg strong { font-weight: 600; color: #7F1D1D; }
+.lasalle-critical-bar .lcb-detail { color: #991B1B; font-size: 13.5px; }
+
+/* Linea de estado */
+.lasalle-status-line {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 10px 0 18px;
+}
+.lasalle-status-line .lsl-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 999px;
+    font-size: 13px;
+    color: #334155;
+}
+.lasalle-status-line .lsl-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #15803D;
+}
+.lasalle-status-line .lsl-dot.warn { background: #B45309; }
+.lasalle-status-line .lsl-dot.fail { background: #B91C1C; }
+.lasalle-status-line .lsl-label {
+    text-transform: uppercase;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    color: #94A3B8;
+    font-weight: 600;
+}
+.lasalle-status-line .lsl-val { font-weight: 500; }
+
+/* Etiquetas de seccion */
+.lasalle-section-label {
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #64748B;
+    font-weight: 600;
+    margin: 22px 0 10px;
+}
+
+/* Cards de stat (Actividad) */
+.lasalle-stat-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    height: 100%;
+}
+.lasalle-stat-card .lsc-label {
+    text-transform: uppercase;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    color: #64748B;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.lasalle-stat-card .lsc-value {
+    font-size: 30px;
+    font-weight: 600;
+    color: #0F172A;
+    line-height: 1.1;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.lasalle-stat-card.critical .lsc-value { color: #B91C1C; }
+.lasalle-stat-card.warn     .lsc-value { color: #B45309; }
+.lasalle-stat-card.muted    .lsc-value { color: #475569; }
+
+/* Accesos rapidos: todos los st.page_link del main quedan como cards.
+   (En Inicio los hay como atajos; en otras paginas no hay page_links en
+   main, solo en la sidebar nativa). */
+section[data-testid="stMain"] [data-testid="stPageLink"] a {
+    display: block;
+    padding: 14px 16px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    color: #0F172A;
+    font-weight: 500;
+    text-decoration: none;
+    transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+section[data-testid="stMain"] [data-testid="stPageLink"] a:hover {
+    border-color: #1D4ED8;
+    background: rgba(29, 78, 216, 0.04);
+    transform: translateY(-1px);
+}
+section[data-testid="stMain"] [data-testid="stPageLink"] a p {
+    margin: 0;
+    font-size: 14.5px;
+    color: #0F172A;
+}
+
+/* Cards genericas */
+.lasalle-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin: 10px 0 14px;
+}
+
+/* Disclaimer */
+.lasalle-disclaimer {
+    background: #FFFBEB;
+    border: 1px solid #FDE68A;
+    color: #78350F;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    margin: 8px 0 14px;
+}
+.lasalle-form-section {
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #64748B;
+    font-weight: 600;
+    margin: 4px 0 8px;
+}
+
+/* Panel de prioridad (Triaje) */
+.lasalle-priority {
+    margin-top: 18px;
+    padding: 16px 18px;
+    border-radius: 12px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+}
+.lasalle-priority.grave  { background: #FEF2F2; border-color: #FECACA; }
+.lasalle-priority.medio  { background: #FFFBEB; border-color: #FDE68A; }
+.lasalle-priority.leve   { background: #ECFDF5; border-color: #BBF7D0; }
+.lasalle-priority .lpr-tag {
+    text-transform: uppercase;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+.lasalle-priority.grave .lpr-tag { color: #B91C1C; }
+.lasalle-priority.medio .lpr-tag { color: #B45309; }
+.lasalle-priority.leve  .lpr-tag { color: #15803D; }
+.lasalle-priority .lpr-level {
+    font-size: 24px;
+    font-weight: 600;
+    color: #0F172A;
+    margin: 4px 0 2px;
+}
+.lasalle-priority .lpr-recommendation {
+    color: #334155;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+.lasalle-priority .lpr-reasons-label {
+    text-transform: uppercase;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    color: #64748B;
+    font-weight: 600;
+    margin: 6px 0 4px;
+}
+.lasalle-priority .lpr-reasons-list {
+    margin: 0;
+    padding-left: 18px;
+    color: #1E293B;
+    font-size: 13.5px;
+}
+.lasalle-priority .lpr-reasons-list li { margin: 2px 0; }
+
+/* Alertas */
+.lasalle-alert-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.lasalle-alert-list article.lalert {
+    display: flex;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.lasalle-alert-list article.lalert .lalert-marker {
+    width: 4px;
+    flex: none;
+    background: #94A3B8;
+}
+.lasalle-alert-list article.lalert--critical .lalert-marker { background: #B91C1C; }
+.lasalle-alert-list article.lalert--high     .lalert-marker { background: #DC2626; }
+.lasalle-alert-list article.lalert--medium   .lalert-marker { background: #B45309; }
+.lasalle-alert-list article.lalert--low      .lalert-marker { background: #94A3B8; }
+.lasalle-alert-list article.lalert .lalert-body { flex: 1; padding: 12px 16px; min-width: 0; }
+.lasalle-alert-list article.lalert .lalert-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+.lasalle-alert-list article.lalert .lalert-sev {
+    text-transform: uppercase;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #F1F5F9;
+    color: #334155;
+}
+.lasalle-alert-list article.lalert--critical .lalert-sev { background: #FEE2E2; color: #7F1D1D; }
+.lasalle-alert-list article.lalert--high     .lalert-sev { background: #FEE2E2; color: #991B1B; }
+.lasalle-alert-list article.lalert--medium   .lalert-sev { background: #FEF3C7; color: #78350F; }
+.lasalle-alert-list article.lalert--low      .lalert-sev { background: #F1F5F9; color: #475569; }
+.lasalle-alert-list article.lalert .lalert-title {
+    font-weight: 600;
+    color: #0F172A;
+    font-size: 14.5px;
+}
+.lasalle-alert-list article.lalert .lalert-text {
+    color: #334155;
+    font-size: 13.5px;
+    margin: 2px 0 6px;
+}
+.lasalle-alert-list article.lalert .lalert-meta {
+    color: #94A3B8;
+    font-size: 11.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.lasalle-alert-list article.lalert .lalert-meta .mono {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.lasalle-alert-list article.lalert .lalert-meta .lalert-sep { color: #CBD5E1; }
+
+/* Estados vacios */
+.lasalle-empty {
+    background: #FFFFFF;
+    border: 1px dashed #CBD5E1;
+    border-radius: 10px;
+    padding: 18px 20px;
+    color: #475569;
+    text-align: center;
+    font-size: 13.5px;
+}
+.lasalle-empty--ok { color: #14532D; border-color: #BBF7D0; background: #ECFDF5; }
+
+/* Pacientes - cabecera de detalle */
+.lasalle-patient-head { margin-bottom: 4px; }
+.lasalle-patient-head .lph-name {
+    font-size: 20px;
+    font-weight: 600;
+    color: #0F172A;
+}
+.lasalle-patient-head .lph-meta {
+    color: #64748B;
+    font-size: 13px;
+    margin-top: 2px;
+}
+.lasalle-patient-head .lph-meta .mono {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    color: #334155;
+}
+
+/* Clasificador */
+.lasalle-prediction {
+    margin-top: 16px;
+    padding: 16px 18px;
+    border-radius: 12px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+}
+.lasalle-prediction.normal    { background: #ECFDF5; border-color: #BBF7D0; }
+.lasalle-prediction.pneumonia { background: #FFFBEB; border-color: #FDE68A; }
+.lasalle-prediction.covid     { background: #FEF2F2; border-color: #FECACA; }
+.lasalle-prediction .lpd-label {
+    text-transform: uppercase;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    color: #64748B;
+    font-weight: 600;
+}
+.lasalle-prediction .lpd-class {
+    font-size: 26px;
+    font-weight: 600;
+    color: #0F172A;
+    line-height: 1.1;
+    margin: 4px 0;
+}
+.lasalle-prediction.normal    .lpd-class { color: #14532D; }
+.lasalle-prediction.pneumonia .lpd-class { color: #78350F; }
+.lasalle-prediction.covid     .lpd-class { color: #7F1D1D; }
+.lasalle-prediction .lpd-meta {
+    color: #64748B;
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.lasalle-prediction .lpd-meta .mono {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    color: #334155;
+}
+.lasalle-prediction .lpd-meta .lpd-sep { color: #CBD5E1; }
+
+.lasalle-model-summary {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 12px;
+    color: #334155;
+    font-size: 13px;
+}
+.lasalle-model-summary strong { font-weight: 600; color: #0F172A; }
+.lasalle-model-summary .mono {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    color: #0F172A;
+}
+
+/* Ajustes Streamlit pequenos */
+button[kind="primary"], button[kind="secondary"] { border-radius: 8px; font-weight: 500; }
+details[data-testid="stExpander"] > summary { font-size: 13.5px; }
+[data-testid="stMetric"] { padding: 0; }
+
+/* Caption discreto bajo la imagen del clasificador */
+.lasalle-img-caption {
+    text-align: center;
+    color: #94A3B8;
+    font-size: 12px;
+    margin-top: 6px;
+    word-break: break-all;
+}
+.lasalle-img-caption.mono { font-family: ui-monospace, SFMono-Regular, monospace; }

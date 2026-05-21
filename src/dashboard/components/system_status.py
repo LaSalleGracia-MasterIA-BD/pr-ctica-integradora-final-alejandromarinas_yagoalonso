@@ -71,28 +71,40 @@ def build_chips(api_client: ApiClient) -> list[Chip]:
     ]
 
 
+_CHIP_CLASS_BY_COLOR = {
+    COLOR_OK: "ok",
+    COLOR_WARN: "warn",
+    COLOR_CRIT: "fail",
+    COLOR_NEUTRAL: "",
+}
+
+
 def _chip_html(chip: Chip) -> str:
-    """Minimal HTML span for the chip — sin CSS complejo, una linea."""
-    # `unsafe_allow_html=True` se usa solo aqui y con esta funcion.
+    """Sobrio: usa `.lasalle-chip` (ver static/dashboard.css)."""
+    css_state = _CHIP_CLASS_BY_COLOR.get(chip.color, "")
+    cls = f"lasalle-chip {css_state}".strip()
     return (
-        f'<span style="display:inline-block;padding:2px 8px;margin:2px 4px 2px 0;'
-        f'border-radius:12px;background:{chip.color};color:#FFFFFF;font-size:12px;'
-        f'font-weight:500;">{chip.label}: {chip.value}</span>'
+        f'<span class="{cls}">'
+        f'<span class="ldot"></span>'
+        f'{chip.label}: {chip.value}'
+        f'</span>'
     )
 
 
 def render_system_status(api_client: ApiClient) -> None:
-    """Render the 3 chips inside the current Streamlit container (typically sidebar)."""
+    """Render the 3 chips dentro del contenedor actual (sidebar tipicamente)."""
     import streamlit as st
 
     @st.cache_data(ttl=10, show_spinner=False)
     def _cached_chips(_client_id: str) -> list[Chip]:
-        # Cache key uses base_url so a second sidebar render reuses the result
         return build_chips(api_client)
 
     chips = _cached_chips(api_client.base_url)
     st.markdown("---")
-    st.caption("Estado del sistema")
+    st.markdown(
+        '<div class="lasalle-status-footer-label">Estado del sistema</div>',
+        unsafe_allow_html=True,
+    )
     html = "".join(_chip_html(c) for c in chips)
     st.markdown(html, unsafe_allow_html=True)
 

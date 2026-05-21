@@ -1,25 +1,46 @@
-"""Overview view.
+"""Vista Inicio (rediseno UX fase 1).
 
-Implementa:
-  - RF-1: 4 cards (patients/admissions/radiografias/modelo) + ultimo run
-  - RF-7a: strip minimo de evaluacion (accuracy + macro-F1 + model_version)
-  - RNF-7: auto-refresh cada 30s con st.fragment sobre cards + ultimo run.
-           El strip de evaluacion vive FUERA del fragment (TTL 60s, ya cacheado)
+Pantalla de turno: una sola pregunta, "es hay algo que requiera mi
+atencion ahora?". Si no hay nada urgente, atajos a las tres tareas
+habituales (triaje, buscar paciente, clasificar radiografia).
 
-Senales independientes (CB-4):
-  - predictor_loaded de /health → chip "Modelo" + warning del bloque cards
-  - 503 en /model/evaluation → strip de evaluacion sustituido por "Reporte no disponible"
+Composicion (de arriba abajo):
+  1. Saludo + meta de turno
+  2. Barra de alerta critica - solo si hay alertas active+critical
+  3. Linea de estado (API / Modelo / Pipeline)
+  4. Actividad de hoy - 4 numeros grandes (sin cards)
+  5. Accesos rapidos - 3 page_link como bloques anchos
+
+Se descartan respecto a la version anterior (intencional):
+  - 4 KPIs totales (patients / admissions / radiografias / modelo)
+  - Strip de evaluacion del modelo
+  - Detalle del ultimo pipeline run (vive ya en "Pipeline runs")
+  - Auto-refresh con st.fragment (la pagina es mas ligera ahora;
+    el operador refresca con el navegador o con el boton "Recargar")
+
+Nota sobre "Actividad de hoy":
+La API actual NO expone un endpoint agregado de triajes por nivel
+(solo POST /triage/patients). Mientras eso no exista, los 4 numeros se
+componen con los datos derivables del endpoint `/alerts` (que SI
+distingue tres severidades: critical / high / medium) + un contador de
+runs del pipeline. Cuando exista `GET /api/v1/triage/today` se sustituye
+la composicion sin tocar el resto de la vista.
 """
 from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import streamlit as st
 
 from src.dashboard.api_client import ApiClient
-from src.dashboard.components.error_banner import (
-    CONTEXT_MODEL_EVALUATION,
-    show_api_error,
-)
+from src.dashboard.components.error_banner import show_api_error
 from src.dashboard.config import CACHE_TTL_SECONDS
+
+
+# Mismo patron que app.py: rutas absolutas para que `st.page_link`
+# enganche con las paginas registradas independientemente del cwd.
+_VIEWS_DIR = Path(__file__).resolve().parent
 
 
 api: ApiClient = st.session_state["api_client"]
@@ -35,148 +56,341 @@ def _cached_health(_base_url: str):
 
 
 @st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
-def _cached_counts(_base_url: str):
-    p, p_err = api.count_patients()
-    a, a_err = api.count_admissions()
-    r, r_err = api.count_radiographies()
-    return {
-        "patients": (p, p_err),
-        "admissions": (a, a_err),
-        "radiographies": (r, r_err),
-    }
-
-
-@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
 def _cached_latest_run(_base_url: str):
     return api.latest_pipeline_run()
 
 
-@st.cache_data(ttl=60, show_spinner=False)
-def _cached_model_evaluation(_base_url: str):
-    """TTL=60s (las metricas no cambian hasta reentrenar)."""
-    return api.model_evaluation()
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
+def _cached_alerts(_base_url: str):
+    """Trae todas las alertas activas, agrupa por severidad en cliente.
+
+    El endpoint `/api/v1/alerts` devuelve un dict con `items`, `total`,
+    `generated_at`, `threshold`, `window_start`. Lo desempaquetamos aqui
+    para que el resto de la vista trabaje sobre una lista plana.
+    """
+    data, err = api.get_alerts()
+    if err is not None:
+        return {"err": err}
+    items = (data or {}).get("items", [])
+    by_sev: dict[str, int] = {"critical": 0, "high": 0, "medium": 0}
+    criticals = []
+    for alert in items:
+        sev = alert.get("severity")
+        if sev in by_sev:
+            by_sev[sev] += 1
+        if sev == "critical":
+            criticals.append(alert)
+    return {
+        "by_sev": by_sev,
+        "total": len(items),
+        "critical_items": criticals,
+        "err": None,
+    }
+
+
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
+def _cached_volume(_base_url: str) -> dict[str, int | None]:
+    """Pide los `total` de pacientes, admisiones y radiografias.
+
+    Cada endpoint sopporta `limit=1&offset=0` y devuelve `total`, asi
+    que con 3 llamadas tenemos el volumen del sistema sin paginar.
+    Si alguna falla, ese contador se devuelve como None para que la
+    UI lo pinte como '-'.
+    """
+    result: dict[str, int | None] = {"patients": None, "admissions": None, "radiographies": None}
+    p_data, p_err = api.list_patients(limit=1, offset=0)
+    if p_err is None and isinstance(p_data, dict):
+        result["patients"] = p_data.get("total")
+    a_data, a_err = api.list_admissions(limit=1, offset=0)
+    if a_err is None and isinstance(a_data, dict):
+        result["admissions"] = a_data.get("total")
+    r_data, r_err = api.list_radiographies(limit=1, offset=0)
+    if r_err is None and isinstance(r_data, dict):
+        result["radiographies"] = r_data.get("total")
+    return result
+
+
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
+def _cached_runs_today(_base_url: str) -> int | None:
+    """Cuenta los runs iniciados en las ultimas 24h (proxy de "hoy")."""
+    data, err = api.list_runs(limit=50, offset=0)
+    if err is not None:
+        return None
+    runs = (data or {}).get("items") or data or []
+    if not isinstance(runs, list):
+        return None
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    count = 0
+    for run in runs:
+        started = run.get("started_at") if isinstance(run, dict) else None
+        if not started:
+            continue
+        # ISO 8601 con o sin 'Z'
+        try:
+            ts = datetime.fromisoformat(started.replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            if ts >= cutoff:
+                count += 1
+        except ValueError:
+            continue
+    return count
 
 
 # ---------------------------------------------------------------------------
-# Render
+# Pequenas utilidades de render (HTML inline minimo)
 # ---------------------------------------------------------------------------
 
-st.title("Resumen del sistema")
-st.caption(
-    "Vision general del estado actual del hospital. Se actualiza "
-    "automaticamente cada 30 segundos."
-)
+def _greeting(now: datetime) -> str:
+    h = now.hour
+    if 6 <= h < 13:
+        return "Buenos dias"
+    if 13 <= h < 21:
+        return "Buenas tardes"
+    return "Buenas noches"
 
 
-@st.fragment(run_every=30)
-def _render_live_block() -> None:
-    """Cards + ultimo run. Se re-ejecuta cada 30s sin recargar el resto."""
-    counts = _cached_counts(api.base_url)
-    health_data, health_err = _cached_health(api.base_url)
+_MONTHS_ES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+]
 
-    # --- 4 cards ---
-    cols = st.columns(4)
-    p, p_err = counts["patients"]
-    cols[0].metric(
-        "Pacientes",
-        value=f"{p:,}" if p_err is None and p is not None else "—",
-        help="Pacientes totales en MongoDB",
+
+def _format_date_es(now: datetime) -> str:
+    """%d de %B%-style date en castellano sin depender del locale del SO."""
+    return f"{now.day} de {_MONTHS_ES[now.month - 1]}"
+
+
+def _shift_label(now: datetime) -> str:
+    h = now.hour
+    if 7 <= h < 15:
+        return "turno manana"
+    if 15 <= h < 23:
+        return "turno tarde"
+    return "turno noche"
+
+
+def _render_critical_bar(criticals: list[dict]) -> None:
+    """Barra horizontal coral si hay alertas criticas activas."""
+    n = len(criticals)
+    if n == 0:
+        return
+    # Resumen de los pacientes/IDs implicados (top 3 para no desbordar)
+    summary_parts = []
+    for alert in criticals[:3]:
+        body = (alert.get("body") or alert.get("message") or "").strip()
+        # Cortar antes del primer guion largo si existe (formato del backend)
+        head = body.split(" - ")[0].split(" — ")[0].strip()
+        if head:
+            summary_parts.append(head)
+    summary = " · ".join(summary_parts) if summary_parts else "ver detalle en Alertas"
+    if n > 3:
+        summary += f" · y {n - 3} mas"
+
+    plural = "alertas criticas" if n != 1 else "alerta critica"
+    st.markdown(
+        f'<div class="lasalle-critical-bar" role="alert">'
+        f'<span class="lcb-dot" aria-hidden="true"></span>'
+        f'<div class="lcb-msg">'
+        f'<strong>{n} {plural}</strong>'
+        f'<span class="lcb-detail">{summary}</span>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
     )
 
-    a, a_err = counts["admissions"]
-    cols[1].metric(
-        "Admisiones",
-        value=f"{a:,}" if a_err is None and a is not None else "—",
-        help="Admisiones embebidas en pacientes",
-    )
 
-    r, r_err = counts["radiographies"]
-    cols[2].metric(
-        "Radiografias",
-        value=f"{r:,}" if r_err is None and r is not None else "—",
-        help="Radiografias en el bucket MinIO",
-    )
+def _render_status_line(
+    health_err, predictor_loaded: bool | None,
+    run_data: dict | None, run_err,
+) -> None:
+    """Una linea con 3 chips: API / Modelo / Pipeline."""
 
+    # API chip
     if health_err is not None:
-        cols[3].metric("Modelo", value="?", help="API no disponible")
+        api_cls, api_val = "fail", "caida"
     else:
-        loaded = bool(health_data and health_data.get("predictor_loaded"))
-        cols[3].metric(
-            "Modelo",
-            value="Cargado" if loaded else "No cargado",
-            help="Indicador de `predictor_loaded` en /api/v1/health",
-        )
+        api_cls, api_val = "", "operativo"
 
-    # Mostrar errores agregados (si los hay) — sin spammar 1 banner por count
-    errs = [e for _, e in counts.values() if e is not None]
-    if errs and health_err is None:
-        show_api_error(errs[0], context="")
+    # Modelo chip
+    if health_err is not None:
+        model_cls, model_val = "warn", "desconocido"
+    elif predictor_loaded:
+        model_cls, model_val = "", "cargado"
+    else:
+        model_cls, model_val = "fail", "no cargado"
 
-    # --- Ultimo run ---
-    st.subheader("Ultimo pipeline run")
-    run_data, run_err = _cached_latest_run(api.base_url)
+    # Pipeline chip
     if run_err is not None:
-        if run_err.kind == "not_found":
-            st.info("Aun no hay runs registrados.")
+        if getattr(run_err, "kind", None) == "not_found":
+            pipe_cls, pipe_val = "warn", "sin runs"
         else:
-            show_api_error(run_err, context="")
+            pipe_cls, pipe_val = "warn", "desconocido"
     else:
-        run_cols = st.columns(5)
-        run_cols[0].markdown(f"**Status**\n\n`{run_data.get('status', '?')}`")
-        run_cols[1].markdown(f"**Trigger**\n\n`{run_data.get('trigger_type', '?')}`")
-        started = run_data.get("started_at") or "—"
-        if isinstance(started, str) and len(started) > 19:
-            started = started[:19].replace("T", " ")
-        run_cols[2].markdown(f"**Inicio**\n\n`{started}`")
-        run_cols[3].metric("Procesados", value=run_data.get("records_processed", 0))
-        run_cols[4].metric("Rechazados", value=run_data.get("records_rejected", 0))
+        status = (run_data or {}).get("status", "")
+        if status == "success":
+            pipe_cls, pipe_val = "", "ok"
+        elif status == "failed":
+            pipe_cls, pipe_val = "fail", "fallo"
+        elif status == "running":
+            pipe_cls, pipe_val = "warn", "en curso"
+        else:
+            pipe_cls, pipe_val = "warn", str(status) or "desconocido"
 
-        if run_data.get("status") == "failed" and run_data.get("error_message"):
-            with st.expander("Ver error del run"):
-                st.code(run_data["error_message"])
-
-
-_render_live_block()
+    st.markdown(
+        f'<div class="lasalle-status-line">'
+        f'<span class="lsl-chip"><span class="lsl-dot {api_cls}"></span>'
+        f'<span class="lsl-label">API</span><span class="lsl-val">{api_val}</span></span>'
+        f'<span class="lsl-chip"><span class="lsl-dot {model_cls}"></span>'
+        f'<span class="lsl-label">Modelo</span><span class="lsl-val">{model_val}</span></span>'
+        f'<span class="lsl-chip"><span class="lsl-dot {pipe_cls}"></span>'
+        f'<span class="lsl-label">Pipeline</span><span class="lsl-val">{pipe_val}</span></span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ---------------------------------------------------------------------------
-# RF-7a: strip minimo de evaluacion del modelo
-# Fuera del fragment porque las metricas NO cambian hasta reentrenar.
+# Render principal
 # ---------------------------------------------------------------------------
 
-st.markdown("---")
-st.subheader("Evaluacion del modelo")
-st.caption(
-    "Resumen sobre el split de test. El detalle completo (matriz de "
-    "confusion + recall por clase) esta en la vista Clasificador."
+now = datetime.now()
+shift = _shift_label(now)
+
+# Cabecera
+st.markdown(
+    f'<div class="lasalle-greeting">'
+    f'<h1>{_greeting(now)}</h1>'
+    f'<div class="lg-meta">{_format_date_es(now)} · {shift} · '
+    f'<span class="mono">{now.strftime("%H:%M")}</span></div>'
+    f'</div>',
+    unsafe_allow_html=True,
 )
 
-eval_data, eval_err = _cached_model_evaluation(api.base_url)
-if eval_err is not None:
-    show_api_error(eval_err, context=CONTEXT_MODEL_EVALUATION)
-else:
-    eval_cols = st.columns(3)
-    eval_cols[0].metric(
-        "Accuracy",
-        value=f"{eval_data.get('accuracy', 0):.3f}",
-    )
-    eval_cols[1].metric(
-        "Macro-F1",
-        value=f"{eval_data.get('macro_f1', 0):.3f}",
-    )
-    eval_cols[2].markdown(
-        f"**Version del modelo**\n\n`{eval_data.get('model_version', '?')}`"
+# Linea discreta de volumen del sistema. NO son KPIs grandes — es
+# contexto secundario para que al entrar se vea "el sistema esta vivo
+# y tiene N datos cargados". Si algun endpoint falla, ese contador
+# aparece como '-' (no rompe la vista).
+volume = _cached_volume(api.base_url)
+
+
+def _fmt_volume_number(n: int | None) -> str:
+    if n is None:
+        return "—"
+    # Separador de miles tipo es-ES, sin depender del locale del SO
+    return f"{n:,}".replace(",", ".")
+
+
+st.markdown(
+    f'<div class="lasalle-volume-line">'
+    f'<span class="mono">{_fmt_volume_number(volume["patients"])}</span> pacientes '
+    f'<span class="lvl-sep">·</span> '
+    f'<span class="mono">{_fmt_volume_number(volume["admissions"])}</span> admisiones '
+    f'<span class="lvl-sep">·</span> '
+    f'<span class="mono">{_fmt_volume_number(volume["radiographies"])}</span> radiografias'
+    f'</div>',
+    unsafe_allow_html=True,
+)
+
+# Datos para la barra y los chips
+alerts_payload = _cached_alerts(api.base_url)
+health_data, health_err = _cached_health(api.base_url)
+run_data, run_err = _cached_latest_run(api.base_url)
+predictor_loaded = (
+    bool(health_data and health_data.get("predictor_loaded"))
+    if health_err is None
+    else None
+)
+
+# 1) Barra critica - solo si la API responde y hay criticas
+if alerts_payload.get("err") is None:
+    _render_critical_bar(alerts_payload.get("critical_items", []))
+elif alerts_payload["err"].kind != "network":
+    # Errores duros del endpoint /alerts: se muestran como banner
+    # (errores de red ya los reportan los chips de estado)
+    show_api_error(alerts_payload["err"], context="")
+
+# 2) Linea de estado
+_render_status_line(health_err, predictor_loaded, run_data, run_err)
+
+
+# 3) Actividad de hoy ------------------------------------------------------
+
+st.markdown(
+    '<div class="lasalle-section-label">Actividad de hoy</div>',
+    unsafe_allow_html=True,
+)
+
+by_sev = alerts_payload.get("by_sev", {"critical": 0, "high": 0, "medium": 0})
+runs_24h = _cached_runs_today(api.base_url)
+
+
+def _stat_card_html(label: str, value: object, mod: str = "") -> str:
+    """Card compacta con label uppercase + numero grande. `mod` aplica
+    color al numero (critical / warn / muted)."""
+    cls = f"lasalle-stat-card {mod}".strip()
+    val = value if value is not None else "—"
+    return (
+        f'<div class="{cls}">'
+        f'<div class="lsc-label">{label}</div>'
+        f'<div class="lsc-value">{val}</div>'
+        f'</div>'
     )
 
 
-# ---------------------------------------------------------------------------
-# Boton de recarga manual
-# ---------------------------------------------------------------------------
+_n_crit  = by_sev.get("critical", 0)
+_n_high  = by_sev.get("high", 0)
+_n_med   = by_sev.get("medium", 0)
+_n_runs  = runs_24h
 
-st.markdown("---")
-if st.button("Recargar"):
-    _cached_counts.clear()
+a_cols = st.columns(4)
+with a_cols[0]:
+    st.markdown(
+        _stat_card_html("Alertas criticas", _n_crit, "critical" if _n_crit else "muted"),
+        unsafe_allow_html=True,
+    )
+with a_cols[1]:
+    st.markdown(
+        _stat_card_html("Alertas altas", _n_high, "critical" if _n_high else "muted"),
+        unsafe_allow_html=True,
+    )
+with a_cols[2]:
+    st.markdown(
+        _stat_card_html("Alertas medias", _n_med, "warn" if _n_med else "muted"),
+        unsafe_allow_html=True,
+    )
+with a_cols[3]:
+    st.markdown(
+        _stat_card_html("Pipeline runs (24h)", _n_runs, "muted"),
+        unsafe_allow_html=True,
+    )
+
+
+# 4) Accesos rapidos -------------------------------------------------------
+
+st.markdown(
+    '<div class="lasalle-section-label">Accesos rapidos</div>',
+    unsafe_allow_html=True,
+)
+st.markdown('<div class="lasalle-quick-actions">', unsafe_allow_html=True)
+
+qa_cols = st.columns(3)
+with qa_cols[0]:
+    st.page_link(str(_VIEWS_DIR / "triage.py"),     label="Nuevo triaje")
+with qa_cols[1]:
+    st.page_link(str(_VIEWS_DIR / "patients.py"),   label="Buscar paciente")
+with qa_cols[2]:
+    st.page_link(str(_VIEWS_DIR / "classifier.py"), label="Clasificar radiografia")
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+
+# 5) Recargar (sutil, al final) -------------------------------------------
+
+st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
+if st.button("Recargar", use_container_width=False):
     _cached_health.clear()
     _cached_latest_run.clear()
-    _cached_model_evaluation.clear()
+    _cached_alerts.clear()
+    _cached_runs_today.clear()
     st.rerun()
