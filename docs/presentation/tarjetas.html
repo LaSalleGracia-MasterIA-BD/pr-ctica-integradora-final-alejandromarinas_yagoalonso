@@ -520,7 +520,7 @@
       <div class="body">
         <ul>
           <li>Mira una radiografía y devuelve <b>3 probabilidades</b>: Normal / Neumonía / COVID-19.</li>
-          <li><b>Hecha por nosotros</b>, sin coger un modelo preentrenado (lo que enseña Jordi).</li>
+          <li><b>Hecha por nosotros</b>, sin coger un modelo preentrenado. Arquitectura clásica: convolucionales + clasificador denso.</li>
           <li>Pesa <b>21 MB</b> · responde en <b>&lt;50 ms</b> · arranca con la API.</li>
         </ul>
       </div>
@@ -665,7 +665,7 @@
       <span class="label">Si ML</span>
       <div class="body">
         <ul>
-          <li>Del temario: <b>DecisionTree</b> / <b>RandomForest</b> de <code>scikit-learn</code> (Jordi). Árbol de decisión = reglas IF-THEN aprendidas de datos.</li>
+          <li>Alternativa estándar: <b>DecisionTree</b> / <b>RandomForest</b> de <code>scikit-learn</code>. Un árbol de decisión equivale a reglas IF-THEN aprendidas de datos.</li>
         </ul>
       </div>
     </div>
@@ -936,7 +936,7 @@
 
     <div class="qa-block">
       <p class="q">¿Por qué CNN custom y no transfer learning?</p>
-      <p class="a">3 razones: alineación literal con <b>Bloque 6</b> del Master · modelo dentro del techo de <b>50 MB</b> · sin dependencias externas en arranque. Transfer learning es trabajo futuro. <b>ADR-005</b>.</p>
+      <p class="a">3 razones: <b>CNN es el modelo estándar para imágenes</b> · modelo dentro del techo de <b>50 MB</b> (transfer learning pesaría 100-200 MB) · sin dependencias externas en arranque (no descarga pesos preentrenados). Transfer learning queda como trabajo futuro. <b>ADR-005</b>.</p>
     </div>
 
     <div class="qa-block">
@@ -992,7 +992,7 @@
 
     <div class="qa-block trampa">
       <p class="q">¿Qué modelo del temario habríais usado si tuvierais dataset?</p>
-      <p class="a"><b>DecisionTreeClassifier</b> o <b>RandomForestClassifier</b> de <code>scikit-learn</code> — lo que enseña Jordi en Aprenentatge Automatic. Es el modelo natural para clasificación multiclase sobre datos tabulares. Y elegante: un árbol de decisión es <b>matemáticamente equivalente a un conjunto de reglas IF-THEN</b>, solo que los umbrales se aprenden de datos en vez de definirlos nosotros.</p>
+      <p class="a"><b>DecisionTreeClassifier</b> o <b>RandomForestClassifier</b> de <code>scikit-learn</code>. Es el modelo estándar para clasificación multiclase sobre datos tabulares. Y elegante: un árbol de decisión es <b>matemáticamente equivalente a un conjunto de reglas IF-THEN</b>, solo que los umbrales se aprenden de datos en vez de definirlos nosotros.</p>
     </div>
 
     <div class="qa-block trampa">

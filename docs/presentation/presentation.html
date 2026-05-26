@@ -1243,7 +1243,7 @@
             <div class="corners"><span class="c tl"></span><span class="c tr"></span><span class="c bl"></span><span class="c br"></span></div>
           </div>
           <ul style="font-size: 0.72em; line-height: 1.4;">
-            <li><strong>Hecha por nosotros</strong>, sin coger un modelo preentrenado. Arquitectura que enseña Jordi: convolucionales + clasificador.</li>
+            <li><strong>Hecha por nosotros</strong>, sin coger un modelo preentrenado. Arquitectura clasica: capas convolucionales + clasificador denso.</li>
             <li>Pesa <strong>21 MB</strong> en disco · arranca con la API · responde en <strong>&lt;50 ms</strong>.</li>
             <li>Aprende sobre <strong>12.120</strong> radiografias · validamos con <strong>1.515</strong> · y guardamos otras <strong>1.515</strong> para el examen final.</li>
             <li>Clasifica en 3: <strong>Normal · Neumonia · COVID-19</strong>. Devuelve probabilidad, no veredicto.</li>
@@ -1403,7 +1403,7 @@
           <div style="margin-top: 12px; padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 6px;">
             <div style="font-size: 0.5em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px;">Modelo del temario si hubiera dataset</div>
             <p style="margin: 0; font-size: 0.75em; color: var(--text);">
-              <code>DecisionTreeClassifier</code> o <code>RandomForestClassifier</code> de scikit-learn (Aprenentatge Automatic). Un arbol de decision es <em>equivalente</em> a un conjunto de reglas IF-THEN, solo que los umbrales se aprenden de datos.
+              <code>DecisionTreeClassifier</code> o <code>RandomForestClassifier</code> de scikit-learn. Un arbol de decision es <em>equivalente</em> a un conjunto de reglas IF-THEN, solo que los umbrales se aprenden de datos.
             </p>
           </div>
         </div>
