@@ -1,12 +1,12 @@
-"""Watch an incoming directory and trigger the pipeline when both CSVs arrive.
+"""Vigila un directorio de entrada y dispara el pipeline cuando llegan ambos CSVs.
 
-The watcher is intentionally simple: it waits until both `patients.csv` and
-`admissions.csv` are present in the incoming dir, calls the provided callback
-once with their paths, and moves the files into `incoming/processed/` so the
-next batch starts from a clean slate.
+El watcher es deliberadamente simple: espera hasta que `patients.csv` y
+`admissions.csv` esten presentes en el directorio de entrada, llama una
+unica vez al callback proporcionado con sus paths, y mueve los archivos a
+`incoming/processed/` para que el siguiente batch arranque limpio.
 
-This powers the automated trigger side of RF-7 (the other side being a manual
-API endpoint provided by T10).
+Esto cubre el lado del trigger automatico de RF-7 (el otro lado es un
+endpoint manual de la API provisto por T10).
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ OnReadyCallback = Callable[[Path, Path], None]
 
 
 class IncomingFilesWatcher:
-    """Watch `incoming_dir` for the arrival of patients+admissions CSVs."""
+    """Vigila `incoming_dir` esperando la llegada de los CSVs de pacientes+ingresos."""
 
     def __init__(
         self,
@@ -59,7 +59,7 @@ class IncomingFilesWatcher:
         self._observer.start()
         logger.info("Watching %s for incoming CSVs", self._incoming_dir)
 
-        # Trigger an initial check in case the files were already there before start
+        # Disparar un chequeo inicial por si los archivos ya estaban antes del start
         self._check_and_trigger()
 
     def stop(self) -> None:

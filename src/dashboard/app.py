@@ -1,4 +1,4 @@
-"""Streamlit entrypoint for the hospital dashboard.
+"""Entrypoint de Streamlit para el dashboard del hospital.
 
 Navegacion en dos bloques (rediseno UX fase 1):
 
@@ -51,10 +51,11 @@ if "api_client" not in st.session_state:
     )
 
 
-# Resolve the views/ directory relative to this file so navigation works
-# both inside the container (/app/src/dashboard/...) and from anywhere
-# else if someone runs `streamlit run src/dashboard/app.py`. Mismo
-# patron que el `app.py` anterior — robusto frente a cwd arbitrario.
+# Resuelve la ruta a views/ relativa a este fichero para que la
+# navegacion funcione tanto dentro del contenedor
+# (/app/src/dashboard/...) como desde cualquier otro sitio si alguien
+# ejecuta `streamlit run src/dashboard/app.py`. Mismo patron que el
+# `app.py` anterior — robusto frente a cwd arbitrario.
 #
 # `st.navigation(dict)` renderiza el nombre de cada grupo como cabecera
 # en la sidebar (Streamlit >= 1.36).

@@ -1,13 +1,12 @@
-"""Clean hospital records: trim whitespace, remove duplicates.
+"""Limpia registros hospitalarios: recorta whitespace, elimina duplicados.
 
-The cleaner operates on rows that have already passed validation (T7). It is
-intentionally conservative: it never modifies business fields, only normalizes
-obvious artefacts (trailing whitespace) and collapses duplicates by business
-key.
+El cleaner opera sobre filas que ya pasaron validacion (T7). Es deliberadamente
+conservador: nunca modifica campos de negocio, solo normaliza artefactos
+obvios (whitespace al final) y colapsa duplicados por clave de negocio.
 
-Dedup note: when multiple rows share the same key tuple, which one survives
-is not guaranteed. The guarantee is uniqueness of the key, not preservation
-of insertion order.
+Nota sobre dedup: cuando varias filas comparten la misma tupla de clave,
+cual sobrevive no esta garantizado. La garantia es la unicidad de la clave,
+no la preservacion del orden de insercion.
 """
 from __future__ import annotations
 
@@ -28,9 +27,9 @@ class DataCleaner:
         return cleaned
 
     def clean_admissions(self, df: DataFrame) -> DataFrame:
-        # A patient can have multiple admissions; dedup only when the same
-        # patient has the same date and department — those are almost certainly
-        # duplicates rather than two distinct admissions.
+        # Un paciente puede tener multiples ingresos; deduplicar solo cuando el
+        # mismo paciente tenga la misma fecha y departamento — casi seguro son
+        # duplicados, no dos ingresos distintos.
         cleaned = (
             df.withColumn("department", F.trim(F.col("department")))
               .dropDuplicates(

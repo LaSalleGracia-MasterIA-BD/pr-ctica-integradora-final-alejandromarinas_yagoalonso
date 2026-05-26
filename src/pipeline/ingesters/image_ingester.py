@@ -1,4 +1,4 @@
-"""Ingest chest X-ray PNG images into MinIO with extracted metadata."""
+"""Ingesta imagenes PNG de radiografias de torax a MinIO con metadatos extraidos."""
 from __future__ import annotations
 
 import re
@@ -13,8 +13,8 @@ logger = get_logger(__name__)
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
-# Files are expected to follow `{patient_external_id}_{suffix}.png`
-# where patient_external_id is HOSP-NNNNNN.
+# Se espera que los archivos sigan `{patient_external_id}_{suffix}.png`
+# donde patient_external_id es HOSP-NNNNNN.
 PATIENT_PREFIX_PATTERN = re.compile(r"^(HOSP-\d{6})_")
 
 
@@ -24,7 +24,7 @@ class IngestedImage:
     original_filename: str
     minio_object_key: str
     file_size_bytes: int
-    ingested_at: str  # ISO timestamp in UTC
+    ingested_at: str  # timestamp ISO en UTC
 
 
 class ImageIngester:
@@ -33,7 +33,7 @@ class ImageIngester:
         self._bucket = bucket
 
     def ingest_directory(self, directory: Path) -> list[IngestedImage]:
-        """Upload every valid PNG in `directory` to MinIO and return metadata."""
+        """Sube cada PNG valido en `directory` a MinIO y devuelve metadatos."""
         path = Path(directory)
         if not path.exists():
             raise FileNotFoundError(f"Image directory does not exist: {path}")
@@ -58,11 +58,11 @@ class ImageIngester:
         return ingested
 
     def ingest_file(self, image_path: Path) -> IngestedImage | None:
-        """Ingest a single PNG. Returns None if invalid/corrupt/unsupported.
+        """Ingesta un unico PNG. Devuelve None si es invalido/corrupto/no soportado.
 
-        Exposed so callers that already know which files to sync (e.g. the
-        bootstrap, which skips images already present in MinIO) can avoid
-        re-scanning an entire directory.
+        Se expone para que los callers que ya saben que archivos sincronizar
+        (p.ej. el bootstrap, que omite imagenes ya presentes en MinIO) puedan
+        evitar re-escanear un directorio completo.
         """
         self._minio.ensure_bucket(self._bucket)
         return self._ingest_one(Path(image_path))
@@ -81,7 +81,7 @@ class ImageIngester:
             return None
         patient_id = match.group(1)
 
-        # Validate PNG signature — CB-2: corrupt images must not crash the run.
+        # Validar firma PNG — CB-2: las imagenes corruptas no deben romper el run.
         try:
             with image_path.open("rb") as f:
                 header = f.read(len(PNG_SIGNATURE))
@@ -93,15 +93,15 @@ class ImageIngester:
             logger.warning("Skipping corrupt/invalid PNG: %s", image_path.name)
             return None
 
-        # Deterministic object key — re-uploading the same file is idempotent
-        # because MinIO overwrites with the same key.
+        # Object key determinista — re-subir el mismo archivo es idempotente
+        # porque MinIO sobrescribe con la misma key.
         object_key = f"{patient_id}/{image_path.name}"
         file_size = image_path.stat().st_size
         now = datetime.now(timezone.utc)
 
         try:
             self._minio.upload_file(self._bucket, object_key, image_path)
-        except Exception as exc:  # pragma: no cover - depends on MinIO being up
+        except Exception as exc:  # pragma: no cover - depende de que MinIO este arriba
             logger.error("Failed to upload %s: %s", image_path.name, exc)
             return None
 

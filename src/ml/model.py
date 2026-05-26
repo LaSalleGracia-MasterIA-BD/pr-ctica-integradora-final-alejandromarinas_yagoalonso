@@ -1,14 +1,14 @@
-"""CNN architecture for the radiography classifier.
+"""Arquitectura CNN para el clasificador de radiografias.
 
-The architecture follows the literal pattern taught in the Master's
-Block 6 (Conv2D + MaxPooling2D + Dropout + Flatten + Dense + softmax).
-See ADR-005 for the rationale of choosing custom-CNN over transfer
-learning.
+La arquitectura sigue el patron literal ensenado en el Bloque 6 del Master
+(Conv2D + MaxPooling2D + Dropout + Flatten + Dense + softmax).
+Ver ADR-005 para la justificacion de elegir una CNN custom frente a
+transfer learning.
 
-`padding="same"` on the Conv2D layers is mandatory: it guarantees that
-spatial reduction only comes from the MaxPool2x2 layers, producing the
-clean cascade 224 → 112 → 56 → 28 → 14 referenced in the design and
-in the tests of `tests/ml/test_model.py`.
+`padding="same"` en las capas Conv2D es obligatorio: garantiza que la
+reduccion espacial proceda unicamente de las capas MaxPool2x2, produciendo
+la cascada limpia 224 -> 112 -> 56 -> 28 -> 14 referenciada en el design
+y en los tests de `tests/ml/test_model.py`.
 """
 from __future__ import annotations
 
@@ -20,20 +20,20 @@ def build_model(
     dropout_dense: float = 0.3,
     learning_rate: float = 1e-3,
 ):
-    """Build and compile the radiography classification CNN.
+    """Construye y compila la CNN de clasificacion de radiografias.
 
     Args:
-        num_classes: softmax output size.
-        input_shape: HWC input shape.
-        dropout_conv: dropout applied after the last conv block, before
-            Flatten. Default 0.5 matches the original design. Lower
-            values (e.g. 0.3) help convergence when training does not
-            reach a useful minimum with LR alone.
-        dropout_dense: dropout between the two Dense layers. Default 0.3.
-        learning_rate: Adam optimizer LR. Default 1e-3.
+        num_classes: tamano de la salida softmax.
+        input_shape: shape HWC de entrada.
+        dropout_conv: dropout aplicado tras el ultimo bloque conv, antes de
+            Flatten. El default 0.5 coincide con el diseno original. Valores
+            mas bajos (p.ej. 0.3) ayudan a la convergencia cuando el
+            entrenamiento no alcanza un minimo util solo con el LR.
+        dropout_dense: dropout entre las dos capas Dense. Default 0.3.
+        learning_rate: LR del optimizador Adam. Default 1e-3.
 
-    Lazy-imports TensorFlow so importing this module is cheap when only
-    the function signature is needed.
+    Hace lazy-import de TensorFlow para que importar este modulo sea barato
+    cuando solo se necesita la firma de la funcion.
     """
     from tensorflow import keras
     from tensorflow.keras import layers

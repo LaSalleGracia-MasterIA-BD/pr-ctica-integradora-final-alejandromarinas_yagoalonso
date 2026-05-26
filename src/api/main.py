@@ -1,8 +1,8 @@
-"""FastAPI application for the hospital system.
+"""Aplicacion FastAPI para el sistema hospitalario.
 
-`build_app` is the testable factory: it accepts the MongoDB name to use and
-optionally a pipeline launcher. The module-level `app` is what uvicorn imports
-in production (reads config from environment variables).
+`build_app` es la factory testeable: acepta el nombre de MongoDB a usar y
+opcionalmente un pipeline launcher. El `app` a nivel de modulo es el que
+uvicorn importa en produccion (lee la configuracion de variables de entorno).
 """
 from __future__ import annotations
 
@@ -32,18 +32,18 @@ logger = logging.getLogger(__name__)
 
 API_VERSION = "0.1.0"
 
-# Sentinel that distinguishes "use the production default launcher" from
-# "explicitly disable the launcher" (used by tests that don't want to spin
-# up Spark in BackgroundTasks).
+# Sentinela que distingue "usar el launcher por defecto de produccion" de
+# "deshabilitar explicitamente el launcher" (usado por tests que no quieren
+# levantar Spark en BackgroundTasks).
 _USE_DEFAULT_LAUNCHER = object()
 
 
 def _try_load_predictor():
-    """Best-effort: returns a Predictor or None if the artefact is missing.
+    """Best-effort: devuelve un Predictor o None si falta el artefacto.
 
-    Importing Predictor lazily so the API still imports cleanly even if
-    tensorflow is unavailable in the current environment (e.g. light test
-    runs that don't need the model).
+    Importa Predictor de forma lazy para que la API se importe correctamente
+    incluso si tensorflow no esta disponible en el entorno actual (por ejemplo,
+    ejecuciones ligeras de tests que no necesitan el modelo).
     """
     try:
         from src.ml.predictor import ModelNotAvailableError, Predictor
@@ -78,14 +78,15 @@ def build_app(
         port=int(os.environ.get("MONGO_PORT", "27017")),
         db_name=db_name,
     )
-    # SQLite owns pipeline_runs + data_quality_summary (ADR-004). The reader
-    # is constructed lazily so test apps can override it via app.state.
+    # SQLite es duenia de pipeline_runs + data_quality_summary (ADR-004). El
+    # reader se construye de forma lazy para que los tests puedan sobreescribirlo
+    # via app.state.
     sql_reader = get_sql_reader_from_env()
 
-    # Writer + MinIO client are needed by the classify endpoint, which both
-    # persists to Mongo and downloads bytes from MinIO. They are best-effort:
-    # if the deployment lacks those env vars the app still boots and the
-    # affected endpoints fail with a clear error.
+    # El writer + cliente MinIO son necesarios para el endpoint classify, que
+    # tanto persiste en Mongo como descarga bytes de MinIO. Son best-effort:
+    # si el despliegue carece de esas variables de entorno la app aun arranca
+    # y los endpoints afectados fallan con un error claro.
     try:
         mongo_writer = get_mongo_writer_from_env(db_name=db_name)
     except Exception as exc:  # pragma: no cover
@@ -111,12 +112,12 @@ def build_app(
                     mongo_writer.close()
                 except Exception:
                     pass
-            # MinIO client and Predictor have no explicit close.
+            # El cliente MinIO y el Predictor no tienen close explicito.
 
     app = FastAPI(
         title="laSalle Hospital API",
         version=API_VERSION,
-        description="REST API to consult hospital data and trigger the ETL pipeline.",
+        description="API REST para consultar datos hospitalarios y disparar el pipeline ETL.",
         lifespan=lifespan,
     )
 
@@ -151,5 +152,5 @@ def build_app(
     return app
 
 
-# ASGI entrypoint for uvicorn: `uvicorn src.api.main:app`
+# Entrypoint ASGI para uvicorn: `uvicorn src.api.main:app`
 app = build_app()

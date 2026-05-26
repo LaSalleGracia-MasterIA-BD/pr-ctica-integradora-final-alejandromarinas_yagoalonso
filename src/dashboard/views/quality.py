@@ -1,4 +1,4 @@
-"""Calidad de datos view.
+"""Vista Calidad de datos.
 
 RF-2: muestra el ultimo `quality-summary` por dimension + grafico
 del historico de `rejection_rate` por dimension a lo largo de los runs.

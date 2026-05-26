@@ -1,20 +1,20 @@
-"""Generate the evaluation report for the radiography classifier.
+"""Genera el informe de evaluacion del clasificador de radiografias.
 
-Produces:
-  * `metrics.json` — machine-readable metrics for downstream automation
-  * `confusion_matrix.png` — heatmap with counts
-  * `learning_curves.png` — loss / accuracy per epoch
-  * `report.md` — human-readable report with the **clinical analysis**
-    that the project requires (CA-3)
+Produce:
+  * `metrics.json` — metricas legibles por maquina para automatizacion downstream
+  * `confusion_matrix.png` — heatmap con conteos
+  * `learning_curves.png` — loss / accuracy por epoch
+  * `report.md` — informe legible por humanos con el **analisis clinico**
+    que requiere el proyecto (CA-3)
 
-All metrics are computed on the **test split**. The validation split is
-only used during training (EarlyStopping, ModelCheckpoint, hyperparam
-tuning) — see the regla estricta documented in train.py.
+Todas las metricas se calculan sobre el **split de test**. El split de
+validacion solo se usa durante el entrenamiento (EarlyStopping, ModelCheckpoint,
+tuning de hiperparametros) — ver la regla estricta documentada en train.py.
 
-Decision rule (Feature 16, ADR-010): the report's primary metrics apply
-the COVID-threshold rule from the predictor (`covid_threshold_0.35`),
-which is the rule actually served by the API. The argmax baseline is
-preserved under `comparison_argmax` for traceability.
+Regla de decision (Feature 16, ADR-010): las metricas primarias del informe
+aplican la regla del umbral COVID del predictor (`covid_threshold_0.35`),
+que es la regla efectivamente servida por la API. El baseline argmax se
+conserva bajo `comparison_argmax` para trazabilidad.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 def _collect_probs(model, test_dataset) -> tuple[np.ndarray, np.ndarray]:
-    """Run inference over the test dataset and return (y_true, probs)."""
+    """Ejecuta inferencia sobre el dataset de test y devuelve (y_true, probs)."""
     y_true_chunks: list[np.ndarray] = []
     probs_chunks: list[np.ndarray] = []
     for batch_x, batch_y in test_dataset:
@@ -43,10 +43,10 @@ def _collect_probs(model, test_dataset) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _apply_threshold_rule(probs: np.ndarray) -> np.ndarray:
-    """Apply the same decision rule as Predictor.predict.
+    """Aplica la misma regla de decision que Predictor.predict.
 
-    if P(COVID-19) >= COVID_THRESHOLD -> predicted = COVID-19
-    else                               -> argmax(Normal, Pneumonia)
+    si P(COVID-19) >= COVID_THRESHOLD -> predicho = COVID-19
+    si no                              -> argmax(Normal, Pneumonia)
     """
     covid_idx = CLASSES.index(COVID_CLASS)
     non_covid_idx = [i for i in range(len(CLASSES)) if i != covid_idx]
@@ -61,13 +61,13 @@ def _apply_threshold_rule(probs: np.ndarray) -> np.ndarray:
 
 
 def _collect_predictions(model, test_dataset) -> tuple[np.ndarray, np.ndarray]:
-    """Backward-compatible API: returns (y_true, y_pred) under the threshold rule."""
+    """API retrocompatible: devuelve (y_true, y_pred) bajo la regla del umbral."""
     y_true, probs = _collect_probs(model, test_dataset)
     return y_true, _apply_threshold_rule(probs)
 
 
 def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, Any]:
-    """Aggregate accuracy, macro-F1, per-class P/R/F1, and confusion matrix."""
+    """Agrega accuracy, macro-F1, P/R/F1 por clase y matriz de confusion."""
     from sklearn.metrics import (
         accuracy_score,
         classification_report,
@@ -104,7 +104,7 @@ def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, Any]:
 
 
 def _save_confusion_matrix_png(cm: list[list[int]], output_path: Path) -> None:
-    """Render the confusion matrix as a heatmap PNG."""
+    """Renderiza la matriz de confusion como heatmap PNG."""
     import matplotlib.pyplot as plt
 
     cm_np = np.asarray(cm)
@@ -117,7 +117,7 @@ def _save_confusion_matrix_png(cm: list[list[int]], output_path: Path) -> None:
     ax.set_xlabel("Predicted")
     ax.set_ylabel("True")
     ax.set_title("Confusion matrix (test split)")
-    # annotate cells
+    # anotar celdas
     for i in range(len(CLASSES)):
         for j in range(len(CLASSES)):
             ax.text(
@@ -132,7 +132,7 @@ def _save_confusion_matrix_png(cm: list[list[int]], output_path: Path) -> None:
 
 
 def _save_learning_curves_png(history: dict[str, list[float]], output_path: Path) -> None:
-    """Render training curves (loss + accuracy, train vs val) as a PNG."""
+    """Renderiza las curvas de entrenamiento (loss + accuracy, train vs val) como PNG."""
     import matplotlib.pyplot as plt
 
     fig, (ax_loss, ax_acc) = plt.subplots(1, 2, figsize=(10, 4))
@@ -164,7 +164,7 @@ def _render_markdown_report(
     hyperparams: dict[str, Any],
     model_version: str,
 ) -> str:
-    """Produce the human-readable Markdown report (CA-2, CA-3, CA-4)."""
+    """Produce el informe Markdown legible por humanos (CA-2, CA-3, CA-4)."""
     accuracy = metrics["accuracy"]
     macro_f1 = metrics["macro_f1"]
     per_class = metrics["per_class"]
@@ -344,10 +344,10 @@ def generate_report(
     hyperparams: dict[str, Any],
     model_version: str = "unknown",
 ) -> dict[str, Any]:
-    """Compute metrics on `test_dataset`, persist artefacts, return metrics dict.
+    """Calcula metricas en `test_dataset`, persiste artefactos, devuelve dict de metricas.
 
-    Primary metrics use the threshold decision rule (the production rule);
-    `comparison_argmax` preserves the baseline for traceability.
+    Las metricas primarias usan la regla de decision del umbral (la regla de
+    produccion); `comparison_argmax` conserva el baseline para trazabilidad.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

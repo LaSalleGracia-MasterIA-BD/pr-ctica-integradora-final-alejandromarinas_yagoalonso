@@ -1,12 +1,12 @@
-"""Discovery and split of the COVID-19 Radiography Database.
+"""Descubrimiento y split de la COVID-19 Radiography Database.
 
-The Kaggle dataset is laid out as `{class}/images/*.png` (plus a
-`masks/` subdir we ignore). We use only three of its four classes —
-`Lung_Opacity` is discarded because it does not fit the triple
-classification of the project (Normal / Pneumonia / COVID-19).
+El dataset de Kaggle esta organizado como `{class}/images/*.png` (mas un
+subdir `masks/` que ignoramos). Usamos solo tres de sus cuatro clases —
+`Lung_Opacity` se descarta porque no encaja en la clasificacion triple
+del proyecto (Normal / Pneumonia / COVID-19).
 
-The class index order in `CLASSES` is the canonical contract used by
-the model's softmax output and by the predictor; do not reorder.
+El orden de indices de clase en `CLASSES` es el contrato canonico usado
+por la salida softmax del modelo y por el predictor; no reordenar.
 """
 from __future__ import annotations
 
@@ -20,15 +20,15 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-# Mapping from the raw Kaggle folder name to our internal class label.
-# `Lung_Opacity` is deliberately absent: it gets skipped at discovery time.
+# Mapeo del nombre raw de la carpeta de Kaggle a nuestra etiqueta de clase interna.
+# `Lung_Opacity` esta deliberadamente ausente: se omite en el discovery.
 CLASS_MAP: dict[str, str] = {
     "COVID": "COVID-19",
     "Normal": "Normal",
     "Viral Pneumonia": "Pneumonia",
 }
 
-# Canonical class index → label. Used by the model softmax and the predictor.
+# Indice de clase canonico -> etiqueta. Usado por el softmax del modelo y por el predictor.
 CLASSES: list[str] = ["Normal", "Pneumonia", "COVID-19"]
 
 
@@ -38,15 +38,15 @@ DEFAULT_DATASET_PATH = Path(
 
 
 class DatasetNotFoundError(FileNotFoundError):
-    """Raised when the dataset is missing or malformed on disk."""
+    """Se lanza cuando el dataset falta o esta malformado en disco."""
 
 
 @dataclass(frozen=True)
 class Splits:
-    """Stratified train/val/test splits.
+    """Splits estratificados train/val/test.
 
-    Each element is a `(image_path, class_label)` tuple, where class_label
-    is a value from `CLASSES`.
+    Cada elemento es una tupla `(image_path, class_label)`, donde class_label
+    es un valor de `CLASSES`.
     """
     train: list[tuple[Path, str]]
     val: list[tuple[Path, str]]
@@ -61,12 +61,12 @@ def _resolve_root(root: Path | None) -> Path:
 
 
 def discover_dataset(root: Path | None = None) -> list[tuple[Path, str]]:
-    """List every classified image in the dataset.
+    """Lista todas las imagenes clasificadas en el dataset.
 
-    Returns `[(image_path, mapped_class_label)]` walking `{class}/images/*.png`
-    under `root`. Classes outside `CLASS_MAP` (notably `Lung_Opacity`) are
-    silently skipped. Raises `DatasetNotFoundError` with a pointer to the
-    runbook if the root is missing or a kept class has no `images/` dir.
+    Devuelve `[(image_path, mapped_class_label)]` recorriendo `{class}/images/*.png`
+    bajo `root`. Las clases fuera de `CLASS_MAP` (en particular `Lung_Opacity`)
+    se omiten silenciosamente. Lanza `DatasetNotFoundError` con un puntero al
+    runbook si el root falta o si una clase retenida no tiene directorio `images/`.
     """
     root = _resolve_root(root)
     if not root.exists() or not root.is_dir():
@@ -105,10 +105,10 @@ def build_splits(
     seed: int = 42,
     ratios: tuple[float, float, float] = (0.8, 0.1, 0.1),
 ) -> Splits:
-    """Stratified 80/10/10 (or custom) split by class.
+    """Split estratificado 80/10/10 (o personalizado) por clase.
 
-    Within each class the items are shuffled with the given seed and then
-    cut at the configured ratios. Deterministic for a given (items, seed).
+    Dentro de cada clase los items se barajan con la seed dada y luego
+    se cortan en los ratios configurados. Determinista para un (items, seed) dado.
     """
     if abs(sum(ratios) - 1.0) > 1e-6:
         raise ValueError(f"ratios must sum to 1.0, got {ratios}")
@@ -122,7 +122,7 @@ def build_splits(
     val: list[tuple[Path, str]] = []
     test: list[tuple[Path, str]] = []
 
-    for cls in sorted(by_class):  # sort to make ordering deterministic
+    for cls in sorted(by_class):  # ordenar para que el orden sea determinista
         bucket = list(by_class[cls])
         rng.shuffle(bucket)
         n = len(bucket)

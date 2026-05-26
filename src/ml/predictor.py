@@ -1,14 +1,14 @@
-"""Predictor: the inference-side facade of the radiography classifier.
+"""Predictor: la fachada del lado de inferencia del clasificador de radiografias.
 
-One instance is constructed at API startup (in `build_app`'s lifespan) and
-kept on `app.state.predictor` for the lifetime of the process. The
-endpoints in `src/api/routers/classify.py` call `.predict(image_bytes)`
-on it.
+Se construye una instancia al arrancar la API (en el lifespan de `build_app`)
+y se mantiene en `app.state.predictor` durante toda la vida del proceso.
+Los endpoints de `src/api/routers/classify.py` llaman a `.predict(image_bytes)`
+sobre ella.
 
-Thread-safety: TensorFlow / Keras `model.predict` has historically not
-been safe to call from multiple threads concurrently. FastAPI serves
-sync route handlers from a threadpool, so we serialise calls with a
-`threading.Lock`.
+Thread-safety: el `model.predict` de TensorFlow / Keras historicamente no
+ha sido seguro llamandolo desde multiples threads concurrentes. FastAPI
+sirve los route handlers sincronos desde un threadpool, asi que
+serializamos las llamadas con un `threading.Lock`.
 """
 from __future__ import annotations
 
@@ -35,12 +35,12 @@ DECISION_RULE = f"covid_threshold_{COVID_THRESHOLD:.2f}"
 
 
 class ModelNotAvailableError(RuntimeError):
-    """Raised when the model artefact or its meta is missing on disk."""
+    """Se lanza cuando el artefacto del modelo o su meta no estan en disco."""
 
 
 @dataclass(frozen=True)
 class Prediction:
-    """The structured result of a single inference."""
+    """El resultado estructurado de una inferencia."""
     predicted_class: str
     probabilities: dict[str, float]
     model_version: str
@@ -48,7 +48,7 @@ class Prediction:
 
 
 class Predictor:
-    """Load once, predict many. Thread-safe wrapper around a Keras model."""
+    """Carga una vez, predice muchas. Wrapper thread-safe alrededor de un modelo Keras."""
 
     def __init__(self, model_path: Path, meta_path: Path) -> None:
         if not model_path.exists():
@@ -64,8 +64,8 @@ class Predictor:
                 "exists but its sibling .meta.json is missing."
             )
 
-        # Lazy-import TF so even importing this module is cheap when the
-        # model is not present (the API still needs to start).
+        # Lazy-import de TF para que importar este modulo sea barato cuando
+        # el modelo no esta presente (la API aun necesita arrancar).
         from tensorflow import keras
 
         self._model = keras.models.load_model(model_path)
@@ -83,12 +83,12 @@ class Predictor:
         return self._model_version
 
     def predict(self, image_bytes: bytes) -> Prediction:
-        """Run a single-image inference. Raises InvalidImageError on bad input.
+        """Ejecuta inferencia sobre una imagen. Lanza InvalidImageError si la entrada es invalida.
 
-        Decision rule (post-hoc threshold tuning, see ADR-010):
-          if P(COVID-19) >= COVID_THRESHOLD -> predicted_class = "COVID-19"
-          else                               -> argmax between Normal/Pneumonia
-        The probabilities returned are the raw softmax outputs of the model.
+        Regla de decision (tuning de umbral post-hoc, ver ADR-010):
+          si P(COVID-19) >= COVID_THRESHOLD -> predicted_class = "COVID-19"
+          si no                              -> argmax entre Normal/Pneumonia
+        Las probabilidades devueltas son las salidas softmax raw del modelo.
         """
         x = preprocess_for_inference(image_bytes)
         x_batched = x[np.newaxis, ...]
@@ -107,7 +107,7 @@ class Predictor:
         )
 
     def _apply_decision_rule(self, probabilities: dict[str, float]) -> str:
-        """Apply the COVID-threshold decision rule on raw softmax probabilities."""
+        """Aplica la regla de decision del umbral COVID sobre las probabilidades softmax raw."""
         if probabilities.get(COVID_CLASS, 0.0) >= COVID_THRESHOLD:
             return COVID_CLASS
         non_covid = {c: p for c, p in probabilities.items() if c != COVID_CLASS}
@@ -115,11 +115,11 @@ class Predictor:
 
     @classmethod
     def from_env(cls) -> "Predictor":
-        """Build a Predictor reading paths from environment variables.
+        """Construye un Predictor leyendo los paths desde variables de entorno.
 
-        Env overrides (with defaults):
+        Overrides via env (con defaults):
           - MODEL_PATH (default `/app/data/models/radiography_classifier.keras`)
-          - MODEL_META_PATH (default sibling `.meta.json` of MODEL_PATH)
+          - MODEL_META_PATH (default `.meta.json` hermano de MODEL_PATH)
         """
         model_path = Path(os.environ.get("MODEL_PATH", DEFAULT_MODEL_PATH))
         meta_default = (

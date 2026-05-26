@@ -1,4 +1,4 @@
-"""Wrapper around pymongo with hospital-specific write operations."""
+"""Wrapper alrededor de pymongo con operaciones de escritura especificas del hospital."""
 from __future__ import annotations
 
 import os
@@ -22,12 +22,12 @@ class MongoWriter:
         self._client.close()
 
     def ping(self) -> bool:
-        """Verify the MongoDB server is reachable. Raises on failure."""
+        """Verifica que el servidor MongoDB es alcanzable. Lanza excepcion si falla."""
         self._client.admin.command("ping")
         return True
 
     def bulk_upsert_patients(self, records: list[dict]) -> dict[str, int]:
-        """Upsert patients by external_id. Safe with empty input."""
+        """Upsert de pacientes por external_id. Seguro con entrada vacia."""
         if not records:
             return {"upserted": 0, "modified": 0}
 
@@ -63,12 +63,12 @@ class MongoWriter:
         patients: list[dict],
         admissions: list[dict],
     ) -> dict[str, int]:
-        """Upsert patients and embed their admissions as a subdocument array.
+        """Upsert de pacientes embebiendo sus ingresos como un array de subdocumentos.
 
-        Note: the `admissions` array is fully replaced on each upsert. Callers
-        must pass the complete set of admissions per patient in the same batch,
-        which matches how our ETL processes whole CSV files at a time. This
-        keeps re-runs idempotent (CB-4, CA-6).
+        Nota: el array `admissions` se reemplaza completamente en cada upsert.
+        Los callers deben pasar el set completo de ingresos por paciente en
+        el mismo batch, lo cual coincide con como nuestro ETL procesa archivos
+        CSV enteros de una vez. Esto mantiene las re-ejecuciones idempotentes (CB-4, CA-6).
         """
         if not patients:
             return {"upserted": 0, "modified": 0}
@@ -140,13 +140,13 @@ class MongoWriter:
     def add_radiography_to_patient(
         self, external_id: str, radiography: dict[str, Any]
     ) -> bool:
-        """Add a radiography metadata dict to the patient's array, idempotently.
+        """Anade un dict de metadatos de radiografia al array del paciente, idempotentemente.
 
-        Returns True if the patient exists (regardless of whether the entry was
-        new or already present), False if no patient with that external_id
-        exists. Re-adding the same `minio_object_key` for the same patient is a
-        no-op, which is required by CB-4 (running the pipeline twice must not
-        create duplicates).
+        Devuelve True si el paciente existe (independientemente de si la entrada
+        era nueva o ya estaba presente), False si no existe ningun paciente con
+        ese external_id. Re-anadir el mismo `minio_object_key` para el mismo
+        paciente es un no-op, requerido por CB-4 (ejecutar el pipeline dos veces
+        no debe crear duplicados).
         """
         if self.db.patients.count_documents({"external_id": external_id}, limit=1) == 0:
             return False

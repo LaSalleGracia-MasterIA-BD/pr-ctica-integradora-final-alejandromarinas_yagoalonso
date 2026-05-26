@@ -1,12 +1,12 @@
-"""Endpoints for radiography classification (Feature 2) + image proxy (Feature 4).
+"""Endpoints para clasificacion de radiografias (Feature 2) + proxy de imagenes (Feature 4).
 
-POST /api/v1/radiographies/classify        — infer + persist
-GET  /api/v1/radiographies/classification   — read persisted result
-GET  /api/v1/radiographies/image            — proxy of PNG bytes from MinIO
+POST /api/v1/radiographies/classify        — inferir + persistir
+GET  /api/v1/radiographies/classification   — leer resultado persistido
+GET  /api/v1/radiographies/image            — proxy de los bytes PNG desde MinIO
 
-The MinIO key comes in the body (POST) or as a query param (GET) instead
-of a path param because it contains `/` (e.g. `HOSP-000001/xray1.png`)
-and `{key:path}` complicates clients and tooling.
+La key de MinIO llega en el body (POST) o como query param (GET) en
+lugar de como parametro de path porque contiene `/` (ej. `HOSP-000001/xray1.png`)
+y `{key:path}` complica a clientes y herramientas.
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def _bucket(request: Request) -> str:
 @router.post(
     "/classify",
     response_model=ClassificationResponse,
-    summary="Classify a radiography stored in MinIO and persist the result",
+    summary="Clasifica una radiografia almacenada en MinIO y persiste el resultado",
 )
 def classify_radiography(
     payload: ClassifyRequest,
@@ -88,10 +88,10 @@ def classify_radiography(
 
     matched = mongo_writer.set_radiography_classification(key, classification)
     if not matched:
-        # The radiography is not registered in any patient document. We
-        # could still serve the prediction, but the spec says the
-        # endpoint MUST persist; without a parent patient, the result
-        # would be lost. 404 makes that contract explicit.
+        # La radiografia no esta registrada en ningun documento de paciente.
+        # Podriamos servir la prediccion igualmente, pero la spec dice que
+        # el endpoint DEBE persistir; sin un paciente padre, el resultado
+        # se perderia. 404 hace ese contrato explicito.
         raise HTTPException(
             status_code=404,
             detail=f"No patient owns radiography {key}",
@@ -115,11 +115,11 @@ def classify_radiography(
 @router.get(
     "/classification",
     response_model=ClassificationResponse,
-    summary="Read the persisted classification for a radiography",
+    summary="Lee la clasificacion persistida de una radiografia",
 )
 def get_classification(
     request: Request,
-    key: str = Query(..., min_length=1, description="MinIO object key"),
+    key: str = Query(..., min_length=1, description="Clave del objeto MinIO"),
 ) -> ClassificationResponse:
     mongo_reader = request.app.state.mongo_reader
     doc = mongo_reader.get_radiography_classification(key)
@@ -134,27 +134,27 @@ def get_classification(
         probabilities=doc["probabilities"],
         predicted_at=doc["predicted_at"],
         model_version=doc["model_version"],
-        # Backfill for classifications persisted before the threshold rule
-        # was introduced (Feature 16). Those rows used pure argmax.
+        # Backfill para clasificaciones persistidas antes de introducir la
+        # regla del umbral (Feature 16). Esas filas usaban argmax puro.
         decision_rule=doc.get("decision_rule", "legacy_argmax"),
     )
 
 
 @router.get(
     "/image",
-    summary="Proxy PNG bytes of a radiography from MinIO",
+    summary="Proxy de los bytes PNG de una radiografia desde MinIO",
     responses={
         200: {"content": {"image/png": {}}},
-        404: {"description": "Object not found in MinIO"},
-        422: {"description": "key missing or empty"},
-        502: {"description": "Upstream object storage error"},
+        404: {"description": "Objeto no encontrado en MinIO"},
+        422: {"description": "key ausente o vacia"},
+        502: {"description": "Error en el almacenamiento de objetos upstream"},
     },
 )
 def get_radiography_image(
     request: Request,
-    key: str = Query(..., min_length=1, description="MinIO object key"),
+    key: str = Query(..., min_length=1, description="Clave del objeto MinIO"),
 ) -> Response:
-    """Read-only proxy of MinIO object bytes for the dashboard.
+    """Proxy de solo lectura de los bytes del objeto MinIO para el dashboard.
 
     NO toca MongoDB, NO clasifica. Existe para que el dashboard
     (servicio aparte sin acceso directo a MinIO) pueda renderizar

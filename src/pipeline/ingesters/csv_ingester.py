@@ -1,9 +1,9 @@
-"""Read hospital CSV files into PySpark DataFrames.
+"""Lee archivos CSV hospitalarios a DataFrames de PySpark.
 
-This layer only handles ingestion (reading + schema validation). It does NOT
-filter or reject rows — that belongs to the validation stage (T7). Edge-case
-rows (nulls, malformed values) are preserved verbatim so downstream validators
-can produce meaningful rejection reasons.
+Esta capa solo gestiona la ingesta (lectura + validacion de schema). NO
+filtra ni rechaza filas — eso corresponde a la etapa de validacion (T7).
+Las filas con casos borde (nulls, valores malformados) se preservan literales
+para que los validators downstream puedan generar motivos de rechazo utiles.
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ SOURCE_FILE_COLUMN = "_source_file"
 
 
 class MissingColumnsError(ValueError):
-    """Raised when a CSV is missing one or more required columns."""
+    """Se lanza cuando a un CSV le faltan una o mas columnas obligatorias."""
 
 
 class CSVIngester:
@@ -62,12 +62,12 @@ class CSVIngester:
         if not path.exists():
             raise FileNotFoundError(f"CSV file does not exist: {path}")
 
-        # Read everything as string. Type casting and validation happen later.
+        # Leer todo como string. El casting de tipos y la validacion se hacen despues.
         schema = StructType(
             [StructField(col, StringType(), nullable=True) for col in required_columns]
         )
 
-        # Use header to auto-detect column order; missing cols will surface below.
+        # Usar la cabecera para auto-detectar el orden de columnas; las faltantes saldran abajo.
         df = (
             self._spark.read
             .option("header", "true")
@@ -83,13 +83,13 @@ class CSVIngester:
 
         df = df.select(*required_columns)
 
-        # Enforce the nominal schema so downstream code sees consistent types.
+        # Forzar el schema nominal para que el codigo downstream vea tipos consistentes.
         for field in schema.fields:
             df = df.withColumn(field.name, F.col(field.name).cast(field.dataType))
 
         df = df.withColumn(SOURCE_FILE_COLUMN, F.lit(path.name))
 
-        # Row counts are logged by downstream stages (validator, cleaner) so we
-        # avoid triggering an extra action on the DataFrame here.
+        # Los conteos de filas los logean las etapas downstream (validator, cleaner)
+        # para evitar disparar una accion extra sobre el DataFrame aqui.
         logger.info("Ingested %s from %s", entity, path.name)
         return df

@@ -1,1 +1,1 @@
-"""FastAPI dependencies (shared handles to MongoDB and pipeline components)."""
+"""Dependencias de FastAPI (handles compartidos a MongoDB y componentes del pipeline)."""

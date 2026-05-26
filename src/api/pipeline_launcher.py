@@ -1,24 +1,25 @@
-"""Glue between the FastAPI router and the actual ETL orchestrator.
+"""Pegamento entre el router de FastAPI y el orquestador ETL real.
 
-The HTTP handler `POST /api/v1/pipeline/trigger` should respond fast (with
-the new run id) but the heavy PySpark work has to happen somewhere. This
-launcher splits that into two parts:
+El handler HTTP `POST /api/v1/pipeline/trigger` debe responder rapido (con
+el id del nuevo run) pero el trabajo pesado de PySpark debe ocurrir en
+algun sitio. Este launcher lo divide en dos partes:
 
-  * `start_run(trigger_type)` — synchronous: creates the `pipeline_runs`
-    row in SQLite so the API can return the run id (UUID string)
-    immediately
-  * `execute(run_id, patients_csv, admissions_csv)` — long-running: runs
-    the orchestrator under a fresh SparkSession + writers, reusing the
-    run id so the run history is consistent
+  * `start_run(trigger_type)` — sincrono: crea la fila en `pipeline_runs`
+    en SQLite para que la API pueda devolver el id del run (string UUID)
+    inmediatamente
+  * `execute(run_id, patients_csv, admissions_csv)` — long-running: ejecuta
+    el orquestador con una SparkSession + writers nuevos, reutilizando el
+    id del run para que el historial sea consistente
 
-Polyglot persistence (ADR-004): the run lifecycle (start/finish + quality
-summary) lives in SQLite, while rejected records and patient/admissions
-documents live in MongoDB. The launcher creates both writers per call.
+Persistencia poliglota (ADR-004): el ciclo de vida del run (start/finish +
+quality summary) vive en SQLite, mientras que los registros rechazados y
+los documentos de pacientes/ingresos viven en MongoDB. El launcher crea
+ambos writers en cada llamada.
 
-`execute` is intended to be scheduled with FastAPI's `BackgroundTasks`. It
-catches exceptions and only logs — the orchestrator has already marked
-the run as failed in SQLite, so re-raising would just generate noise in
-uvicorn without changing state.
+`execute` esta pensado para programarse con `BackgroundTasks` de FastAPI.
+Captura excepciones y solo logea — el orquestador ya ha marcado el run
+como fallido en SQLite, asi que relanzar solo generaria ruido en uvicorn
+sin cambiar el estado.
 """
 from __future__ import annotations
 
@@ -65,11 +66,11 @@ class PipelineLauncher:
             )
         except Exception:
             logger.exception("Background pipeline run %s failed", run_id)
-            # No re-raising: the run is already marked as failed in SQLite
-            # by the orchestrator. Re-raising in a BackgroundTask would only
-            # generate a noisy traceback in uvicorn without changing state.
+            # Sin re-raise: el run ya queda marcado como fallido en SQLite
+            # por el orquestador. Relanzar en un BackgroundTask solo
+            # generaria un traceback ruidoso en uvicorn sin cambiar el estado.
         finally:
             mongo_writer.close()
             sql_writer.close()
-            # We intentionally don't stop Spark — getOrCreate reuses the
-            # session for subsequent triggers within the same API process.
+            # No paramos Spark a proposito — getOrCreate reutiliza la
+            # sesion para triggers posteriores dentro del mismo proceso de API.

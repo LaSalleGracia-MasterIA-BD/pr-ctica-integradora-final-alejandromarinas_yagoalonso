@@ -1,4 +1,4 @@
-"""SparkSession factory for the hospital data pipeline."""
+"""Factory de SparkSession para el pipeline de datos del hospital."""
 from __future__ import annotations
 
 import os
@@ -19,9 +19,9 @@ def get_spark_session(
     app_name: str | None = None,
     master: str | None = None,
 ) -> SparkSession:
-    """Create or retrieve a SparkSession configured for the hospital pipeline.
+    """Crea u obtiene una SparkSession configurada para el pipeline del hospital.
 
-    Reuses any active SparkSession via getOrCreate to avoid duplicated drivers.
+    Reutiliza cualquier SparkSession activa via getOrCreate para evitar drivers duplicados.
     """
     name = app_name or os.environ.get("SPARK_APP_NAME", DEFAULT_APP_NAME)
     master_url = master or os.environ.get("SPARK_MASTER", DEFAULT_MASTER)

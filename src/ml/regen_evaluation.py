@@ -1,24 +1,23 @@
-"""Regenerate the evaluation artefacts WITHOUT retraining the model.
+"""Regenera los artefactos de evaluacion SIN reentrenar el modelo.
 
-Loads the persisted .keras artefact, rebuilds the same stratified
-test split (seed=42, 80/10/10) used by `train.py`, runs inference and
-rewrites:
+Carga el artefacto .keras persistido, reconstruye el mismo split de test
+estratificado (seed=42, 80/10/10) usado por `train.py`, ejecuta inferencia
+y reescribe:
 
   * docs/model-evaluation/metrics.json
   * docs/model-evaluation/report.md
   * docs/model-evaluation/confusion_matrix.png
 
-The history (learning curves) is preserved from the previous metrics.json
-because we cannot recover Keras History without retraining; the PNG is
-left untouched.
+El history (learning curves) se conserva del metrics.json anterior porque
+no podemos recuperar el History de Keras sin reentrenar; el PNG no se toca.
 
-Why this script exists: Feature 16 applies a post-hoc decision rule
-(`covid_threshold_0.35`) on the model's raw softmax outputs. The metrics
-on disk were computed under argmax; this script regenerates them under
-the new rule so the docs/model-evaluation/* artefacts reflect what the
-API actually serves.
+Razon de este script: la Feature 16 aplica una regla de decision post-hoc
+(`covid_threshold_0.35`) sobre las salidas softmax raw del modelo. Las
+metricas en disco se calcularon bajo argmax; este script las regenera bajo
+la nueva regla para que los artefactos en docs/model-evaluation/* reflejen
+lo que la API sirve realmente.
 
-Usage (inside the pipeline container):
+Uso (dentro del contenedor pipeline):
     python -m src.ml.regen_evaluation
 """
 from __future__ import annotations
@@ -64,7 +63,7 @@ def _label_to_idx(label: str) -> int:
 
 
 def _predict_all(model, items: list, batch_size: int = 32) -> np.ndarray:
-    """Return probs of shape (N, 3) in the same order as `items`."""
+    """Devuelve probs con shape (N, 3) en el mismo orden que `items`."""
     probs = np.zeros((len(items), 3), dtype=np.float32)
     batch: list[np.ndarray] = []
     indices: list[int] = []
@@ -110,8 +109,8 @@ def main() -> None:
     metrics["decision_rule"] = DECISION_RULE
     metrics["covid_threshold"] = COVID_THRESHOLD
 
-    # Preserve hyperparameters from the previous metrics.json if present so
-    # the report still documents how the model was trained.
+    # Conservar hyperparameters del metrics.json anterior si existen, para
+    # que el informe siga documentando como se entreno el modelo.
     prev_path = OUTPUT_DIR / "metrics.json"
     if prev_path.exists():
         prev = json.loads(prev_path.read_text())

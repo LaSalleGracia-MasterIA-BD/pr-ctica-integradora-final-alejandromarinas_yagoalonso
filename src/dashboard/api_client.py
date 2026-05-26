@@ -1,17 +1,18 @@
-"""Thin sync httpx wrapper for the dashboard.
+"""Wrapper sincrono ligero sobre httpx para el dashboard.
 
-Every method returns a `(data, error)` tuple. The error is `None` on
-success and an `ApiError` otherwise. Views never raise — they branch on
-`error is not None` and render a banner via `components.error_banner`.
+Cada metodo devuelve una tupla `(data, error)`. El error es `None` si
+todo va bien, y un `ApiError` en caso contrario. Las vistas nunca
+lanzan excepciones — comprueban `error is not None` y renderizan un
+banner via `components.error_banner`.
 
-Why sync + tuple-style:
-  * Streamlit reruns the script on every interaction. Async would force
-    `asyncio.run()` per call, which is heavy and brittle.
-  * Returning `(data, error)` makes the views read top-to-bottom without
-    `try/except` everywhere.
+Por que sync + tuple-style:
+  * Streamlit re-ejecuta el script en cada interaccion. Async obligaria
+    a hacer `asyncio.run()` en cada llamada, pesado y fragil.
+  * Devolver `(data, error)` permite leer las vistas de arriba a abajo
+    sin `try/except` por todas partes.
 
-`image_bytes` is the only method that returns raw bytes (PNG content);
-the others return parsed JSON.
+`image_bytes` es el unico metodo que devuelve bytes en crudo (contenido
+PNG); el resto devuelven JSON ya parseado.
 """
 from __future__ import annotations
 
@@ -35,10 +36,10 @@ ErrorKind = Literal[
 
 @dataclass(frozen=True)
 class ApiError:
-    """A typed error from the API client.
+    """Error tipado del cliente de la API.
 
-    `kind` drives the message shown in the banner; `status` and `detail`
-    are surfaced for debugging.
+    `kind` determina el mensaje que se muestra en el banner; `status` y
+    `detail` se exponen para facilitar el debug.
     """
     kind: ErrorKind
     status: Optional[int]
@@ -46,25 +47,25 @@ class ApiError:
     raw: Optional[dict] = None
 
 
-# Result tuples for typing convenience
+# Tuplas de resultado por comodidad de tipado
 ResultJson = tuple[Optional[Any], Optional[ApiError]]
 ResultBytes = tuple[Optional[bytes], Optional[ApiError]]
 
 
 def _classify_status(status: int, detail: str, raw: Optional[dict]) -> ApiError:
-    """Map an HTTP status code to an ApiError(kind, ...)."""
+    """Mapea un codigo de estado HTTP a un ApiError(kind, ...)."""
     if status == 404:
         return ApiError(kind="not_found", status=status, detail=detail, raw=raw)
     if status == 422:
         return ApiError(kind="validation", status=status, detail=detail, raw=raw)
     if status == 503:
         return ApiError(kind="unavailable", status=status, detail=detail, raw=raw)
-    # 4xx other or 5xx: bucket "server"
+    # 4xx restantes o 5xx: bucket "server"
     return ApiError(kind="server", status=status, detail=detail, raw=raw)
 
 
 def _extract_detail(response: httpx.Response) -> tuple[str, Optional[dict]]:
-    """Pull a human-readable detail string + raw json (if any)."""
+    """Extrae un string de detail legible + json crudo (si lo hay)."""
     try:
         body = response.json()
     except ValueError:
@@ -73,16 +74,17 @@ def _extract_detail(response: httpx.Response) -> tuple[str, Optional[dict]]:
         detail = body.get("detail")
         if isinstance(detail, str):
             return detail, body
-        # FastAPI Pydantic validation: detail is a list of dicts
+        # Validacion Pydantic de FastAPI: detail es una lista de dicts
         return str(detail) if detail is not None else "", body
     return str(body)[:300], body if isinstance(body, dict) else None
 
 
 class ApiClient:
-    """Read facade over the hospital API.
+    """Fachada de lectura sobre la API del hospital.
 
-    One instance per Streamlit session (stored in `st.session_state`).
-    Construct once; `httpx.Client` reuses connections.
+    Una instancia por sesion de Streamlit (almacenada en
+    `st.session_state`). Se construye una vez; `httpx.Client` reutiliza
+    conexiones.
     """
 
     def __init__(self, base_url: str, timeout: float) -> None:
@@ -97,7 +99,7 @@ class ApiClient:
         self._client.close()
 
     # ------------------------------------------------------------------
-    # internal helpers
+    # helpers internos
     # ------------------------------------------------------------------
 
     def _request_json(self, method: str, url: str, **kwargs: Any) -> ResultJson:
@@ -151,7 +153,7 @@ class ApiClient:
     # ------------------------------------------------------------------
 
     def count_patients(self) -> ResultJson:
-        """Return the `total` field of the patients listing."""
+        """Devuelve el campo `total` del listado de pacientes."""
         data, err = self._request_json(
             "GET", "/api/v1/patients", params={"limit": 1, "offset": 0},
         )
@@ -205,7 +207,7 @@ class ApiClient:
         )
 
     def image_bytes(self, minio_object_key: str) -> ResultBytes:
-        """Get PNG bytes of a radiography from the API proxy (RF-8)."""
+        """Obtiene los bytes PNG de una radiografia desde el proxy de la API (RF-8)."""
         return self._request_bytes(
             "GET", "/api/v1/radiographies/image",
             params={"key": minio_object_key},
@@ -252,8 +254,8 @@ class ApiClient:
     # ------------------------------------------------------------------
 
     def model_evaluation(self) -> ResultJson:
-        """Read the offline metrics.json. 503 if missing (not the same as
-        predictor_loaded=false — see ADR-007 and spec CB-4)."""
+        """Lee el metrics.json offline. 503 si falta (no es lo mismo que
+        predictor_loaded=false — ver ADR-007 y spec CB-4)."""
         return self._request_json("GET", "/api/v1/model/evaluation")
 
     # ------------------------------------------------------------------

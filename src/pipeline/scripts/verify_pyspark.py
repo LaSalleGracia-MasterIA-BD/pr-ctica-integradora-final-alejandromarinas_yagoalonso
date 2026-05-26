@@ -1,4 +1,4 @@
-"""Smoke test that verifies PySpark + logging setup inside the container."""
+"""Smoke test que verifica la configuracion de PySpark + logging dentro del contenedor."""
 from __future__ import annotations
 
 from src.pipeline.logging_config import get_logger

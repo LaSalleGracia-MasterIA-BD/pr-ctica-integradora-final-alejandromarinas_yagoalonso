@@ -1,20 +1,20 @@
-"""CLI to train the radiography classifier end-to-end.
+"""CLI para entrenar el clasificador de radiografias end-to-end.
 
-Usage (typically inside the `pipeline` container):
+Uso (normalmente dentro del contenedor `pipeline`):
     docker compose run --rm pipeline python -m src.ml.train
 
-Strict split usage (see design `clasificacion-radiografias`):
-  * `train` → `model.fit` (weight updates)
-  * `validation` → callbacks ONLY (EarlyStopping, ModelCheckpoint).
-    Never enters the final report
-  * `test` → final report ONLY (one-shot evaluation). The model never
-    sees this split during training, so the reported metrics are not
-    contaminated by hyperparameter selection
+Uso estricto de splits (ver design `clasificacion-radiografias`):
+  * `train` -> `model.fit` (actualizaciones de pesos)
+  * `validation` -> callbacks UNICAMENTE (EarlyStopping, ModelCheckpoint).
+    Nunca entra en el informe final
+  * `test` -> SOLO informe final (evaluacion one-shot). El modelo nunca
+    ve este split durante el entrenamiento, asi que las metricas reportadas
+    no estan contaminadas por la seleccion de hiperparametros
 
-Reproducibility (RNF-5): seeds are fixed for Python `random`, NumPy and
-TensorFlow. `tf.config.experimental.enable_op_determinism()` is enabled
-where available; even so, full bit-for-bit reproducibility is not
-guaranteed (documented limitation).
+Reproducibilidad (RNF-5): se fijan seeds para Python `random`, NumPy y
+TensorFlow. `tf.config.experimental.enable_op_determinism()` se activa
+cuando esta disponible; aun asi, no se garantiza reproducibilidad
+bit-a-bit completa (limitacion documentada).
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ DEFAULT_IMAGE_SIZE = (224, 224)
 
 
 # ----------------------------------------------------------------------
-# Reproducibility helpers
+# Helpers de reproducibilidad
 # ----------------------------------------------------------------------
 
 def _set_global_seed(seed: int) -> None:
@@ -52,16 +52,16 @@ def _set_global_seed(seed: int) -> None:
     tf.random.set_seed(seed)
     try:
         tf.config.experimental.enable_op_determinism()
-    except Exception as exc:  # pragma: no cover  (TF version may not support it)
+    except Exception as exc:  # pragma: no cover  (la version de TF podria no soportarlo)
         logger.warning("enable_op_determinism not available: %s", exc)
 
 
 # ----------------------------------------------------------------------
-# tf.data pipeline
+# Pipeline tf.data
 # ----------------------------------------------------------------------
 
 def _load_and_preprocess(path_bytes_tensor, label_idx):
-    """tf.py_function wrapper around our shared `preprocess_for_inference`."""
+    """Wrapper tf.py_function alrededor de nuestro `preprocess_for_inference` compartido."""
     import tensorflow as tf
 
     def _py(path_bytes):
@@ -79,7 +79,7 @@ def _load_and_preprocess(path_bytes_tensor, label_idx):
 
 
 def _build_tf_dataset(items, batch_size: int, augment: bool, shuffle: bool):
-    """Build a `tf.data.Dataset` of (image_tensor, class_index) batches."""
+    """Construye un `tf.data.Dataset` de batches (image_tensor, class_index)."""
     import tensorflow as tf
 
     from src.ml.preprocessing import build_augmentation_pipeline
@@ -101,20 +101,20 @@ def _build_tf_dataset(items, batch_size: int, augment: bool, shuffle: bool):
 
 
 # ----------------------------------------------------------------------
-# Class weights
+# Pesos de clase
 # ----------------------------------------------------------------------
 
 def _compute_class_weight(train_items, mode: str = "balanced") -> dict[int, float] | None:
-    """Class weights for `model.fit(class_weight=...)`.
+    """Pesos de clase para `model.fit(class_weight=...)`.
 
-    Modes:
-      * `balanced` — sklearn standard: w = n_samples / (n_classes * n_in_class).
-        Aggressive on heavily imbalanced datasets; the extreme weight for
-        the minority class can destabilise training.
-      * `sqrt`     — softer version: take the square root of the balanced
-        weights and renormalise so the mean weight stays around 1. Damps
-        the gradient kicks from minority-class batches.
-      * `none`     — return None (caller should pass class_weight=None).
+    Modos:
+      * `balanced` — estandar de sklearn: w = n_samples / (n_classes * n_in_class).
+        Agresivo en datasets muy desbalanceados; el peso extremo para la
+        clase minoritaria puede desestabilizar el entrenamiento.
+      * `sqrt`     — version mas suave: raiz cuadrada de los pesos balanced
+        y renormalizar para que el peso medio quede cerca de 1. Amortigua
+        los golpes de gradiente de los batches de clase minoritaria.
+      * `none`     — devuelve None (el caller deberia pasar class_weight=None).
     """
     if mode == "none":
         return None
@@ -127,7 +127,7 @@ def _compute_class_weight(train_items, mode: str = "balanced") -> dict[int, floa
 
     if mode == "sqrt":
         soft = np.sqrt(weights)
-        soft = soft / soft.mean()  # keep mean ≈ 1 so loss magnitude is comparable
+        soft = soft / soft.mean()  # mantener media ~ 1 para que la magnitud del loss sea comparable
         weights = soft
     elif mode != "balanced":
         raise ValueError(f"Unknown CLASS_WEIGHT_MODE: {mode!r}")
@@ -136,16 +136,16 @@ def _compute_class_weight(train_items, mode: str = "balanced") -> dict[int, floa
 
 
 # ----------------------------------------------------------------------
-# Main pipeline
+# Pipeline principal
 # ----------------------------------------------------------------------
 
 def main() -> dict[str, Any]:
-    """Run training, evaluation and persistence. Returns the metrics dict."""
+    """Ejecuta entrenamiento, evaluacion y persistencia. Devuelve el dict de metricas."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
-    # Defaults reproduce the v3 model (commiteado en data/models/, see
-    # docs/model-evaluation/report.md). Running the script with no env vars
-    # regenerates the SAME model — not the broken first attempt.
+    # Los defaults reproducen el modelo v3 (commiteado en data/models/, ver
+    # docs/model-evaluation/report.md). Ejecutar el script sin env vars
+    # regenera el MISMO modelo — no el primer intento roto.
     seed = int(os.environ.get("SEED", "42"))
     batch_size = int(os.environ.get("BATCH_SIZE", "32"))
     epochs_max = int(os.environ.get("EPOCHS_MAX", "35"))
@@ -166,7 +166,7 @@ def main() -> dict[str, Any]:
         dropout_conv, dropout_dense, early_stop_patience, early_stop_min_delta,
     )
 
-    # === 1. Dataset discovery + stratified split =====================
+    # === 1. Discovery del dataset + split estratificado ===============
     items = discover_dataset()
     logger.info("Total images discovered: %d", len(items))
     splits = build_splits(items, seed=seed, ratios=(0.8, 0.1, 0.1))
@@ -175,16 +175,16 @@ def main() -> dict[str, Any]:
         len(splits.train), len(splits.val), len(splits.test),
     )
 
-    # === 2. Class weights (CB-6: imbalanced classes) =================
+    # === 2. Pesos de clase (CB-6: clases desbalanceadas) =============
     class_weight = _compute_class_weight(splits.train, mode=class_weight_mode)
     logger.info("Class weights (%s): %s", class_weight_mode, class_weight)
 
-    # === 3. tf.data pipelines ========================================
+    # === 3. Pipelines tf.data ========================================
     train_ds = _build_tf_dataset(splits.train, batch_size, augment=True, shuffle=True)
     val_ds = _build_tf_dataset(splits.val, batch_size, augment=False, shuffle=False)
     test_ds = _build_tf_dataset(splits.test, batch_size, augment=False, shuffle=False)
 
-    # === 4. Build & compile model ====================================
+    # === 4. Construir y compilar el modelo ===========================
     import tensorflow as tf
     model = build_model(
         num_classes=len(CLASSES),
@@ -193,7 +193,7 @@ def main() -> dict[str, Any]:
         learning_rate=learning_rate,
     )
 
-    # === 5. Callbacks (val only) =====================================
+    # === 5. Callbacks (solo val) =====================================
     models_dir.mkdir(parents=True, exist_ok=True)
     report_dir.mkdir(parents=True, exist_ok=True)
     callbacks = [
@@ -223,7 +223,7 @@ def main() -> dict[str, Any]:
         verbose=2,
     )
 
-    # === 7. Evaluation on the test split only ========================
+    # === 7. Evaluacion solo sobre el split de test ====================
     model_version = f"v1.0-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
     hyperparams: dict[str, Any] = {
         "seed": seed,
@@ -254,7 +254,7 @@ def main() -> dict[str, Any]:
         model_version=model_version,
     )
 
-    # === 8. Persist model + meta =====================================
+    # === 8. Persistir modelo + meta ==================================
     model_path = models_dir / "radiography_classifier.keras"
     meta_path = models_dir / "radiography_classifier.meta.json"
     model.save(model_path)

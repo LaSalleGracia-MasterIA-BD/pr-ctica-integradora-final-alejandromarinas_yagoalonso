@@ -1,16 +1,16 @@
-"""Endpoint to serve the offline model evaluation report (Feature 4).
+"""Endpoint para servir el informe de evaluacion offline del modelo (Feature 4).
 
-GET /api/v1/model/evaluation → contents of `docs/model-evaluation/metrics.json`
+GET /api/v1/model/evaluation → contenido de `docs/model-evaluation/metrics.json`
 
-The dashboard's "Evaluacion del modelo" sub-section (RF-7) consumes this
-endpoint. The API reads the file directly via a `:ro` mount of the
-evaluation directory.
+La sub-seccion "Evaluacion del modelo" del dashboard (RF-7) consume este
+endpoint. La API lee el archivo directamente via un montaje `:ro` del
+directorio de evaluacion.
 
-Important: a 503 here does NOT mean `predictor_loaded=false` — they are
-two independent signals (see ADR-007 + spec dashboard, CB-4):
-  * `predictor_loaded=false` (from /health) → API cannot run inference.
-  * `/model/evaluation` 503 → there is no evaluation report to display
-    (`metrics.json` is missing). The model could still be loaded.
+Importante: un 503 aqui NO significa `predictor_loaded=false` — son dos
+senales independientes (ver ADR-007 + spec dashboard, CB-4):
+  * `predictor_loaded=false` (desde /health) → la API no puede inferir.
+  * `/model/evaluation` 503 → no hay informe de evaluacion que mostrar
+    (`metrics.json` no existe). El modelo aun podria estar cargado.
 """
 from __future__ import annotations
 
@@ -32,11 +32,11 @@ DEFAULT_EVAL_PATH = Path("/app/docs/model-evaluation/metrics.json")
 
 @router.get(
     "/evaluation",
-    summary="Read the offline evaluation report of the radiography classifier",
+    summary="Lee el informe de evaluacion offline del clasificador de radiografias",
     responses={
-        200: {"description": "metrics.json contents"},
-        503: {"description": "metrics.json missing (model never trained)"},
-        500: {"description": "metrics.json is present but corrupt"},
+        200: {"description": "Contenido de metrics.json"},
+        503: {"description": "metrics.json no existe (modelo nunca entrenado)"},
+        500: {"description": "metrics.json esta presente pero corrupto"},
     },
 )
 def get_model_evaluation() -> dict:

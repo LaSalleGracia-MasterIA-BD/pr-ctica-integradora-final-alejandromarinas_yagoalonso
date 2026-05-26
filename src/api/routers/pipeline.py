@@ -1,8 +1,8 @@
-"""Endpoints to consult and trigger the ETL pipeline.
+"""Endpoints para consultar y disparar el pipeline ETL.
 
-Reads against `pipeline_runs` and `data_quality_summary` go through the
-SQLite-backed `SqlReader` (see ADR-004). The launcher is unchanged at the
-HTTP surface: clients still POST to /trigger and receive a run_id.
+Las lecturas sobre `pipeline_runs` y `data_quality_summary` pasan por el
+`SqlReader` respaldado por SQLite (ver ADR-004). El launcher no cambia a
+nivel de HTTP: los clientes siguen haciendo POST a /trigger y reciben un run_id.
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def pipeline_status(request: Request) -> PipelineRun:
 
 @router.get("/quality-summary", response_model=QualitySummaryResponse)
 def latest_quality_summary(request: Request) -> QualitySummaryResponse:
-    """Latest data-quality snapshot: one row per dimension."""
+    """Ultimo snapshot de calidad de datos: una fila por dimension."""
     reader = _sql_reader(request)
     rows = reader.latest_quality_summary()
     return QualitySummaryResponse(
@@ -75,11 +75,11 @@ def quality_summary_history(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> QualitySummaryHistoryPage:
-    """History of quality snapshots for a given dimension.
+    """Historial de snapshots de calidad para una dimension dada.
 
-    `total` is the real number of rows in `data_quality_summary` for the
-    requested dimension, not the size of the current page — clients need
-    it to drive pagination correctly.
+    `total` es el numero real de filas en `data_quality_summary` para la
+    dimension solicitada, no el tamano de la pagina actual — los clientes
+    lo necesitan para gestionar la paginacion correctamente.
     """
     reader = _sql_reader(request)
     rows = reader.quality_summary_history(
@@ -100,11 +100,12 @@ def trigger_pipeline(
     request: Request,
     background: BackgroundTasks,
 ) -> PipelineTriggerResponse:
-    """Kick off the ETL in the background and return the new run id.
+    """Arranca el ETL en segundo plano y devuelve el id del nuevo run.
 
-    The pipeline takes seconds on the demo dataset; returning 202 Accepted and
-    running in a background task keeps the HTTP request fast and lets clients
-    poll `/pipeline/status` or `/pipeline/runs` for progress.
+    El pipeline tarda segundos en el dataset de demo; devolver 202 Accepted
+    y ejecutar en una background task mantiene la peticion HTTP rapida y
+    permite a los clientes hacer polling de `/pipeline/status` o
+    `/pipeline/runs` para ver el progreso.
     """
     launcher = getattr(request.app.state, "pipeline_launcher", None)
     if launcher is None:
@@ -116,8 +117,8 @@ def trigger_pipeline(
     patients_csv = Path(request.app.state.patients_csv_path)
     admissions_csv = Path(request.app.state.admissions_csv_path)
 
-    # Start the run synchronously so we can return a real run_id (UUID
-    # string from SQLite), and execute the heavy processing in background.
+    # Arrancamos el run sincronamente para poder devolver un run_id real
+    # (string UUID desde SQLite) y ejecutamos el procesamiento pesado en background.
     run_id = launcher.start_run(trigger_type="manual")
     background.add_task(
         launcher.execute, run_id=run_id,

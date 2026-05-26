@@ -1,8 +1,8 @@
-"""Validate hospital records and separate valid rows from rejected ones.
+"""Valida registros hospitalarios y separa filas validas de rechazadas.
 
-The validator applies business rules in a deterministic order. The first rule
-that a row fails determines its `rejection_reason`. Valid rows keep their
-original schema; rejected rows get a `rejection_reason` column appended.
+El validator aplica reglas de negocio en orden determinista. La primera regla
+que una fila falla determina su `rejection_reason`. Las filas validas mantienen
+su schema original; las rechazadas reciben una columna `rejection_reason` anadida.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ _REASON_TMP = "_reason"
 
 @dataclass(frozen=True)
 class ValidationResult:
-    """Two DataFrames: `valid` with original schema, `rejected` with a reason."""
+    """Dos DataFrames: `valid` con el schema original, `rejected` con motivo."""
 
     valid: DataFrame
     rejected: DataFrame
@@ -97,8 +97,8 @@ class DataValidator:
 
 
 def _apply_rule(df: DataFrame, failing_condition, reason: str) -> DataFrame:
-    """Tag rows that fail `failing_condition` with `reason`, but only if they
-    don't already carry a previous rejection reason (first-failure-wins)."""
+    """Etiqueta con `reason` las filas que fallan `failing_condition`, pero solo
+    si no llevan ya un motivo de rechazo previo (first-failure-wins)."""
     return df.withColumn(
         _REASON_TMP,
         F.when(

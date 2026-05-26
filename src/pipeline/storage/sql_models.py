@@ -1,14 +1,16 @@
-"""SQLAlchemy declarative models for pipeline metadata.
+"""Modelos declarativos de SQLAlchemy para los metadatos del pipeline.
 
-Two tables live in SQLite (see ADR-004 for the polyglot persistence rationale):
-  * `pipeline_runs`: one row per pipeline execution (audit log)
-  * `data_quality_summary`: aggregated counts per dimension per run, used by
-    the dashboard
+En SQLite viven dos tablas (ver ADR-004 sobre la justificacion de la
+persistencia poliglota):
+  * `pipeline_runs`: una fila por ejecucion del pipeline (audit log)
+  * `data_quality_summary`: contadores agregados por dimension y por
+    run, usados por el dashboard
 
-Identifiers are plain string UUIDs generated with `uuid.uuid4()`. We do NOT
-use bson.ObjectId here: SQLite should not depend conceptually on BSON. The
-soft reference from MongoDB's `rejected_records.pipeline_run_id` is also a
-string UUID — no cross-DB FK enforcement, just a logical link.
+Los identificadores son UUID en string generados con `uuid.uuid4()`. NO
+usamos bson.ObjectId aqui: SQLite no debe depender conceptualmente de
+BSON. La referencia blanda desde `rejected_records.pipeline_run_id` de
+MongoDB tambien es un UUID en string — no hay FK cross-DB, solo un
+enlace logico.
 """
 from __future__ import annotations
 
@@ -28,13 +30,13 @@ from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
-    """Declarative base for the hospital SQL schema."""
+    """Base declarativa para el schema SQL del hospital."""
 
 
 class PipelineRunRow(Base):
     __tablename__ = "pipeline_runs"
 
-    id = Column(String, primary_key=True)  # uuid.uuid4() as str
+    id = Column(String, primary_key=True)  # uuid.uuid4() como str
     trigger_type = Column(String, nullable=False)  # 'manual' | 'bootstrap' | 'watcher'
     started_at = Column(DateTime, nullable=False)
     finished_at = Column(DateTime, nullable=True)

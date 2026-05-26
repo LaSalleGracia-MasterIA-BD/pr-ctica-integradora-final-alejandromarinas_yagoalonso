@@ -1,11 +1,11 @@
-"""Read-side access to the SQLite metadata store (pipeline_runs + summary).
+"""Acceso de lectura al store de metadatos SQLite (pipeline_runs + summary).
 
-Mirror of `MongoReader` for the SQL side of the polyglot persistence model
-(see ADR-004). Kept separate from `SqlWriter` so read and write surfaces
-can evolve independently.
+Espejo de `MongoReader` para el lado SQL del modelo de persistencia poliglota
+(ver ADR-004). Se mantiene separado de `SqlWriter` para que las superficies
+de lectura y escritura puedan evolucionar de forma independiente.
 
-All returned rows are plain dicts (no SQLAlchemy ORM objects leaking up to
-the API layer): the router only does Pydantic validation on top.
+Todas las filas devueltas son dicts planos (sin objetos del ORM de SQLAlchemy
+filtrandose hacia la capa API): el router solo aplica validacion Pydantic encima.
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def _quality_summary_to_dict(row: DataQualitySummaryRow) -> dict[str, Any]:
 
 
 class SqlReader:
-    """Read-only queries against the SQLite metadata store."""
+    """Consultas de solo lectura contra el store de metadatos SQLite."""
 
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -96,11 +96,11 @@ class SqlReader:
     # -- data_quality_summary ----------------------------------------------
 
     def latest_quality_summary(self) -> list[dict]:
-        """Return all rows from the most recently recorded summary.
+        """Devuelve todas las filas del summary mas recientemente registrado.
 
-        Latest is decided by `recorded_at` of the rows themselves, not by
-        the run's `started_at` — this keeps the dashboard's "last quality
-        snapshot" aligned with the actual SQL write.
+        El "mas reciente" se decide por el `recorded_at` de las propias filas,
+        no por el `started_at` del run — esto mantiene el "ultimo snapshot
+        de calidad" del dashboard alineado con la escritura SQL real.
         """
         with self._SessionFactory() as session:
             latest_run = session.scalars(
@@ -133,10 +133,10 @@ class SqlReader:
             return [_quality_summary_to_dict(r) for r in rows]
 
     def count_quality_summary_by_dimension(self, dimension: str) -> int:
-        """Total rows in `data_quality_summary` for a given dimension.
+        """Total de filas en `data_quality_summary` para una dimension dada.
 
-        Used by the API to expose a faithful `total` in paginated history
-        responses — `len(items)` would only describe the current page.
+        Usado por la API para exponer un `total` fiel en respuestas de
+        historial paginadas — `len(items)` solo describiria la pagina actual.
         """
         with self._SessionFactory() as session:
             stmt = select(func.count()).select_from(DataQualitySummaryRow).where(

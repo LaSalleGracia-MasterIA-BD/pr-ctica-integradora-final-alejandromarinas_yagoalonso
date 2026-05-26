@@ -1,9 +1,9 @@
-"""Centralised error banner for the dashboard.
+"""Banner de error centralizado para el dashboard.
 
-Maps `ApiError.kind` (+ optional context like '/classify' or
-'/model/evaluation') to a Spanish, user-facing message. Streamlit
-rendering is delegated to `show_api_error` so views never construct
-the message themselves.
+Mapea `ApiError.kind` (+ contexto opcional como '/classify' o
+'/model/evaluation') a un mensaje en castellano orientado a usuario
+final. El render con Streamlit se delega en `show_api_error`, asi las
+vistas nunca construyen el mensaje por su cuenta.
 """
 from __future__ import annotations
 
@@ -12,16 +12,16 @@ from typing import Optional
 from src.dashboard.api_client import ApiError
 
 
-# Contexts the dashboard cares about (used to disambiguate `validation`
-# and `unavailable` kinds).
+# Contextos relevantes para el dashboard (se usan para desambiguar los
+# kinds `validation` y `unavailable`).
 CONTEXT_CLASSIFY = "/classify"
 CONTEXT_MODEL_EVALUATION = "/model/evaluation"
 
 
 def format_error(err: ApiError, context: str = "") -> str:
-    """Return the human-readable text for an ApiError, in Spanish.
+    """Devuelve el texto legible para un ApiError, en castellano.
 
-    Mapping documented in design + spec (CB-1..CB-7).
+    Mapeo documentado en design + spec (CB-1..CB-7).
     """
     if err.kind == "network":
         return "API no disponible. Revisa que el contenedor `api` este arriba."
@@ -47,7 +47,7 @@ def format_error(err: ApiError, context: str = "") -> str:
             )
         return f"Servicio no disponible (HTTP 503): {err.detail}"
 
-    # `server` bucket: distinguir 4xx vs 5xx por el status
+    # bucket `server`: distinguir 4xx vs 5xx segun el status
     if err.kind == "server":
         if err.status is not None and 400 <= err.status < 500:
             return f"Peticion invalida (HTTP {err.status}): {err.detail}"
@@ -55,19 +55,19 @@ def format_error(err: ApiError, context: str = "") -> str:
             return f"Error del servidor (HTTP {err.status}): {err.detail}"
         return f"Error del servidor: {err.detail}"
 
-    # Should be unreachable; defensive
+    # No deberia alcanzarse; defensivo
     return f"Error inesperado: {err.detail}"  # pragma: no cover
 
 
 def is_warning(err: ApiError) -> bool:
-    """A few error kinds are 'recoverable' for the user (warning vs error)."""
+    """Algunos kinds de error son 'recuperables' para el usuario (warning vs error)."""
     return err.kind in {"not_found", "unavailable", "validation"}
 
 
 def show_api_error(err: ApiError, context: str = "") -> None:
-    """Render an ApiError as a Streamlit banner.
+    """Renderiza un ApiError como banner de Streamlit.
 
-    Lazy-import streamlit so this module is testable without it.
+    Importa streamlit de forma lazy para que el modulo sea testeable sin el.
     """
     import streamlit as st
 

@@ -1,4 +1,4 @@
-"""GET endpoints to consume hospital data from MongoDB."""
+"""Endpoints GET para consumir datos hospitalarios desde MongoDB."""
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Request

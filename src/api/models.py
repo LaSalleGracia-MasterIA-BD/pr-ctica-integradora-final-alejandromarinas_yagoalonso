@@ -1,4 +1,4 @@
-"""Pydantic response schemas for the API."""
+"""Schemas Pydantic de respuesta para la API."""
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -21,12 +21,12 @@ class Admission(BaseModel):
 
 
 class RadiographyClassification(BaseModel):
-    """Persisted classification for a radiography.
+    """Clasificacion persistida de una radiografia.
 
-    Lives in `patients.radiographies[].classification`. Used both as the
-    nested sub-document of `Radiography` and as the body of the
-    `GET /api/v1/radiographies/classification` and
-    `POST /api/v1/radiographies/classify` responses.
+    Vive en `patients.radiographies[].classification`. Usada tanto como
+    sub-documento anidado de `Radiography` como cuerpo de las respuestas de
+    `GET /api/v1/radiographies/classification` y
+    `POST /api/v1/radiographies/classify`.
     """
     model_config = ConfigDict(extra="ignore")
 
@@ -34,9 +34,9 @@ class RadiographyClassification(BaseModel):
     probabilities: dict[str, float]
     predicted_at: datetime
     model_version: str
-    # Optional with a `legacy_argmax` fallback for rows persisted before
-    # Feature 16 (ADR-010). New writes from `POST /classify` always set it
-    # to the active rule (e.g. "covid_threshold_0.35").
+    # Opcional con fallback `legacy_argmax` para filas persistidas antes
+    # de la Feature 16 (ADR-010). Las nuevas escrituras de `POST /classify`
+    # siempre lo fijan a la regla activa (p.ej. "covid_threshold_0.35").
     decision_rule: str = "legacy_argmax"
 
 
@@ -48,7 +48,7 @@ class Radiography(BaseModel):
     original_filename: str | None = None
     file_size_bytes: int | None = None
     ingested_at: str | None = None
-    # Previously `str | None`; now a structured object (Feature 2).
+    # Antes era `str | None`; ahora es un objeto estructurado (Feature 2).
     classification: RadiographyClassification | None = None
 
 
@@ -123,10 +123,10 @@ class RadiographiesPage(Page):
 
 
 class PipelineRun(BaseModel):
-    """Audit row from the SQLite `pipeline_runs` table.
+    """Fila de auditoria de la tabla SQLite `pipeline_runs`.
 
-    `id` is a UUID v4 string (see ADR-004: SQLite owns this primary key,
-    no bson.ObjectId is involved).
+    `id` es un UUID v4 en string (ver ADR-004: SQLite es duenia de esta
+    clave primaria, no interviene ningun bson.ObjectId).
     """
     model_config = ConfigDict(extra="ignore")
 
@@ -152,7 +152,7 @@ class PipelineTriggerResponse(BaseModel):
 
 
 class QualitySummaryItem(BaseModel):
-    """One row of the `data_quality_summary` SQL table."""
+    """Una fila de la tabla SQL `data_quality_summary`."""
     model_config = ConfigDict(extra="ignore")
 
     pipeline_run_id: str
@@ -165,7 +165,7 @@ class QualitySummaryItem(BaseModel):
 
 
 class QualitySummaryResponse(BaseModel):
-    """Latest snapshot: one item per dimension for the most recent run."""
+    """Ultimo snapshot: un item por dimension para el run mas reciente."""
     items: list[QualitySummaryItem]
 
 
@@ -183,15 +183,16 @@ class HealthResponse(BaseModel):
 # -- Classification (Feature 2: clasificacion-radiografias) --
 
 class ClassifyRequest(BaseModel):
-    """Body of POST /api/v1/radiographies/classify."""
+    """Cuerpo de POST /api/v1/radiographies/classify."""
     minio_object_key: str = Field(min_length=1)
 
 
 class ClassificationResponse(RadiographyClassification):
-    """Body of POST /classify and GET /classification responses.
+    """Cuerpo de las respuestas de POST /classify y GET /classification.
 
-    Includes the minio_object_key so callers can confirm which radiography
-    the classification belongs to without round-tripping through the query.
+    Incluye el minio_object_key para que los callers puedan confirmar a
+    que radiografia pertenece la clasificacion sin necesidad de hacer una
+    consulta adicional.
     """
     minio_object_key: str
 
@@ -210,7 +211,7 @@ class TriagePatientRequest(BaseModel):
 
     name: str = Field(min_length=1)
     gender: Literal["M", "F", "Other"]
-    birth_date: str | None = None  # ISO YYYY-MM-DD
+    birth_date: str | None = None  # formato ISO YYYY-MM-DD
     age: int | None = Field(default=None, ge=0, le=130)
     blood_type: str | None = None
     vital_signs: VitalSigns

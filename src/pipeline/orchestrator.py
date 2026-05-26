@@ -1,29 +1,28 @@
-"""Coordinate the end-to-end ETL run over a pair of input CSVs.
+"""Coordina el run ETL end-to-end sobre un par de CSVs de entrada.
 
-The orchestrator wires the ingesters, processors and storage layer into a
-single atomic pipeline run. Each call:
+El orquestador conecta los ingesters, processors y la capa de storage en
+un unico run de pipeline atomico. Cada llamada:
 
-  1. Opens a `pipeline_run` row in SQLite (status=running) via `SqlWriter`
-  2. Ingests patients and admissions CSVs into PySpark DataFrames
-  3. Validates rows, splitting valid from rejected
-  4. Cleans and transforms the valid rows (age, diagnosis_category)
-  5. Cross-entity validation: admissions whose patient does not exist in
-     this batch go to rejected with reason `orphan patient_external_id`
-  6. Writes enriched patients with embedded admissions to MongoDB
-  7. Persists rejected rows in MongoDB with their reason (soft cross-DB
-     reference: `pipeline_run_id` is the SQLite UUID as string)
-  8. Builds a `data_quality_summary` row per dimension and persists it
-     in SQLite via `SqlWriter`
-  9. Closes the run with status=success/failed and aggregated stats in
-     SQLite
+  1. Abre una fila `pipeline_run` en SQLite (status=running) via `SqlWriter`
+  2. Ingesta los CSVs de pacientes e ingresos en DataFrames de PySpark
+  3. Valida las filas, separando validas de rechazadas
+  4. Limpia y transforma las filas validas (age, diagnosis_category)
+  5. Validacion cross-entity: los ingresos cuyo paciente no existe en
+     este batch van a rechazados con motivo `orphan patient_external_id`
+  6. Escribe los pacientes enriquecidos con sus ingresos embebidos a MongoDB
+  7. Persiste las filas rechazadas en MongoDB con su motivo (referencia
+     blanda cross-DB: `pipeline_run_id` es el UUID de SQLite como string)
+  8. Construye una fila `data_quality_summary` por dimension y la persiste
+     en SQLite via `SqlWriter`
+  9. Cierra el run con status=success/failed y stats agregadas en SQLite
 
-Polyglot persistence (ADR-004):
+Persistencia poliglota (ADR-004):
   - SQLite: pipeline_runs + data_quality_summary
   - MongoDB: patients/admissions/radiographies/rejected_records
-  - MinIO: PNG binaries (handled by the bootstrap/watcher, not here)
+  - MinIO: binarios PNG (los gestiona el bootstrap/watcher, no aqui)
 
-Failures at any stage mark the run as failed (CB-5) before re-raising,
-so the run history always reflects what happened.
+Los fallos en cualquier etapa marcan el run como failed (CB-5) antes de
+relanzar, asi que el historial siempre refleja lo que ocurrio.
 """
 from __future__ import annotations
 
@@ -46,7 +45,7 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True)
 class PipelineRunResult:
-    run_id: str  # SQLite UUID string
+    run_id: str  # string UUID de SQLite
     status: str
     records_processed: int
     records_rejected: int
@@ -78,15 +77,15 @@ class PipelineOrchestrator:
         trigger_type: str = "manual",
         run_id: str | None = None,
     ) -> PipelineRunResult:
-        """Run the full ETL on the given CSVs.
+        """Ejecuta el ETL completo sobre los CSVs dados.
 
-        If `run_id` is provided, reuse it (used by the API launcher which
-        starts the run synchronously to return its id, then schedules
-        execution as a BackgroundTask). Otherwise a new run is started.
+        Si se proporciona `run_id`, se reutiliza (lo usa el launcher de la API
+        que arranca el run sincronicamente para devolver su id, y luego
+        programa la ejecucion como BackgroundTask). Si no, se arranca un run nuevo.
 
-        Errors at ANY stage — including the initial `start_pipeline_run`
-        call — are logged and, when possible, recorded as a `failed` run
-        before re-raising. We never swallow exceptions silently (CB-5).
+        Los errores en CUALQUIER etapa — incluyendo la llamada inicial
+        `start_pipeline_run` — se logean y, cuando es posible, se registran
+        como run `failed` antes de relanzar. Nunca se silencian excepciones (CB-5).
         """
         try:
             if run_id is None:
@@ -100,9 +99,9 @@ class PipelineOrchestrator:
             patients_records = [row.asDict() for row in patients_clean.collect()]
             admissions_records = [row.asDict() for row in admissions_clean.collect()]
 
-            # Cross-entity validation: drop admissions whose patient does not
-            # exist in this batch. Single-row validator cannot do this since
-            # it lacks access to the patients dataframe.
+            # Validacion cross-entity: descartar ingresos cuyo paciente no
+            # existe en este batch. El validador por fila no puede hacerlo
+            # porque carece de acceso al dataframe de pacientes.
             admissions_records, orphan_admissions = self._split_orphan_admissions(
                 admissions_records, patients_records
             )
@@ -121,11 +120,11 @@ class PipelineOrchestrator:
                 + self._collect_rejected(admissions_rejected, source="admissions.csv")
                 + self._build_orphan_rejections(orphan_admissions)
             )
-            # Soft cross-DB reference: pipeline_run_id is the SQLite UUID
-            # stored in MongoDB as a string. See ADR-004.
+            # Referencia blanda cross-DB: pipeline_run_id es el UUID de SQLite
+            # almacenado en MongoDB como string. Ver ADR-004.
             self._mongo.write_rejected(rejected, run_id)
 
-            # Persist aggregated quality summary in SQLite (for the dashboard)
+            # Persistir el quality summary agregado en SQLite (para el dashboard)
             patients_total = len(patients_records) + patients_rejected_count
             admissions_total = (
                 len(admissions_records) + admissions_rejected_count + orphan_count
@@ -165,9 +164,9 @@ class PipelineOrchestrator:
         except Exception as exc:
             logger.exception("Pipeline run failed (run_id=%s)", run_id)
             if run_id is not None:
-                # Best-effort: try to mark the run as failed in SQLite.
-                # If SQLite itself is the cause of the failure, log and let
-                # the original exception propagate.
+                # Best-effort: intentar marcar el run como failed en SQLite.
+                # Si SQLite es la causa del fallo, logear y dejar que la
+                # excepcion original se propague.
                 try:
                     self._sql.finish_pipeline_run(
                         run_id,
@@ -217,12 +216,13 @@ class PipelineOrchestrator:
     def _split_orphan_admissions(
         admissions: list[dict], patients: list[dict]
     ) -> tuple[list[dict], list[dict]]:
-        """Split admissions into (valid, orphans) based on whether their
-        `patient_external_id` exists in the patients batch.
+        """Divide los ingresos en (validos, huerfanos) segun si su
+        `patient_external_id` existe en el batch de pacientes.
 
-        Orphans are admissions that pass the per-row validator but reference
-        a patient that does not exist in this run's patients dataset. Without
-        this check they would silently disappear at the embedding step.
+        Los huerfanos son ingresos que pasan el validador por fila pero
+        referencian a un paciente que no existe en el dataset de pacientes
+        de este run. Sin este chequeo desaparecerian silenciosamente en
+        el paso de embedding.
         """
         known_ids = {p["external_id"] for p in patients}
         valid: list[dict] = []

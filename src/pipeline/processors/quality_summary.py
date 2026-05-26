@@ -1,14 +1,13 @@
-"""Aggregate counts per dimension for the dashboard's data_quality_summary.
+"""Agrega conteos por dimension para el data_quality_summary del dashboard.
 
-Pure function with no I/O — easy to test, easy to compose. Lives in
-`processors/` because it transforms data, like the validator and the
-cleaner, even though it does not touch PySpark.
+Funcion pura sin I/O — facil de testear, facil de componer. Vive en
+`processors/` porque transforma datos, como el validator y el cleaner,
+aunque no toca PySpark.
 
-Orphan admissions detected by cross-entity validation (admissions whose
-`patient_external_id` does not exist in the batch) count towards the
-`admissions.rejected` total. They are NOT a separate dimension: the
-dashboard reasons in terms of "what fraction of admissions were rejected,
-for any reason".
+Los ingresos huerfanos detectados por validacion cross-entity (ingresos cuyo
+`patient_external_id` no existe en el batch) cuentan dentro del total de
+`admissions.rejected`. NO son una dimension separada: el dashboard razona
+en terminos de "que fraccion de ingresos fue rechazada, por cualquier motivo".
 """
 from __future__ import annotations
 
@@ -23,14 +22,14 @@ def build(
     admissions_rejected: int,
     admissions_orphans: int,
 ) -> list[dict]:
-    """Build summary rows ready to feed `SqlWriter.write_quality_summary`."""
+    """Construye las filas de summary listas para alimentar `SqlWriter.write_quality_summary`."""
     patients = _row(
         dimension="patients",
         total=patients_total,
         valid=patients_valid,
         rejected=patients_rejected,
     )
-    # Orphans are counted alongside rule-based rejections in admissions.
+    # Los huerfanos se contabilizan junto a los rechazos por regla en admissions.
     admissions = _row(
         dimension="admissions",
         total=admissions_total,

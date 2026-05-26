@@ -1,13 +1,14 @@
-"""Image preprocessing for the radiography classifier.
+"""Preprocesado de imagenes para el clasificador de radiografias.
 
-`preprocess_for_inference` is the single contract shared between training
-and serving. Anything that touches a model input MUST go through it; this
-is how we avoid the classic train-serve skew bug (different normalisation
-or resize in training vs. production).
+`preprocess_for_inference` es el unico contrato compartido entre entrenamiento
+y serving. Todo lo que toque una entrada del modelo DEBE pasar por aqui; asi
+evitamos el clasico bug de train-serve skew (distinta normalizacion o resize
+en entrenamiento frente a produccion).
 
-The augmentation pipeline (used only in training) intentionally excludes
-RandomFlip: flipping a chest X-ray horizontally would invert anatomical
-left/right and confuse the model about lesion sides.
+El pipeline de augmentation (usado solo en entrenamiento) excluye intencionadamente
+RandomFlip: voltear horizontalmente una radiografia de torax invertiria la
+lateralidad anatomica izquierda/derecha y confundiria al modelo sobre el lado
+de las lesiones.
 """
 from __future__ import annotations
 
@@ -21,22 +22,22 @@ logger = logging.getLogger(__name__)
 
 
 IMAGE_SIZE: tuple[int, int] = (224, 224)
-MIN_IMAGE_DIM: int = 32  # CB-7: smaller than this is almost certainly not a real X-ray
+MIN_IMAGE_DIM: int = 32  # CB-7: por debajo casi seguro no es una radiografia real
 
 
 class InvalidImageError(ValueError):
-    """Image cannot be safely turned into a model input (CB-3, CB-7)."""
+    """La imagen no se puede convertir de forma segura en entrada del modelo (CB-3, CB-7)."""
 
 
 def preprocess_for_inference(image_bytes: bytes) -> np.ndarray:
-    """Decode + resize + normalise an image to a model-ready tensor.
+    """Decodifica + redimensiona + normaliza una imagen a un tensor listo para el modelo.
 
-    Output shape: (IMAGE_SIZE[0], IMAGE_SIZE[1], 1), dtype float32, values
-    in [0.0, 1.0]. Grayscale by design (X-rays are monochromatic and the
-    model has a single input channel — see ADR-005).
+    Shape de salida: (IMAGE_SIZE[0], IMAGE_SIZE[1], 1), dtype float32, valores
+    en [0.0, 1.0]. Escala de grises por diseno (las radiografias son monocromaticas
+    y el modelo tiene un unico canal de entrada — ver ADR-005).
 
-    Raises `InvalidImageError` for empty payloads, unreadable bytes, or
-    images below `MIN_IMAGE_DIM` per side.
+    Lanza `InvalidImageError` para payloads vacios, bytes ilegibles o imagenes
+    por debajo de `MIN_IMAGE_DIM` en cualquier lado.
     """
     if not image_bytes:
         raise InvalidImageError("Empty image payload")
@@ -63,17 +64,17 @@ def preprocess_for_inference(image_bytes: bytes) -> np.ndarray:
 
 
 def build_augmentation_pipeline():
-    """Build the data-augmentation Sequential used during training only.
+    """Construye el Sequential de data-augmentation usado solo durante el entrenamiento.
 
-    Lazy-imports keras so unit tests that don't need TF can still import
-    this module. The augmentations are deliberately conservative and
-    radiography-aware:
-        * RandomRotation(±10°): patients are not always perfectly aligned
-        * RandomZoom(±10%): scale variability between machines
-        * RandomBrightness(±10%): exposure variability
-    Notably absent: RandomFlip — see module docstring.
+    Hace lazy-import de keras para que los tests unitarios que no necesitan
+    TF aun puedan importar este modulo. Las augmentations son deliberadamente
+    conservadoras y conscientes del dominio radiografico:
+        * RandomRotation(+-10 grados): los pacientes no siempre estan perfectamente alineados
+        * RandomZoom(+-10%): variabilidad de escala entre maquinas
+        * RandomBrightness(+-10%): variabilidad de exposicion
+    Notablemente ausente: RandomFlip — ver docstring del modulo.
     """
-    from tensorflow import keras  # local import: keep module light-weight
+    from tensorflow import keras  # import local: mantener el modulo ligero
 
     return keras.Sequential(
         [

@@ -1,8 +1,9 @@
-"""Generate synthetic hospital data (patients + admissions) for pipeline testing.
+"""Genera datos hospitalarios sinteticos (pacientes + ingresos) para testear el pipeline.
 
-Produces CSV files shaped like what the hospital's source systems would emit,
-including intentional edge cases (nulls, malformed dates, duplicates, orphan
-references) so the downstream validators have something meaningful to reject.
+Produce archivos CSV con la forma de los que emitirian los sistemas fuente del
+hospital, incluyendo casos borde intencionados (nulls, fechas malformadas,
+duplicados, referencias huerfanas) para que los validators downstream tengan
+algo significativo que rechazar.
 """
 from __future__ import annotations
 
@@ -49,7 +50,7 @@ DEPARTMENTS = [
     "Oncologia", "Radiologia",
 ]
 
-# ICD-10 codes aligned with the triple classification we care about
+# Codigos ICD-10 alineados con la clasificacion triple que nos interesa
 DIAGNOSES = [
     ("J18.9", "Pneumonia, unspecified"),
     ("J18.0", "Bronchopneumonia"),
@@ -92,7 +93,7 @@ def generate_patients(
     edge_case_ratio: float = 0.05,
     seed: int | None = None,
 ) -> list[str]:
-    """Write a patients CSV and return the list of generated external_ids."""
+    """Escribe un CSV de pacientes y devuelve la lista de external_ids generados."""
     rng = random.Random(seed)
     fake = Faker("es_ES")
     if seed is not None:
@@ -127,7 +128,7 @@ def generate_patients(
         records.append(record)
         external_ids.append(external_id)
 
-    # Duplicate ~3% when edge cases are enabled to exercise dedup logic
+    # Duplicar ~3% cuando los casos borde estan activos para ejercitar la logica de dedup
     if edge_case_ratio > 0 and records:
         n_duplicates = max(1, int(n * 0.03))
         duplicates = rng.sample(records, min(n_duplicates, len(records)))
@@ -145,7 +146,7 @@ def generate_admissions(
     edge_case_ratio: float = 0.05,
     seed: int | None = None,
 ) -> None:
-    """Write an admissions CSV referencing the provided patient ids."""
+    """Escribe un CSV de ingresos referenciando los ids de paciente proporcionados."""
     if not patient_external_ids:
         raise ValueError("patient_external_ids must contain at least one id")
 
@@ -158,7 +159,7 @@ def generate_admissions(
 
     for _ in range(n):
         if rng.random() < edge_case_ratio:
-            # Orphan reference: a patient that does not exist
+            # Referencia huerfana: un paciente que no existe
             patient_ref = f"HOSP-{rng.randint(900_000, 999_999):06d}"
         else:
             patient_ref = rng.choice(patient_external_ids)

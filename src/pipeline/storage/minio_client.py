@@ -1,4 +1,4 @@
-"""Wrapper around minio-py with hospital-specific defaults."""
+"""Wrapper alrededor de minio-py con defaults especificos del hospital."""
 from __future__ import annotations
 
 import io
@@ -64,12 +64,12 @@ class MinIOClient:
         self._client.fget_object(bucket, key, str(file_path))
 
     def download_bytes(self, bucket: str, key: str) -> bytes:
-        """Read an object entirely into memory.
+        """Lee un objeto enteramente en memoria.
 
-        Used by the classification endpoint, which needs the bytes for
-        in-memory preprocessing without round-tripping through the
-        filesystem. Propagates `S3Error` (e.g. `NoSuchKey`) unmodified
-        so the caller can map it to a 404.
+        Lo usa el endpoint de clasificacion, que necesita los bytes para
+        preprocesarlos en memoria sin pasar por el filesystem. Propaga
+        `S3Error` (p.ej. `NoSuchKey`) sin modificar para que el caller
+        pueda mapearlo a un 404.
         """
         response = self._client.get_object(bucket, key)
         try:

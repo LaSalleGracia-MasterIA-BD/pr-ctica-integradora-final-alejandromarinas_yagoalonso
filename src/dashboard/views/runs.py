@@ -1,4 +1,4 @@
-"""Pipeline runs view.
+"""Vista de pipeline runs.
 
 RF-5: tabla paginada del historico de runs del pipeline.
 
@@ -35,7 +35,7 @@ def _cached_runs(_base_url: str, limit: int):
 
 
 def _status_badge(status: str) -> str:
-    # Sin CSS, solo prefijo ascii del badge para la tabla
+    # Sin CSS, solo prefijo ASCII del badge para la tabla
     return {
         "success": "[OK] success",
         "failed":  "[FAIL] failed",

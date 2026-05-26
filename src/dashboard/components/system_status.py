@@ -1,8 +1,8 @@
-"""Persistent system status footer for the sidebar.
+"""Footer persistente con el estado del sistema en la sidebar.
 
-Three chips: API, Modelo, Ultimo run. Visible across all 5 views so the
-evaluator always knows the health of the stack at a glance. Encajado
-con el encuadre "Centro de Control Hospitalario" del producto.
+Tres chips: API, Modelo, Ultimo run. Visibles en las 5 vistas para que
+el evaluador siempre vea de un vistazo la salud del stack. Encajado con
+el encuadre "Centro de Control Hospitalario" del producto.
 
 Comparte llamada `health()` + `latest_pipeline_run()` con las vistas
 gracias al cache de Streamlit (`st.cache_data(ttl=10s)` en
@@ -61,7 +61,7 @@ def _run_chip(run_data: Optional[dict], run_err) -> Chip:
 
 
 def build_chips(api_client: ApiClient) -> list[Chip]:
-    """Build the 3 chips. Pure (no Streamlit), so it is testable."""
+    """Construye los 3 chips. Pura (sin Streamlit), por eso es testeable."""
     health_data, health_err = api_client.health()
     run_data, run_err = api_client.latest_pipeline_run()
     return [
@@ -92,7 +92,7 @@ def _chip_html(chip: Chip) -> str:
 
 
 def render_system_status(api_client: ApiClient) -> None:
-    """Render the 3 chips dentro del contenedor actual (sidebar tipicamente)."""
+    """Renderiza los 3 chips dentro del contenedor actual (sidebar tipicamente)."""
     import streamlit as st
 
     @st.cache_data(ttl=10, show_spinner=False)

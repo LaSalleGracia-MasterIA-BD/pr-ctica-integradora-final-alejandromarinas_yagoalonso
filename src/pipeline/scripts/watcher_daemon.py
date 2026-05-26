@@ -1,19 +1,19 @@
-"""Long-running watcher daemon that triggers the ETL on incoming CSVs.
+"""Daemon watcher long-running que dispara el ETL al llegar CSVs.
 
-This is the productized side of `IncomingFilesWatcher` (T9). It wires the
-watcher to a real `PipelineOrchestrator` and keeps the process alive so the
-container can sit there waiting for files. Used as the entrypoint of the
-`watcher` service in docker-compose.
+Esta es la version productizada de `IncomingFilesWatcher` (T9). Conecta el
+watcher a un `PipelineOrchestrator` real y mantiene el proceso vivo para que
+el contenedor pueda quedarse esperando archivos. Se usa como entrypoint del
+servicio `watcher` en docker-compose.
 
-Behaviour:
-  * On startup, creates Spark + Mongo + orchestrator + watcher once.
-  * Watches `data/incoming/` for `patients.csv` + `admissions.csv`.
-  * When both arrive, runs the full ETL (`trigger_type=watcher`) and moves
-    the files into `data/incoming/processed/` to avoid reprocessing.
-  * Handles SIGINT/SIGTERM cleanly so `docker compose down` is graceful.
+Comportamiento:
+  * Al arrancar, crea Spark + Mongo + orchestrator + watcher una sola vez.
+  * Vigila `data/incoming/` esperando `patients.csv` + `admissions.csv`.
+  * Cuando llegan ambos, ejecuta el ETL completo (`trigger_type=watcher`) y mueve
+    los archivos a `data/incoming/processed/` para evitar re-procesamiento.
+  * Gestiona SIGINT/SIGTERM limpiamente para que `docker compose down` sea graceful.
 
-This is the second half of RF-7 (automated ingestion). The first half is
-the manual `POST /api/v1/pipeline/trigger` endpoint exposed by the API.
+Esta es la segunda mitad de RF-7 (ingesta automatica). La primera mitad es el
+endpoint manual `POST /api/v1/pipeline/trigger` expuesto por la API.
 """
 from __future__ import annotations
 
@@ -60,8 +60,8 @@ def main() -> None:
                 trigger_type="watcher",
             )
         except Exception:
-            # Already logged + marked as failed by the orchestrator. Swallow
-            # here so the watcher keeps running for future batches.
+            # El orquestador ya logea y marca como failed. Tragar aqui para
+            # que el watcher siga corriendo para futuros batches.
             logger.exception("Pipeline run triggered by watcher failed")
 
     watcher = IncomingFilesWatcher(incoming_dir=INCOMING_DIR, on_ready=on_ready)

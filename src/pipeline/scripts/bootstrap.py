@@ -1,18 +1,19 @@
-"""Bring the hospital stack to a ready-to-use state.
+"""Deja el stack del hospital en un estado listo para usar.
 
-Runs automatically at `docker compose up` via the pipeline service. It does
-the work needed to turn a fresh set of containers into a demo-ready system:
+Se ejecuta automaticamente en `docker compose up` via el servicio pipeline.
+Hace el trabajo necesario para convertir un conjunto de contenedores limpio
+en un sistema demo-ready:
 
-  1. Verify that synthetic fixtures are present on disk (committed to the repo)
-  2. Sync local radiographies into the MinIO `radiographies` bucket
-  3. Run the full ETL pipeline (PySpark) if MongoDB has no patients yet,
-     so the API has data to serve right away
-  4. Persist radiography metadata in MongoDB (embedded in patients) so
-     `GET /api/v1/radiographies` returns real data, not just bytes in MinIO
-  5. Smoke-check connectivity with MongoDB
+  1. Verificar que las fixtures sinteticas estan en disco (commiteadas al repo)
+  2. Sincronizar radiografias locales al bucket `radiographies` de MinIO
+  3. Ejecutar el pipeline ETL completo (PySpark) si MongoDB aun no tiene pacientes,
+     para que la API tenga datos que servir desde el primer momento
+  4. Persistir metadatos de radiografias en MongoDB (embebidos en pacientes) para
+     que `GET /api/v1/radiographies` devuelva datos reales, no solo bytes en MinIO
+  5. Smoke-check de conectividad con MongoDB
 
-All steps are idempotent: re-running the stack only does work that is
-actually needed, so warm restarts are fast.
+Todos los pasos son idempotentes: re-ejecutar el stack solo hace el trabajo que
+realmente hace falta, asi que los warm restarts son rapidos.
 """
 from __future__ import annotations
 
@@ -64,9 +65,9 @@ def main() -> None:
         sum(1 for _ in images_dir.iterdir()),
     )
 
-    # Polyglot persistence (ADR-004): SQLite owns pipeline_runs +
-    # data_quality_summary. Bootstrap is the single owner of the DDL —
-    # everything downstream assumes the schema already exists.
+    # Persistencia poliglota (ADR-004): SQLite es duenia de pipeline_runs +
+    # data_quality_summary. El bootstrap es el unico owner del DDL —
+    # todo lo downstream asume que el schema ya existe.
     _init_sql_schema()
 
     images_metadata = _sync_radiographies(images_dir)
@@ -99,7 +100,7 @@ def main() -> None:
 
 
 def _init_sql_schema() -> None:
-    """Create SQLite tables if they do not exist. Idempotent."""
+    """Crea las tablas SQLite si no existen. Idempotente."""
     engine = get_sql_engine_from_env()
     try:
         create_all_tables(engine)
@@ -109,12 +110,12 @@ def _init_sql_schema() -> None:
 
 
 def _sync_radiographies(images_dir: Path) -> list[IngestedImage]:
-    """Sync local PNGs to MinIO and return metadata for ALL local images.
+    """Sincroniza PNGs locales a MinIO y devuelve metadatos de TODAS las imagenes locales.
 
-    Object keys are deterministic (`{patient_id}/{filename}`) so re-uploading
-    the same file is a no-op in terms of MinIO state. We skip the upload when
-    the key is already present, but still build the metadata record so the
-    caller can persist it in MongoDB if needed.
+    Las object keys son deterministas (`{patient_id}/{filename}`) asi que re-subir
+    el mismo archivo es no-op en cuanto al estado de MinIO. Saltamos la subida
+    cuando la key ya esta presente, pero igualmente construimos el registro de
+    metadatos para que el caller pueda persistirlo en MongoDB si hace falta.
     """
     minio = get_minio_client_from_env()
     minio.ensure_bucket(IMAGES_BUCKET)
@@ -133,10 +134,10 @@ def _sync_radiographies(images_dir: Path) -> list[IngestedImage]:
     uploaded = 0
     skipped = 0
     for image_path in local_pngs:
-        # ingest_file always re-validates and produces metadata; if the key
-        # is already in MinIO we can technically skip the network upload, but
-        # since `ingest_file` is idempotent (overwrite-on-same-key) and the
-        # dataset is small, calling it unconditionally is the simpler invariant.
+        # ingest_file siempre re-valida y produce metadatos; si la key ya esta
+        # en MinIO podriamos saltarnos la subida por red, pero como `ingest_file`
+        # es idempotente (overwrite con la misma key) y el dataset es pequeno,
+        # llamarlo incondicionalmente es el invariante mas simple.
         meta = ingester.ingest_file(image_path)
         if meta is None:
             continue
@@ -157,10 +158,10 @@ def _sync_radiographies(images_dir: Path) -> list[IngestedImage]:
 
 
 def _run_etl_if_empty(patients_csv: Path, admissions_csv: Path) -> None:
-    """Populate MongoDB by running the full ETL on the bundled CSVs.
+    """Pobla MongoDB ejecutando el ETL completo sobre los CSVs incluidos.
 
-    Skipped when MongoDB already has patients — keeps warm restarts fast and
-    respects the idempotency contract of the rest of the pipeline.
+    Se omite cuando MongoDB ya tiene pacientes — mantiene los warm restarts
+    rapidos y respeta el contrato de idempotencia del resto del pipeline.
     """
     writer = get_mongo_writer_from_env()
     try:
@@ -200,11 +201,11 @@ def _run_etl_if_empty(patients_csv: Path, admissions_csv: Path) -> None:
 
 
 def _persist_radiography_metadata(images: list[IngestedImage]) -> None:
-    """Embed each radiography metadata into its patient's document.
+    """Embebe los metadatos de cada radiografia en el documento de su paciente.
 
-    `add_radiography_to_patient` is idempotent (uses $ne on minio_object_key),
-    so running this twice does NOT create duplicates — fulfils CB-4/CA-6 for
-    the radiography branch of the pipeline.
+    `add_radiography_to_patient` es idempotente (usa $ne sobre minio_object_key),
+    asi que ejecutarlo dos veces NO crea duplicados — cumple CB-4/CA-6 para la
+    rama de radiografias del pipeline.
     """
     if not images:
         return
@@ -219,7 +220,7 @@ def _persist_radiography_metadata(images: list[IngestedImage]) -> None:
                 "original_filename": img.original_filename,
                 "file_size_bytes": img.file_size_bytes,
                 "ingested_at": img.ingested_at,
-                "classification": None,  # populated when the ML model runs
+                "classification": None,  # se completa cuando se ejecuta el modelo ML
             }
             if writer.add_radiography_to_patient(img.patient_external_id, metadata):
                 attached += 1
@@ -244,12 +245,12 @@ DEMO_RADIOGRAPHY_KEY = "HOSP-DEMO-001/HOSP-DEMO-001_xray1.png"
 
 
 def _generate_demo_radiograph_bytes(seed: int = 42) -> bytes:
-    """Generate a synthetic 256x256 grayscale PNG.
+    """Genera un PNG sintetico de 256x256 en escala de grises.
 
-    Soft vertical gradient + gaussian noise + two darker ellipses that
-    vaguely suggest lungs. NOT a real radiograph — purely there so the
-    Classifier view of the dashboard has at least one image of >=32 px
-    available out-of-the-box. See `data/raw/images-demo/README.md`.
+    Gradiente vertical suave + ruido gaussiano + dos elipses mas oscuras que
+    sugieren vagamente pulmones. NO es una radiografia real — esta solo para
+    que la vista Clasificador del dashboard tenga al menos una imagen >=32 px
+    disponible out-of-the-box. Ver `data/raw/images-demo/README.md`.
     """
     import io
 
@@ -258,14 +259,14 @@ def _generate_demo_radiograph_bytes(seed: int = 42) -> bytes:
 
     rng = np.random.default_rng(seed)
     size = 256
-    # Vertical gradient (darker top, lighter bottom): mimics typical X-ray exposure
+    # Gradiente vertical (mas oscuro arriba, mas claro abajo): imita la exposicion tipica de una radiografia
     gradient = np.tile(np.linspace(60, 200, size, dtype=np.float32), (size, 1)).T
-    # Gaussian noise to look "filmic" rather than flat
+    # Ruido gaussiano para que parezca "filmico" en vez de plano
     noise = rng.normal(0.0, 12.0, size=(size, size)).astype(np.float32)
     arr = np.clip(gradient + noise, 0, 255).astype(np.uint8)
 
     img = Image.fromarray(arr, mode="L")
-    # Two darker ellipses that suggest lungs (decorative, no clinical value)
+    # Dos elipses mas oscuras que sugieren pulmones (decorativo, sin valor clinico)
     draw = ImageDraw.Draw(img)
     draw.ellipse((40, 70, 110, 200), fill=80)
     draw.ellipse((146, 70, 216, 200), fill=80)
@@ -276,10 +277,10 @@ def _generate_demo_radiograph_bytes(seed: int = 42) -> bytes:
 
 
 def _seed_demo_radiograph() -> None:
-    """Upload the demo PNG to MinIO + register the demo patient in MongoDB.
+    """Sube el PNG de demo a MinIO + registra el paciente demo en MongoDB.
 
-    Idempotent: re-runs upload (MinIO overwrites by key) and use
-    `add_radiography_to_patient` which is also idempotent on
+    Idempotente: re-ejecuta la subida (MinIO sobrescribe por key) y usa
+    `add_radiography_to_patient` que tambien es idempotente sobre
     `minio_object_key`.
     """
     minio = get_minio_client_from_env()
@@ -295,7 +296,7 @@ def _seed_demo_radiograph() -> None:
 
     writer = get_mongo_writer_from_env()
     try:
-        # Ensure the demo patient exists
+        # Asegurar que el paciente demo existe
         writer.bulk_upsert_patients([
             {
                 "external_id": DEMO_PATIENT_ID,
@@ -306,7 +307,7 @@ def _seed_demo_radiograph() -> None:
                 "blood_type": "A+",
             }
         ])
-        # Attach the radiograph (idempotent)
+        # Adjuntar la radiografia (idempotente)
         writer.add_radiography_to_patient(
             DEMO_PATIENT_ID,
             {

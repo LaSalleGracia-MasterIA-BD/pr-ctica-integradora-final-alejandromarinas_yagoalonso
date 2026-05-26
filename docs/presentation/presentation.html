@@ -5,360 +5,905 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>laSalle Health Center — Sistema Inteligente de Soporte Hospitalario</title>
 
-  <!-- reveal.js core, tema neutro -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
 
   <style>
-    /* =================================================================
-       Paleta y tipografia
-       =================================================================
-       Inspiracion: instrumental medico / radiografia / panel clinico.
-       Sin imagenes externas. Patrones SVG inline. Sin emojis.
-    */
+    /* =====================================================================
+       laSalle Health Center — Deck final
+       Paleta hibrida: oscura en portada + etica + cierre; clara en el resto.
+       ===================================================================== */
+
     :root {
-      --bg-deep:     #0B1220;
-      --bg-app:      #0F1A2E;
-      --bg-card:     #131F35;
-      --bg-card-2:   #182747;
-      --line:        #1F2C47;
-      --line-soft:   #243353;
-      --text:        #E6ECF5;
-      --text-soft:   #9AA8BE;
-      --text-mute:   #6B7A95;
-      --accent:      #4F8AF2;   /* azul medico */
-      --accent-2:    #61E8C8;   /* verde scope/scanner */
-      --ok:          #4ADE80;
-      --warn:        #F59E0B;
-      --crit:        #F87171;
-      --crit-2:      #B91C1C;
+      /* --- Light palette (default) --- */
+      --bg:           #F4F6FA;
+      --bg-card:      #FFFFFF;
+      --line:         #E2E8F0;
+      --line-strong:  #CBD5E1;
+      --text:         #0F172A;
+      --text-soft:    #475569;
+      --text-mute:    #64748B;
+      --text-faint:   #94A3B8;
+      --accent:       #1D4ED8;
+      --accent-soft:  rgba(29, 78, 216, 0.08);
+      --ok:           #15803D;
+      --ok-bg:        #ECFDF5;
+      --warn:         #B45309;
+      --warn-bg:      #FFFBEB;
+      --crit:         #B91C1C;
+      --crit-bg:      #FEF2F2;
+
+      /* --- Dark palette (portada + etica + cierre) --- */
+      --d-bg-deep:    #0B1220;
+      --d-bg-app:     #0F1A2E;
+      --d-bg-card:    #131F35;
+      --d-line:       #1F2C47;
+      --d-line-soft:  #243353;
+      --d-text:       #E6ECF5;
+      --d-text-soft:  #9AA8BE;
+      --d-text-mute:  #6B7A95;
+      --d-accent:     #4F8AF2;
+      --d-accent-2:   #61E8C8;
+      --d-ok:         #4ADE80;
+      --d-warn:       #F59E0B;
+      --d-crit:       #F87171;
     }
 
-    html, body { background: var(--bg-deep); }
-    .reveal { font-family: "Inter", "Helvetica Neue", -apple-system, system-ui, sans-serif; color: var(--text); }
+    html, body { background: var(--bg); }
+    .reveal {
+      font-family: "Inter", "Helvetica Neue", -apple-system, system-ui, sans-serif;
+      color: var(--text);
+    }
     .reveal .slides section {
       text-align: left;
-      padding: 36px 56px;
+      padding: 85px 56px 70px !important;
       box-sizing: border-box;
+      height: 100% !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-evenly !important;
+      gap: 16px;
     }
-    .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+    /* Grids con cards/big-metrics que se estiran a 1fr para llenar */
+    .reveal .slides section .grid-2,
+    .reveal .slides section .grid-3,
+    .reveal .slides section .grid-4 {
+      align-items: stretch;
+    }
+    .reveal .slides section .grid > .big-metric,
+    .reveal .slides section .grid > .card { height: 100%; }
+    /* El kicker queda fijo arriba como una banda discreta */
+    .reveal .slides section > .kicker {
+      position: absolute;
+      top: 32px;
+      left: 56px;
+      margin: 0;
+    }
+    .reveal h1, .reveal h2, .reveal h3 {
       font-family: inherit;
-      color: var(--text);
       text-transform: none;
-      letter-spacing: -0.005em;
-      margin: 0 0 0.4em;
+      letter-spacing: -0.01em;
+      margin: 0 0 0.35em;
+      color: var(--text);
     }
-    .reveal h1 { font-size: 2.4em; font-weight: 600; line-height: 1.05; }
-    .reveal h2 { font-size: 1.7em; font-weight: 600; line-height: 1.1; }
-    .reveal h3 { font-size: 1.05em; font-weight: 600; color: var(--accent); }
-    .reveal p, .reveal li { color: var(--text-soft); font-size: 0.62em; line-height: 1.55; }
+    .reveal h1 { font-size: 2.6em; font-weight: 700; line-height: 1.05; }
+    .reveal h2 { font-size: 1.85em; font-weight: 600; line-height: 1.1; }
+    .reveal h3 { font-size: 1.15em; font-weight: 600; color: var(--accent); }
+    .reveal p, .reveal li { color: var(--text-soft); font-size: 0.72em; line-height: 1.55; }
     .reveal strong { color: var(--text); font-weight: 600; }
-    .reveal a { color: var(--accent); }
-    .reveal code, .mono { font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", monospace; }
-    .reveal code { color: var(--accent-2); background: rgba(97, 232, 200, 0.08); padding: 1px 6px; border-radius: 4px; font-size: 0.85em; }
-
-    /* Esquinas de marco tipo viewfinder en cada slide */
-    .reveal .slide-background-content::after {
-      content: "";
+    .reveal code, .mono {
+      font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", monospace;
     }
+    .reveal code {
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+    .reveal a { color: var(--accent); }
 
-    /* Fondo principal: grid muy sutil tipo pantalla clinica */
-    .reveal .backgrounds {
+    /* Backgrounds --------------------------------------------------------- */
+    .reveal .backgrounds { background: var(--bg); }
+
+    section[data-theme="dark"] {
       background:
         radial-gradient(1200px 700px at 20% 10%, rgba(79, 138, 242, 0.10), transparent 60%),
         radial-gradient(1000px 600px at 90% 90%, rgba(97, 232, 200, 0.06), transparent 60%),
-        linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-app) 100%);
+        linear-gradient(180deg, var(--d-bg-deep) 0%, var(--d-bg-app) 100%);
+      color: var(--d-text);
+    }
+    section[data-theme="dark"] h1,
+    section[data-theme="dark"] h2,
+    section[data-theme="dark"] h3 { color: var(--d-text); }
+    section[data-theme="dark"] h3 { color: var(--d-accent); }
+    section[data-theme="dark"] p,
+    section[data-theme="dark"] li { color: var(--d-text-soft); }
+    section[data-theme="dark"] strong { color: var(--d-text); }
+    section[data-theme="dark"] code {
+      color: var(--d-accent-2);
+      background: rgba(97, 232, 200, 0.08);
     }
 
-    /* =================================================================
-       Componentes
-       ================================================================= */
-
-    /* Crest superior izquierdo en cada slide */
-    .slide-crest {
-      position: absolute;
-      top: 28px;
-      left: 56px;
-      display: flex;
+    /* Kicker (etiqueta de seccion arriba) --------------------------------- */
+    .kicker {
+      display: inline-flex;
       align-items: center;
-      gap: 10px;
-      color: var(--text-mute);
-      font-size: 11px;
+      gap: 8px;
+      color: var(--text-faint);
+      font-size: 0.50em;
+      font-weight: 600;
       letter-spacing: 0.18em;
       text-transform: uppercase;
+      margin-bottom: 12px;
     }
-    .slide-crest .dot {
-      width: 8px; height: 8px; border-radius: 50%;
+    .kicker::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
       background: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    section[data-theme="dark"] .kicker { color: var(--d-text-mute); }
+    section[data-theme="dark"] .kicker::before {
+      background: var(--d-accent);
       box-shadow: 0 0 0 3px rgba(79, 138, 242, 0.15);
     }
 
-    /* Etiqueta de seccion arriba del titulo */
-    .kicker {
-      display: inline-block;
-      color: var(--accent-2);
-      font-size: 0.5em;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      font-weight: 600;
-      margin-bottom: 14px;
-      padding: 4px 10px;
-      border: 1px solid var(--line-soft);
-      border-radius: 4px;
-      background: rgba(97, 232, 200, 0.04);
-    }
-
-    /* Card */
+    /* Cards --------------------------------------------------------------- */
     .card {
       background: var(--bg-card);
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 18px 22px;
+      padding: 20px 22px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
     }
-    .card.tight { padding: 14px 18px; }
-    .card .card-label {
+    .card .label {
       color: var(--text-mute);
       text-transform: uppercase;
-      letter-spacing: 0.12em;
-      font-size: 10px;
-      margin-bottom: 8px;
-    }
-    .card .card-value {
-      color: var(--text);
-      font-family: ui-monospace, SFMono-Regular, monospace;
-      font-size: 1.6em;
+      letter-spacing: 0.1em;
+      font-size: 0.50em;
       font-weight: 600;
-      line-height: 1.1;
+      margin-bottom: 6px;
     }
-    .card .card-foot {
-      color: var(--text-mute);
-      font-size: 11px;
-      margin-top: 6px;
+    .card .value {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 1.7em;
+      font-weight: 600;
+      line-height: 1.05;
+      color: var(--text);
     }
+    .card .value.crit { color: var(--crit); }
+    .card .value.warn { color: var(--warn); }
+    .card .value.ok   { color: var(--ok); }
+    .card .foot { color: var(--text-mute); font-size: 0.5em; margin-top: 6px; }
 
-    /* Grids */
+    section[data-theme="dark"] .card {
+      background: var(--d-bg-card);
+      border-color: var(--d-line);
+      box-shadow: none;
+    }
+    section[data-theme="dark"] .card .label { color: var(--d-text-mute); }
+    section[data-theme="dark"] .card .value { color: var(--d-text); }
+    section[data-theme="dark"] .card .value.ok   { color: var(--d-ok); }
+    section[data-theme="dark"] .card .value.warn { color: var(--d-warn); }
+    section[data-theme="dark"] .card .value.crit { color: var(--d-crit); }
+    section[data-theme="dark"] .card .foot { color: var(--d-text-mute); }
+
+    /* Grids --------------------------------------------------------------- */
     .grid { display: grid; gap: 14px; }
     .grid-2 { grid-template-columns: 1fr 1fr; }
     .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
     .grid-4 { grid-template-columns: repeat(4, 1fr); }
 
-    /* Pildoras */
-    .pill {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 3px 10px;
-      border-radius: 999px;
-      background: rgba(79, 138, 242, 0.10);
-      border: 1px solid rgba(79, 138, 242, 0.30);
-      color: var(--text);
-      font-size: 0.55em;
-      letter-spacing: 0.02em;
-    }
-    .pill.ok   { background: rgba(74, 222, 128, 0.10); border-color: rgba(74, 222, 128, 0.30); }
-    .pill.warn { background: rgba(245, 158, 11, 0.10); border-color: rgba(245, 158, 11, 0.35); }
-    .pill.crit { background: rgba(248, 113, 113, 0.10); border-color: rgba(248, 113, 113, 0.35); }
-    .pill .ldot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-    .pill.ok   .ldot { background: var(--ok); }
-    .pill.warn .ldot { background: var(--warn); }
-    .pill.crit .ldot { background: var(--crit); }
-
-    /* Bloque metrica grande */
-    .metric {
-      background: var(--bg-card);
-      border: 1px solid var(--line);
+    /* Iconos (Lucide, MIT) ------------------------------------------------- */
+    .icon-tile {
+      width: 48px; height: 48px;
       border-radius: 12px;
-      padding: 16px 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #DBEAFE 0%, #EFF6FF 100%);
+      color: var(--accent);
+      margin-bottom: 14px;
+      box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.12);
+      transition: transform 320ms ease, box-shadow 320ms ease;
     }
-    .metric .m-label {
-      color: var(--text-mute);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      margin-bottom: 6px;
-    }
-    .metric .m-value {
-      color: var(--text);
-      font-family: ui-monospace, SFMono-Regular, monospace;
-      font-size: 2.2em;
-      font-weight: 600;
-      line-height: 1;
-    }
-    .metric .m-delta {
-      color: var(--ok);
-      font-family: ui-monospace, SFMono-Regular, monospace;
-      font-size: 12px;
-      margin-top: 4px;
-    }
-    .metric.crit .m-value { color: var(--crit); }
-    .metric.warn .m-value { color: var(--warn); }
-    .metric.ok   .m-value { color: var(--ok); }
-    .metric.accent .m-value { color: var(--accent-2); }
+    .icon-tile.tone-warn  { background: linear-gradient(135deg, #FEF3C7 0%, #FFFBEB 100%); color: var(--warn); box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.18); }
+    .icon-tile.tone-crit  { background: linear-gradient(135deg, #FEE2E2 0%, #FEF2F2 100%); color: var(--crit); box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.18); }
+    .icon-tile.tone-ok    { background: linear-gradient(135deg, #DCFCE7 0%, #F0FDF4 100%); color: var(--ok);   box-shadow: inset 0 0 0 1px rgba(21, 128, 61, 0.18); }
+    .icon-tile.tone-mute  { background: #F1F5F9; color: #475569; box-shadow: inset 0 0 0 1px #E2E8F0; }
 
-    /* Tablas sobrias */
-    .reveal table { width: 100%; border-collapse: collapse; font-size: 0.58em; }
+    .icon-tile svg { width: 26px; height: 26px; stroke-width: 1.8; }
+    .card:hover .icon-tile { transform: translateY(-2px) scale(1.04); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.22), 0 8px 18px -10px rgba(29, 78, 216, 0.4); }
+
+    section[data-theme="dark"] .icon-tile {
+      background: rgba(29, 78, 216, 0.18);
+      color: var(--d-accent);
+      box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.30);
+    }
+    section[data-theme="dark"] .icon-tile.tone-warn  { background: rgba(217, 119, 6, 0.18); color: var(--d-warn); box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.30); }
+    section[data-theme="dark"] .icon-tile.tone-crit  { background: rgba(220, 38, 38, 0.18); color: var(--d-crit); box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.30); }
+    section[data-theme="dark"] .icon-tile.tone-ok    { background: rgba(21, 128, 61, 0.18); color: var(--d-ok);   box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.30); }
+
+    /* Check inline para tablas */
+    .icon-inline {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      vertical-align: middle;
+      width: 18px; height: 18px;
+      margin-right: 6px;
+      color: var(--ok);
+    }
+    .icon-inline svg { width: 16px; height: 16px; stroke-width: 2.4; }
+    .icon-inline.tone-accent { color: var(--accent); }
+    .icon-inline.tone-warn   { color: var(--warn); }
+
+    /* Animacion entrada iconos */
+    .reveal .slides section.present .icon-tile {
+      animation: icon-pop 540ms cubic-bezier(.2,.7,.2,1) both;
+    }
+    .reveal .slides section.present .card:nth-child(1) .icon-tile { animation-delay: 120ms; }
+    .reveal .slides section.present .card:nth-child(2) .icon-tile { animation-delay: 220ms; }
+    .reveal .slides section.present .card:nth-child(3) .icon-tile { animation-delay: 320ms; }
+    .reveal .slides section.present .card:nth-child(4) .icon-tile { animation-delay: 420ms; }
+    @keyframes icon-pop {
+      0% { opacity: 0; transform: scale(.6) translateY(8px); }
+      60% { opacity: 1; transform: scale(1.08) translateY(0); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    /* Pills --------------------------------------------------------------- */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(29, 78, 216, 0.25);
+      color: var(--accent);
+      font-size: 0.5em;
+      font-weight: 500;
+    }
+    .pill.ok   { background: var(--ok-bg);   border-color: #BBF7D0; color: #14532D; }
+    .pill.warn { background: var(--warn-bg); border-color: #FDE68A; color: #78350F; }
+    .pill.crit { background: var(--crit-bg); border-color: #FECACA; color: #7F1D1D; }
+    .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    /* Tables -------------------------------------------------------------- */
+    .reveal table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78em;
+      background: var(--bg-card);
+      border-radius: 12px;
+      overflow: hidden;
+    }
     .reveal table th, .reveal table td {
-      padding: 8px 12px;
+      padding: 14px 20px;
       text-align: left;
       border-bottom: 1px solid var(--line);
       color: var(--text-soft);
     }
     .reveal table th {
       color: var(--text-mute);
-      font-weight: 500;
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.9em;
+      letter-spacing: 0.06em;
+      font-size: 0.78em;
+      background: var(--bg);
     }
     .reveal table td strong { color: var(--text); }
-    .num { font-family: ui-monospace, SFMono-Regular, monospace; }
+    .reveal table tr:last-child td { border-bottom: none; }
+    .num { font-family: ui-monospace, SFMono-Regular, monospace; font-feature-settings: "tnum"; }
 
-    /* Footer fino */
-    .reveal .slide-footer {
+    /* Footer + slide number ---------------------------------------------- */
+    .slide-foot {
       position: absolute;
-      bottom: 18px;
+      bottom: 16px;
       left: 56px;
       right: 56px;
-      color: var(--text-mute);
-      font-size: 10px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      color: var(--text-faint);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
       pointer-events: none;
     }
-    .slide-footer .left { color: var(--text-mute); }
-    .slide-footer .right { color: var(--text-mute); font-family: ui-monospace, SFMono-Regular, monospace; }
+    .slide-foot .right { font-family: ui-monospace, SFMono-Regular, monospace; }
+    section[data-theme="dark"] .slide-foot { color: var(--d-text-mute); }
 
-    /* Scanline sutil que cruza la portada */
-    .scanline {
-      position: absolute; left: 0; right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--accent-2), transparent);
-      opacity: 0.5;
-      pointer-events: none;
-      animation: scan 4.5s ease-in-out infinite;
+    /* Capturas (imagenes del dashboard) ----------------------------------- */
+    .capture {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--bg-card);
+      box-shadow: 0 4px 16px -8px rgba(15, 23, 42, 0.15);
     }
-    @keyframes scan {
-      0%   { top:  5%; opacity: 0.0; }
-      20%  { top: 15%; opacity: 0.45; }
-      80%  { top: 85%; opacity: 0.35; }
-      100% { top: 95%; opacity: 0.0; }
+    .capture img { display: block; width: 100%; height: auto; }
+    .capture-caption {
+      color: var(--text-mute);
+      font-size: 0.45em;
+      margin-top: 6px;
+      text-align: center;
     }
 
-    /* ECG line en la portada */
+    /* Big metric (cifra protagonista) ------------------------------------- */
+    .big-metric {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 28px 28px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .big-metric .m-label {
+      color: var(--text-mute);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-size: 0.55em;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .big-metric .m-value {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 3.2em;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--text);
+    }
+    .big-metric .m-value.crit { color: var(--crit); }
+    .big-metric .m-value.ok   { color: var(--ok); }
+    .big-metric .m-value.accent { color: var(--accent); }
+    .big-metric .m-delta {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 0.62em;
+      margin-top: 8px;
+      color: var(--ok);
+    }
+    .big-metric .m-foot { color: var(--text-mute); font-size: 0.60em; margin-top: 10px; }
+
+    /* Variante compacta para slides con poco espacio (slide 6) */
+    .metrics-compact .big-metric { padding: 14px 18px; }
+    .metrics-compact .big-metric .m-value { font-size: 2.3em; }
+    .metrics-compact .big-metric .m-label { font-size: 0.46em; margin-bottom: 4px; }
+    .metrics-compact .big-metric .m-delta { font-size: 0.52em; margin-top: 4px; }
+
+    section[data-theme="dark"] .big-metric {
+      background: var(--d-bg-card);
+      border-color: var(--d-line);
+      box-shadow: none;
+    }
+    section[data-theme="dark"] .big-metric .m-label { color: var(--d-text-mute); }
+    section[data-theme="dark"] .big-metric .m-value { color: var(--d-text); }
+    section[data-theme="dark"] .big-metric .m-value.accent { color: var(--d-accent-2); }
+    section[data-theme="dark"] .big-metric .m-foot { color: var(--d-text-mute); }
+
+    /* ECG line (portada) -------------------------------------------------- */
     .ecg {
       position: absolute;
-      bottom: 60px; left: 56px; right: 56px;
+      bottom: 80px;
+      left: 56px;
+      right: 56px;
       height: 60px;
       pointer-events: none;
     }
     .ecg path {
       fill: none;
-      stroke: var(--accent-2);
+      stroke: var(--d-accent-2);
       stroke-width: 1.6;
       stroke-linecap: round;
       stroke-linejoin: round;
       opacity: 0.55;
     }
 
-    /* Matriz de confusion en SVG */
-    .cm-cell {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: ui-monospace, SFMono-Regular, monospace;
-      color: var(--text);
-      font-size: 14px;
-      height: 60px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-    }
-    .cm-row { display: grid; grid-template-columns: 90px repeat(3, 1fr); gap: 6px; margin-bottom: 6px; }
-    .cm-axis { color: var(--text-mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; align-self: center; }
-    .cm-h { color: var(--text-mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; padding: 4px; }
-
-    /* Arquitectura como SVG */
-    .arch-svg { width: 100%; max-height: 350px; }
-
-    /* Portada */
-    .cover {
-      padding: 0 56px;
-    }
-    .cover .cover-grid {
-      display: grid;
-      grid-template-columns: 1.4fr 1fr;
-      gap: 40px;
-      align-items: center;
-      height: 100%;
-    }
-    .cover h1 {
-      font-size: 2.6em;
-      line-height: 1.0;
-      margin-top: 6px;
-    }
-    .cover .subtitle {
-      color: var(--text-soft);
-      font-size: 0.7em;
-      margin-top: 8px;
-      max-width: 90%;
-    }
-    .cover .meta {
-      margin-top: 18px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .cover .scope {
+    /* Scope SVG (portada) ------------------------------------------------ */
+    .scope {
       position: relative;
       width: 100%;
       aspect-ratio: 1 / 1;
       border-radius: 14px;
-      border: 1px solid var(--line-soft);
+      border: 1px solid var(--d-line-soft);
       background:
         radial-gradient(ellipse at center, rgba(79, 138, 242, 0.10) 0%, transparent 60%),
         repeating-linear-gradient(0deg, transparent 0 19px, rgba(79, 138, 242, 0.05) 19px 20px),
         repeating-linear-gradient(90deg, transparent 0 19px, rgba(79, 138, 242, 0.05) 19px 20px);
       overflow: hidden;
     }
-    .cover .scope::before {
+    .scope::before {
       content: "";
       position: absolute; inset: 0;
       background: radial-gradient(circle at center, transparent 0%, transparent 50%, rgba(11, 18, 32, 0.5) 100%);
     }
-    .cover .scope svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .scope svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 
-    /* Notas del presentador */
-    .reveal .notes-hint {
-      position: absolute;
-      right: 56px;
-      top: 28px;
-      color: var(--text-mute);
-      font-size: 10px;
-      letter-spacing: 0.18em;
+    /* Slide 4 arquitectura SVG block ------------------------------------- */
+    .arch-svg { width: 100%; max-height: 380px; }
+
+    /* Flujo narrativo de la arquitectura --------------------------------- */
+    .arch-flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .arch-step {
+      border: 1px solid var(--line);
+      background: var(--bg-card);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.58em;
+      line-height: 1.4;
+      color: var(--text);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .arch-step .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #FFFFFF;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-weight: 700;
+      font-size: 1.0em;
+    }
+    .arch-step .step-body { flex: 1; }
+    .arch-step .step-title {
+      font-weight: 700;
+      color: var(--text);
       text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.85em;
+      margin-bottom: 3px;
+    }
+    .arch-step .step-desc { color: var(--text-soft); }
+
+    /* Variante por color de paso */
+    .arch-step.s-input .step-num   { background: #64748B; }
+    .arch-step.s-process .step-num { background: #1D4ED8; }
+    .arch-step.s-store .step-num   { background: #7C3AED; }
+    .arch-step.s-serve .step-num   { background: #15803D; }
+
+    .reveal .slides section.present .arch-step {
+      animation: arch-step-in 540ms cubic-bezier(.2,.7,.2,1) both;
+    }
+    .reveal .slides section.present .arch-step:nth-child(1) { animation-delay: 100ms; }
+    .reveal .slides section.present .arch-step:nth-child(2) { animation-delay: 220ms; }
+    .reveal .slides section.present .arch-step:nth-child(3) { animation-delay: 340ms; }
+    .reveal .slides section.present .arch-step:nth-child(4) { animation-delay: 460ms; }
+    @keyframes arch-step-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Lista limpia */
-    .reveal ul { list-style: none; padding-left: 0; }
+    /* Listas limpias ------------------------------------------------------ */
+    .reveal ul { list-style: none; padding-left: 0; margin: 0; }
     .reveal ul li {
-      padding-left: 18px;
       position: relative;
+      padding-left: 18px;
       margin-bottom: 8px;
     }
     .reveal ul li::before {
       content: "";
       position: absolute;
       left: 0;
-      top: 0.6em;
+      top: 0.65em;
       width: 6px;
       height: 6px;
       border-radius: 50%;
       background: var(--accent);
     }
+    section[data-theme="dark"] ul li::before { background: var(--d-accent); }
 
-    /* Fragmentos: fade-in suave por defecto */
-    .reveal .slides section .fragment.fade-in-soft { opacity: 0; transform: translateY(4px); transition: opacity .35s ease, transform .35s ease; }
-    .reveal .slides section .fragment.fade-in-soft.visible { opacity: 1; transform: translateY(0); }
+    /* Demo flow (slide 10) ------------------------------------------------ */
+    .demo-flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .demo-flow .step {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      text-align: center;
+    }
+    .demo-flow .step .step-num {
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 0.5em;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+    .demo-flow .step .step-title {
+      color: var(--text);
+      font-size: 0.45em;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    /* Reveal default tweaks ---------------------------------------------- */
+    .reveal .progress { color: var(--accent); height: 3px; }
+
+    /* =====================================================================
+       ANIMACIONES GLOBALES — fade-in escalonado al entrar al slide
+       ===================================================================== */
+    @keyframes slide-in-up {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slide-in-right {
+      from { opacity: 0; transform: translateX(-14px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes scale-in {
+      from { opacity: 0; transform: scale(0.94); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    @keyframes value-pop {
+      0%   { opacity: 0; transform: scale(0.85); }
+      60%  { opacity: 1; transform: scale(1.03); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    /* Cuando un slide se vuelve present, anima sus hijos directos */
+    .reveal .slides section.present > h1,
+    .reveal .slides section.present > h2 {
+      animation: slide-in-right 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    .reveal .slides section.present > div:not(.slide-foot):not(.portada-overlay):not(.portada-grid) {
+      animation: slide-in-up 0.6s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    .reveal .slides section.present > div:not(.slide-foot):not(.portada-overlay):not(.portada-grid) ~ div:not(.slide-foot) {
+      animation: slide-in-up 0.6s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    .reveal .slides section.present > table {
+      animation: slide-in-up 0.6s 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    .reveal .slides section.present > svg.arch-svg {
+      animation: scale-in 0.7s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    /* Pop suave para cifras protagonistas */
+    .reveal .slides section.present .big-metric .m-value {
+      animation: value-pop 0.7s 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    /* =====================================================================
+       MICROINTERACCIONES — hover, focus
+       ===================================================================== */
+    .card, .big-metric, .capture {
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+                  box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+                  border-color 0.25s ease;
+    }
+    .card:hover, .big-metric:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 24px -10px rgba(15, 23, 42, 0.18),
+                  0 2px 4px rgba(15, 23, 42, 0.06);
+      border-color: var(--line-strong);
+    }
+    section[data-theme="dark"] .card:hover,
+    section[data-theme="dark"] .big-metric:hover {
+      box-shadow: 0 12px 30px -10px rgba(79, 138, 242, 0.35);
+      border-color: var(--d-accent);
+    }
+    .capture:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px -8px rgba(15, 23, 42, 0.25);
+    }
+
+    /* =====================================================================
+       ECG line — animacion de "trazado" en loop
+       ===================================================================== */
+    .ecg path {
+      stroke-dasharray: 1000;
+      stroke-dashoffset: 1000;
+      animation: ecg-draw 4s ease-out infinite;
+    }
+    @keyframes ecg-draw {
+      0%   { stroke-dashoffset: 1000; opacity: 0.2; }
+      30%  { opacity: 0.7; }
+      80%  { opacity: 0.55; }
+      100% { stroke-dashoffset: -1000; opacity: 0.2; }
+    }
+
+    /* Portada con imagen integrada en composicion 2-col ------------------ */
+    .portada-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.1fr;
+      gap: 36px;
+      align-items: center;
+      width: 100%;
+    }
+    .portada-text { animation: portada-text-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .portada-text h1 { animation: portada-text-in 0.7s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    .portada-text p,
+    .portada-text > div { animation: portada-text-in 0.7s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    @keyframes portada-text-in {
+      from { opacity: 0; transform: translateX(-12px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .portada-visual {
+      animation: portada-visual-in 0.8s 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    @keyframes portada-visual-in {
+      from { opacity: 0; transform: scale(0.96); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    .portada-frame {
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.3),
+        0 24px 60px -20px rgba(79, 138, 242, 0.4),
+        inset 0 0 0 1px rgba(97, 232, 200, 0.15);
+      aspect-ratio: 16 / 10;
+    }
+    .portada-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      filter: contrast(1.05) saturate(1.1);
+    }
+
+    /* Linea scan vertical que cruza la imagen en loop sutil */
+    .portada-scan {
+      position: absolute;
+      top: 0;
+      left: -2%;
+      width: 30%;
+      height: 100%;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(97, 232, 200, 0.04) 40%,
+        rgba(97, 232, 200, 0.18) 50%,
+        rgba(97, 232, 200, 0.04) 60%,
+        transparent 100%);
+      animation: portada-scan-move 5s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes portada-scan-move {
+      0%   { left: -30%; opacity: 0; }
+      20%  { opacity: 1; }
+      80%  { opacity: 1; }
+      100% { left: 100%; opacity: 0; }
+    }
+
+    /* Esquinas tipo viewfinder en la imagen */
+    .portada-corners .c {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border: 1.5px solid var(--d-accent-2);
+      opacity: 0.7;
+    }
+    .portada-corners .tl { top: 10px;    left: 10px;    border-right: none;  border-bottom: none; border-top-left-radius: 4px; }
+    .portada-corners .tr { top: 10px;    right: 10px;   border-left: none;   border-bottom: none; border-top-right-radius: 4px; }
+    .portada-corners .bl { bottom: 10px; left: 10px;    border-right: none;  border-top: none;    border-bottom-left-radius: 4px; }
+    .portada-corners .br { bottom: 10px; right: 10px;   border-left: none;   border-top: none;    border-bottom-right-radius: 4px; }
+
+    /* =====================================================================
+       SCANNER FRAME — reutilizable para slides claros y oscuros
+       Aplica el mismo lenguaje visual de la portada: frame redondeado,
+       sombra accent, esquinas viewfinder y scan animado en loop.
+       ===================================================================== */
+    .scanner-frame {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      aspect-ratio: 16 / 10;
+      width: 100%;
+      box-shadow:
+        0 2px 8px rgba(15, 23, 42, 0.08),
+        0 16px 36px -16px rgba(29, 78, 216, 0.30),
+        inset 0 0 0 1px rgba(29, 78, 216, 0.10);
+    }
+    .scanner-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      filter: contrast(1.04) saturate(1.05);
+    }
+    .scanner-frame .scan {
+      position: absolute;
+      top: 0;
+      left: -30%;
+      width: 30%;
+      height: 100%;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(29, 78, 216, 0.05) 40%,
+        rgba(29, 78, 216, 0.22) 50%,
+        rgba(29, 78, 216, 0.05) 60%,
+        transparent 100%);
+      animation: scanner-move 5.5s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes scanner-move {
+      0%   { left: -30%; opacity: 0; }
+      18%  { opacity: 1; }
+      82%  { opacity: 1; }
+      100% { left: 100%; opacity: 0; }
+    }
+    .scanner-frame .corners .c {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border: 1.5px solid var(--accent);
+      opacity: 0.85;
+      pointer-events: none;
+    }
+    .scanner-frame .corners .tl { top: 8px;    left: 8px;    border-right: none;  border-bottom: none; border-top-left-radius: 4px; }
+    .scanner-frame .corners .tr { top: 8px;    right: 8px;   border-left: none;   border-bottom: none; border-top-right-radius: 4px; }
+    .scanner-frame .corners .bl { bottom: 8px; left: 8px;    border-right: none;  border-top: none;    border-bottom-left-radius: 4px; }
+    .scanner-frame .corners .br { bottom: 8px; right: 8px;   border-left: none;   border-top: none;    border-bottom-right-radius: 4px; }
+    /* Variante oscura: corners y scan en verde scope */
+    section[data-theme="dark"] .scanner-frame {
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.3),
+        0 20px 48px -20px rgba(97, 232, 200, 0.30),
+        inset 0 0 0 1px rgba(97, 232, 200, 0.15);
+    }
+    section[data-theme="dark"] .scanner-frame .corners .c { border-color: var(--d-accent-2); }
+    section[data-theme="dark"] .scanner-frame .scan {
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(97, 232, 200, 0.05) 40%,
+        rgba(97, 232, 200, 0.22) 50%,
+        rgba(97, 232, 200, 0.05) 60%,
+        transparent 100%);
+    }
+    /* Variante con aspect-ratio mas cuadrado para slides laterales */
+    .scanner-frame.tall { aspect-ratio: 4 / 3; }
+
+    /* Imagen lateral (slide 5, 11) --------------------------------------- */
+    .side-art {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px -10px rgba(15, 23, 42, 0.20);
+      display: block;
+    }
+
+    /* Imagen banda (slide 5) --------------------------------------------- */
+    .band-art {
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+      border-radius: 12px;
+      margin-top: 14px;
+      box-shadow: 0 4px 16px -8px rgba(15, 23, 42, 0.15);
+    }
+
+    /* Boton "Abrir en vivo" (slide 8) ------------------------------------ */
+    .demo-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 28px;
+      background: linear-gradient(135deg, var(--accent) 0%, #4F8AF2 100%);
+      color: #FFFFFF !important;
+      font-size: 0.7em;
+      font-weight: 600;
+      text-decoration: none !important;
+      border-radius: 14px;
+      box-shadow:
+        0 4px 12px rgba(29, 78, 216, 0.25),
+        0 12px 30px -10px rgba(29, 78, 216, 0.35);
+      transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+                  box-shadow 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .demo-btn:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 6px 16px rgba(29, 78, 216, 0.35),
+        0 16px 40px -10px rgba(29, 78, 216, 0.45);
+    }
+    .demo-btn .arr {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 1.2em;
+      transition: transform 0.2s ease;
+    }
+    .demo-btn:hover .arr { transform: translateX(4px); }
+
+    /* Cards de niveles de triaje (slide 8) — hechas en CSS+SVG limpio */
+    .triaje-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+      max-width: 460px;
+    }
+    .tc {
+      background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+      border: 1px solid var(--line);
+      border-top: 6px solid;
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+                  0 6px 14px -8px rgba(15, 23, 42, 0.12);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .tc-grave { border-top-color: #DC2626; }
+    .tc-medio { border-top-color: #D97706; }
+    .tc-leve  { border-top-color: #15803D; }
+    .tc-head {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFFFFF;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .tc-grave .tc-head { background: #DC2626; }
+    .tc-medio .tc-head { background: #D97706; }
+    .tc-leve  .tc-head { background: #15803D; }
+    .tc-ecg {
+      width: 100%;
+      height: 38px;
+    }
+    .tc-grave .tc-ecg path { stroke: #DC2626; }
+    .tc-medio .tc-ecg path { stroke: #D97706; }
+    .tc-leve  .tc-ecg path { stroke: #15803D; }
+    .tc-ecg path {
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 240;
+      stroke-dashoffset: 240;
+      animation: tc-ecg-draw 2.4s ease-out infinite;
+    }
+    .tc-medio .tc-ecg path { animation-delay: 0.3s; }
+    .tc-leve  .tc-ecg path { animation-delay: 0.6s; }
+    @keyframes tc-ecg-draw {
+      0%   { stroke-dashoffset: 240; opacity: 0.3; }
+      30%  { opacity: 1; }
+      70%  { opacity: 1; }
+      100% { stroke-dashoffset: -240; opacity: 0.3; }
+    }
+    .tc-label {
+      font-size: 0.5em;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--text);
+      margin-top: 2px;
+    }
+    .tc-grave .tc-label { color: #DC2626; }
+    .tc-medio .tc-label { color: #D97706; }
+    .tc-leve  .tc-label { color: #15803D; }
+
+    /* Decoracion pequena transparente en esquina (slide 6, 9) ------------ */
+    .corner-art {
+      max-width: 140px;
+      opacity: 0.85;
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -366,663 +911,803 @@
 <div class="reveal">
   <div class="slides">
 
-    <!-- ============================================================
-         SLIDE 1 — Portada
-         ============================================================ -->
-    <section data-background-transition="fade" class="cover">
-      <div class="scanline"></div>
-      <div class="cover-grid">
-        <div>
+    <!-- =========================================================
+         SLIDE 1 — Portada · 00:00 - 00:45 (45 s)
+         ========================================================= -->
+    <section data-theme="dark" data-background-transition="fade">
+      <div class="portada-grid">
+        <div class="portada-text">
           <span class="kicker">laSalle Health Center · Trabajo final</span>
-          <h1>Sistema Inteligente de<br>Soporte Hospitalario</h1>
-          <div class="subtitle">
-            Big Data + IA aplicada para asistencia diagnostica por imagen,
-            triaje basado en reglas y observabilidad operativa. Reproducible
-            con un solo <code>docker compose up</code>.
-          </div>
-          <div class="meta">
-            <span class="pill">Alejandro Marinas · Yago Alonso</span>
-            <span class="pill ok">Master IA &amp; Big Data</span>
-            <span class="pill">v1.0</span>
+          <h1 style="font-size: 2.4em; line-height: 1.02;">Sistema Inteligente<br>de Soporte Hospitalario</h1>
+          <div style="margin-top: 24px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <span class="pill"><span class="dot"></span>Alejandro Marinas · Yago Alonso</span>
+            <span class="pill ok"><span class="dot"></span>Master IA &amp; Big Data</span>
           </div>
         </div>
-        <div>
-          <div class="scope" aria-hidden="true">
-            <svg viewBox="0 0 200 200" preserveAspectRatio="none">
-              <!-- circular crosshair -->
-              <circle cx="100" cy="100" r="72" stroke="#4F8AF2" stroke-width="0.6" fill="none" opacity="0.6"/>
-              <circle cx="100" cy="100" r="42" stroke="#61E8C8" stroke-width="0.5" fill="none" opacity="0.5"/>
-              <line x1="100" y1="20" x2="100" y2="180" stroke="#4F8AF2" stroke-width="0.4" opacity="0.45"/>
-              <line x1="20" y1="100" x2="180" y2="100" stroke="#4F8AF2" stroke-width="0.4" opacity="0.45"/>
-              <circle cx="100" cy="100" r="3" fill="#61E8C8" />
-              <!-- thorax-ish silhouette hint -->
-              <path d="M 60 78 C 72 70, 128 70, 140 78 L 138 130 C 130 145, 70 145, 62 130 Z"
-                    stroke="#9AA8BE" stroke-width="0.6" fill="rgba(154, 168, 190, 0.04)" opacity="0.55"/>
-            </svg>
-          </div>
-        </div>
-      </div>
-      <svg class="ecg" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M 0 30 L 220 30 L 240 30 L 250 18 L 260 42 L 270 8 L 280 50 L 290 24 L 310 30 L 600 30 L 620 30 L 630 18 L 640 42 L 650 8 L 660 50 L 670 24 L 690 30 L 1000 30" />
-      </svg>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">2026-05-21 · v1.0</span></div>
-      <aside class="notes">
-        [00:00 - 00:30] Apertura. Centra el tema: hospital ficticio, sistema completo de soporte clinico,
-        100% reproducible. Mencionar nombres + master. La animacion ECG es suficiente para fijar el contexto medico,
-        no hace falta explicarla.
-      </aside>
-    </section>
-
-    <!-- ============================================================
-         SLIDE 2 — Problema
-         ============================================================ -->
-    <section>
-      <div class="slide-crest"><span class="dot"></span><span>01 · Problema</span></div>
-      <h2 style="margin-top: 60px;">El hospital tiene datos. Le falta soporte.</h2>
-      <div class="grid grid-3" style="margin-top: 30px;">
-        <div class="card">
-          <div class="card-label">Historias clinicas</div>
-          <p style="color: var(--text-soft); font-size: 0.95em;">
-            Tabulares (pacientes, admisiones, departamentos). Fragmentadas
-            entre ficheros, sin proceso reproducible.
-          </p>
-        </div>
-        <div class="card">
-          <div class="card-label">Imagen medica</div>
-          <p style="color: var(--text-soft); font-size: 0.95em;">
-            Radiografias de torax sin clasificacion automatizada. Revision
-            manual lenta. No hay prioridad sugerida.
-          </p>
-        </div>
-        <div class="card">
-          <div class="card-label">Observabilidad</div>
-          <p style="color: var(--text-soft); font-size: 0.95em;">
-            Logs y trazas dispersas. Sin alertas operativas. Sin cuadro de
-            mando unificado.
-          </p>
-        </div>
-      </div>
-      <p class="fragment fade-in-soft" style="margin-top: 36px; font-size: 0.95em;">
-        <strong>Reto:</strong> construir un sistema que ingiera datos a escala,
-        ofrezca <strong>asistencia diagnostica</strong> sobre imagen y exponga
-        un cuadro de mando que un operador no tecnico pueda usar en turno.
-      </p>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">02 / 14</span></div>
-      <aside class="notes">
-        [00:30 - 01:15] Tres fuentes, tres problemas. Datos tabulares + imagen + operacion.
-        Encuadre: NO es diagnostico vinculante. Es asistencia. Decirlo aqui ya.
-      </aside>
-    </section>
-
-    <!-- ============================================================
-         SLIDE 3 — Que pedia el enunciado
-         ============================================================ -->
-    <section>
-      <div class="slide-crest"><span class="dot"></span><span>02 · Enunciado</span></div>
-      <h2 style="margin-top: 60px;">Que pedia el enunciado</h2>
-      <div class="grid grid-2" style="margin-top: 24px;">
-        <div>
-          <ul>
-            <li><strong>Big Data:</strong> pipeline ETL distribuido con framework de calculo.</li>
-            <li><strong>IA aplicada:</strong> al menos dos paradigmas (modelo aprendido + sistema basado en reglas).</li>
-            <li><strong>Persistencia poliglota:</strong> al menos dos tipos de almacenamiento.</li>
-            <li><strong>API REST</strong> documentada.</li>
-          </ul>
-        </div>
-        <div>
-          <ul>
-            <li><strong>Dashboard</strong> con vista operativa.</li>
-            <li><strong>Automatizacion</strong> (alertas + informes).</li>
-            <li><strong>Despliegue</strong> reproducible.</li>
-            <li><strong>Uso de IA generativa</strong> documentado.</li>
-          </ul>
-        </div>
-      </div>
-      <div class="card tight fragment fade-in-soft" style="margin-top: 28px;">
-        <div class="card-label">Como hemos cubierto cada eje</div>
-        <p style="color: var(--text-soft); font-size: 0.9em; margin-top: 4px;">
-          PySpark, CNN custom (Keras) + reglas IF-THEN, MongoDB + SQLite + MinIO,
-          FastAPI + OpenAPI, Streamlit con 7 vistas, <code>/alerts</code> +
-          informe diario reproducible, <code>docker compose up</code>, SDD aplicado
-          y diario IA por sesion.
-        </p>
-      </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">03 / 14</span></div>
-      <aside class="notes">
-        [01:15 - 02:00] Cumplimiento literal del enunciado. La frase importante: 3 almacenamientos
-        (no 2), 2 paradigmas (no 1), automatizacion accionable, dashboard que funciona en turno.
-      </aside>
-    </section>
-
-    <!-- ============================================================
-         SLIDE 4 — Arquitectura general
-         ============================================================ -->
-    <section>
-      <div class="slide-crest"><span class="dot"></span><span>03 · Arquitectura</span></div>
-      <h2 style="margin-top: 60px;">Arquitectura general</h2>
-      <svg class="arch-svg" viewBox="0 0 1100 360" preserveAspectRatio="xMidYMid meet" style="margin-top: 18px;">
-        <!-- ENTRADAS -->
-        <rect x="20"  y="40"  width="160" height="60" rx="8" fill="#131F35" stroke="#1F2C47"/>
-        <text x="100" y="68" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">CSV pacientes</text>
-        <text x="100" y="86" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">Faker + seed</text>
-        <rect x="20"  y="120" width="160" height="60" rx="8" fill="#131F35" stroke="#1F2C47"/>
-        <text x="100" y="148" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">CSV admisiones</text>
-        <text x="100" y="166" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">10.000 filas</text>
-        <rect x="20"  y="200" width="160" height="60" rx="8" fill="#131F35" stroke="#1F2C47"/>
-        <text x="100" y="228" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">Radiografias PNG</text>
-        <text x="100" y="246" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">COVID-19 Database</text>
-
-        <!-- PIPELINE -->
-        <rect x="240" y="120" width="200" height="120" rx="10" fill="#182747" stroke="#4F8AF2"/>
-        <text x="340" y="155" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">Pipeline PySpark</text>
-        <text x="340" y="180" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">validate · dedupe · enrich</text>
-        <text x="340" y="200" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">data quality summary</text>
-        <text x="340" y="220" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">rejected_records</text>
-
-        <!-- STORES -->
-        <rect x="500" y="40"  width="170" height="60" rx="8" fill="#131F35" stroke="#4F8AF2"/>
-        <text x="585" y="68" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">MongoDB</text>
-        <text x="585" y="86" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">patients · rejected</text>
-        <rect x="500" y="120" width="170" height="60" rx="8" fill="#131F35" stroke="#4F8AF2"/>
-        <text x="585" y="148" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">SQLite</text>
-        <text x="585" y="166" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">pipeline_runs · quality</text>
-        <rect x="500" y="200" width="170" height="60" rx="8" fill="#131F35" stroke="#4F8AF2"/>
-        <text x="585" y="228" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">MinIO</text>
-        <text x="585" y="246" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">PNG radiografias</text>
-
-        <!-- ML -->
-        <rect x="500" y="280" width="170" height="50" rx="8" fill="#131F35" stroke="#61E8C8"/>
-        <text x="585" y="308" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">Modelo CNN .keras</text>
-
-        <!-- API -->
-        <rect x="730" y="120" width="160" height="120" rx="10" fill="#182747" stroke="#61E8C8"/>
-        <text x="810" y="155" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">FastAPI</text>
-        <text x="810" y="180" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">/patients · /classify</text>
-        <text x="810" y="200" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">/alerts · /reports</text>
-        <text x="810" y="220" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">/triage · /model</text>
-
-        <!-- DASHBOARD -->
-        <rect x="940" y="120" width="140" height="120" rx="10" fill="#131F35" stroke="#4F8AF2"/>
-        <text x="1010" y="155" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">Dashboard</text>
-        <text x="1010" y="178" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">7 vistas Streamlit</text>
-        <text x="1010" y="198" text-anchor="middle" font-family="Inter" font-size="11" fill="#9AA8BE">API-only</text>
-
-        <!-- AUTOMATION -->
-        <rect x="730" y="280" width="160" height="50" rx="8" fill="#131F35" stroke="#F59E0B"/>
-        <text x="810" y="308" text-anchor="middle" font-family="Inter" font-size="13" fill="#E6ECF5">Informe diario CLI</text>
-
-        <!-- ARROWS -->
-        <g stroke="#4F8AF2" stroke-width="1.2" fill="none" opacity="0.85">
-          <path d="M 180 70  C 200 70, 220 130, 240 150" />
-          <path d="M 180 150 L 240 170" />
-          <path d="M 180 230 C 200 230, 220 200, 240 200" />
-          <path d="M 440 150 L 500 70" />
-          <path d="M 440 170 L 500 150" />
-          <path d="M 440 200 L 500 230" />
-          <path d="M 440 220 L 500 300" />
-          <path d="M 670 150 L 730 170" />
-          <path d="M 670 300 L 730 200" />
-          <path d="M 890 170 L 940 170" />
-        </g>
-        <!-- Automation arrow (warmer) -->
-        <g stroke="#F59E0B" stroke-width="1.2" fill="none" opacity="0.7">
-          <path d="M 810 240 L 810 280" />
-        </g>
-      </svg>
-      <p style="margin-top: 12px; color: var(--text-mute); font-size: 11px; letter-spacing: 0.06em;">
-        Siete servicios Docker · una sola imagen compartida para pipeline/api/watcher (ADR-006) · dashboard en imagen separada (ADR-007).
-      </p>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">04 / 14</span></div>
-      <aside class="notes">
-        [02:00 - 03:00] Recorrer la izquierda (entradas) -> centro (pipeline) -> derecha (stores + API + dashboard).
-        Decisiones encapsuladas en ADRs 001-010. Mantener el ritmo, no pararse en cada caja.
-      </aside>
-    </section>
-
-    <!-- ============================================================
-         SLIDE 5 — Datos y almacenamiento
-         ============================================================ -->
-    <section>
-      <div class="slide-crest"><span class="dot"></span><span>04 · Datos</span></div>
-      <h2 style="margin-top: 60px;">Persistencia poliglota</h2>
-      <p style="margin-top: 6px;">Cada tipo de dato vive donde su forma encaja. El enunciado pide al menos dos almacenes; entregamos tres.</p>
-
-      <div class="grid grid-3" style="margin-top: 22px;">
-        <div class="card">
-          <div class="card-label">MongoDB</div>
-          <div class="card-value num">4.790</div>
-          <div class="card-foot">pacientes con admisiones y radiografias embebidas</div>
-        </div>
-        <div class="card">
-          <div class="card-label">SQLite</div>
-          <div class="card-value num">2 tablas</div>
-          <div class="card-foot">pipeline_runs · data_quality_summary</div>
-        </div>
-        <div class="card">
-          <div class="card-label">MinIO</div>
-          <div class="card-value num">PNG</div>
-          <div class="card-foot">imagenes de radiografia + bucket de descartes</div>
-        </div>
-      </div>
-
-      <div class="grid grid-2 fragment fade-in-soft" style="margin-top: 18px;">
-        <div class="card tight">
-          <div class="card-label">Volumen procesado</div>
-          <p style="font-size: 0.95em; color: var(--text-soft); margin-top: 4px;">
-            <span class="num">4.790</span> pacientes finales en MongoDB ·
-            <span class="num">8.569</span> admisiones embebidas ·
-            <span class="num">1.692</span> registros rechazados (264 pacientes + 1.428 admisiones).
-          </p>
-        </div>
-        <div class="card tight">
-          <div class="card-label">Calidad medida</div>
-          <p style="font-size: 0.95em; color: var(--text-soft); margin-top: 4px;">
-            <code>rejection_rate</code> calculado por dimension y persistido por run.
-            Es la base sobre la que el sistema de alertas dispara <code>data_quality_low</code>.
-          </p>
-        </div>
-      </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">05 / 14</span></div>
-      <aside class="notes">
-        [03:00 - 03:45] No es "porque puedo". Cada base resuelve un encaje natural distinto.
-        MongoDB para jerarquias paciente -> admisiones -> radios. SQLite para metricas de run.
-        MinIO para binarios. ADR-002 y ADR-004 razonan la decision.
-      </aside>
-    </section>
-
-    <!-- ============================================================
-         SLIDE 6 — Pipeline Big Data
-         ============================================================ -->
-    <section>
-      <div class="slide-crest"><span class="dot"></span><span>05 · Pipeline</span></div>
-      <h2 style="margin-top: 60px;">Pipeline PySpark</h2>
-      <div class="grid grid-2" style="margin-top: 18px;">
-        <div>
-          <ul>
-            <li><strong>Validacion + deduplicacion</strong> por external_id, con motivo de rechazo persistido.</li>
-            <li><strong>Enriquecimiento</strong> de admisiones (categoria diagnostico, edad calculada).</li>
-            <li><strong>Image ingester</strong>: lee PNGs, valida signature, sube a MinIO y los embebe en su paciente.</li>
-            <li><strong>Idempotente</strong>: re-bootstrap NO crea duplicados; <code>matched_count &gt; 0</code>.</li>
-            <li><strong>Auditoria por run</strong> en SQLite (status, started_at, finished_at, error_message).</li>
-          </ul>
-        </div>
-        <div>
-          <div class="card">
-            <div class="card-label">Performance</div>
-            <p style="font-size: 0.95em; color: var(--text-soft);">
-              Bootstrap en frio: <span class="num">~50 s</span> · warm restart:
-              <span class="num">~1 s</span>. <code>docker compose up</code> deja
-              el sistema operativo en menos de <span class="num">1 min</span>.
-            </p>
-          </div>
-          <div class="card fragment fade-in-soft" style="margin-top: 14px;">
-            <div class="card-label">Rejected records</div>
-            <p style="font-size: 0.95em; color: var(--text-soft);">
-              <span class="num">264</span> pacientes y <span class="num">1.428</span> admisiones
-              rechazadas se persisten con su <code>raw_data</code> y motivo,
-              consultables desde la vista Calidad.
-            </p>
-          </div>
-        </div>
-      </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">06 / 14</span></div>
-      <aside class="notes">
-        [03:45 - 04:30] Big Data del temario, alineado con Bloque 5. El watcher en filesystem
-        complementa el bootstrap manual. No hay streaming real (fuera de alcance, lo declaramos).
-      </aside>
-    </section>
-
-    <!-- ============================================================
-         SLIDE 7 — Modelo CNN
-         ============================================================ -->
-    <section>
-      <div class="slide-crest"><span class="dot"></span><span>06 · Modelo CNN</span></div>
-      <h2 style="margin-top: 60px;">Clasificador de radiografias</h2>
-      <div class="grid grid-2" style="margin-top: 18px;">
-        <div>
-          <p>
-            CNN <strong>custom desde cero</strong>, sin transfer learning (ADR-005).
-            <code>Conv2D + MaxPooling2D + Dropout + Dense</code>, alineada con el Bloque 6 del Master.
-            21 MB en disco, formato <code>.keras</code>.
-          </p>
-          <ul style="margin-top: 8px;">
-            <li>Tres clases: <strong>Normal · Pneumonia · COVID-19</strong>.</li>
-            <li>Split estratificado <span class="num">80/10/10</span> con <code>seed=42</code>.</li>
-            <li><span class="num">1.515</span> radiografias en test.</li>
-            <li>EarlyStopping + class_weight <code>sqrt</code>.</li>
-          </ul>
-        </div>
-        <div>
-          <div class="grid grid-2" style="gap: 12px;">
-            <div class="metric"><div class="m-label">Accuracy</div><div class="m-value">0,8766</div></div>
-            <div class="metric"><div class="m-label">Macro-F1</div><div class="m-value">0,8594</div></div>
-            <div class="metric ok"><div class="m-label">Recall Normal</div><div class="m-value">0,890</div></div>
-            <div class="metric ok"><div class="m-label">Recall Pneumonia</div><div class="m-value">0,926</div></div>
-            <div class="metric crit" style="grid-column: 1 / span 2;">
-              <div class="m-label">Recall COVID-19 (con threshold)</div>
-              <div class="m-value">0,820</div>
-              <div class="m-delta">vs baseline argmax: 0,695 &nbsp;(+12,5 pp)</div>
+        <div class="portada-visual">
+          <div class="portada-frame">
+            <img src="img/bg-portada.png" alt="Centro de control hospital laSalle">
+            <div class="portada-scan"></div>
+            <div class="portada-corners">
+              <span class="c tl"></span><span class="c tr"></span>
+              <span class="c bl"></span><span class="c br"></span>
             </div>
           </div>
         </div>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">07 / 14</span></div>
-      <aside class="notes">
-        [04:30 - 05:30] Cifras finales del split de test. Accuracy y macro-F1 son utiles pero
-        no son la clave; la clave es el recall por clase, y en particular el de COVID-19.
-        Si preguntan por que no transfer learning: ADR-005, alineacion literal con el Bloque 6.
-      </aside>
+      <svg class="ecg" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M 0 30 L 220 30 L 240 30 L 250 18 L 260 42 L 270 8 L 280 50 L 290 24 L 310 30 L 600 30 L 620 30 L 630 18 L 640 42 L 650 8 L 660 50 L 670 24 L 690 30 L 1000 30"/>
+      </svg>
+      <div class="slide-foot"><span>laSalle Health Center</span><span class="right">v1.0</span></div>
     </section>
 
-    <!-- ============================================================
-         SLIDE 8 — Umbral COVID 0.35
-         ============================================================ -->
+    <!-- =========================================================
+         SLIDE 2 — El encargo · 00:45 - 01:45 (1 min)
+         ========================================================= -->
     <section>
-      <div class="slide-crest"><span class="dot"></span><span>07 · Threshold</span></div>
-      <h2 style="margin-top: 60px;">Regla operativa <code>covid_threshold_0.35</code></h2>
-      <p style="margin-top: 6px;">
-        Post-hoc sobre las probabilidades softmax. <strong>NO reentrena el modelo</strong>.
-        Los pesos del <code>.keras</code> son los mismos. Trazada en cada prediccion (ADR-010).
-      </p>
+      <span class="kicker">01 · El encargo</span>
+      <h2>Tres problemas operativos. Una consultora. Una linea no negociable.</h2>
 
-      <div class="card tight" style="margin-top: 16px;">
-        <pre class="mono" style="color: var(--text-soft); font-size: 0.7em; margin: 0; line-height: 1.6;">
-si P(COVID-19) >= 0,35 → predicted = COVID-19
-si no                   → argmax(Normal, Pneumonia)
-        </pre>
+      <div class="grid grid-3" style="margin-top: 24px;">
+        <div class="card">
+          <div class="icon-tile tone-crit" aria-hidden="true">
+            <!-- Lucide: database-zap (MIT) -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/>
+              <path d="M3 5V19A9 3 0 0 0 15 21.84"/>
+              <path d="M21 5V8"/>
+              <path d="M21 12L18 17H22L19 22"/>
+              <path d="M3 12A9 3 0 0 0 14.59 14.87"/>
+            </svg>
+          </div>
+          <div class="label">No extraer conocimiento</div>
+          <p style="margin-top: 6px; font-size: 0.85em;">Tenian muchos datos clinicos pero <strong>ninguna herramienta</strong> para convertirlos en informacion util.</p>
+        </div>
+        <div class="card">
+          <div class="icon-tile tone-warn" aria-hidden="true">
+            <!-- Lucide: workflow (MIT) -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="8" height="8" x="3" y="3" rx="2"/>
+              <path d="M7 11v4a2 2 0 0 0 2 2h4"/>
+              <rect width="8" height="8" x="13" y="13" rx="2"/>
+            </svg>
+          </div>
+          <div class="label">Sin automatizacion</div>
+          <p style="margin-top: 6px; font-size: 0.85em;"><strong>Todo a mano:</strong> ingestar CSVs, validar, generar informes diarios. Procesos repetitivos sin tocar.</p>
+        </div>
+        <div class="card">
+          <div class="icon-tile" aria-hidden="true">
+            <!-- Lucide: layout-dashboard (MIT) -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="7" height="9" x="3" y="3" rx="1"/>
+              <rect width="7" height="5" x="14" y="3" rx="1"/>
+              <rect width="7" height="9" x="14" y="12" rx="1"/>
+              <rect width="7" height="5" x="3" y="16" rx="1"/>
+            </svg>
+          </div>
+          <div class="label">Sin soporte al turno</div>
+          <p style="margin-top: 6px; font-size: 0.85em;">El operador que entra a trabajar <strong>no tiene un panel</strong> que le diga <em>"¿que requiere mi atencion ahora?"</em>. Va a ciegas.</p>
+        </div>
       </div>
 
-      <table style="margin-top: 18px;">
+      <div style="margin-top: 28px; padding: 18px 22px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; background: var(--bg-card); display: flex; gap: 16px; align-items: flex-start;">
+        <div class="icon-tile" style="margin: 0; flex-shrink: 0; width: 42px; height: 42px;" aria-hidden="true">
+          <!-- Lucide: shield-check (MIT) -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+        </div>
+        <div style="flex: 1;">
+          <div style="color: var(--accent); font-size: 0.45em; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px;">Posicion etica desde el dia uno</div>
+          <p style="margin: 0; font-size: 0.85em; color: var(--text);">
+            <strong>Ayudamos al medico. No le sustituimos.</strong> La decision clinica sigue siendo humana. Nuestro sistema le da informacion y sugerencias — el profesional decide. No es un disclaimer al final, es lo que condiciona cada decision tecnica.
+          </p>
+        </div>
+      </div>
+
+      <div class="slide-foot"><span>El encargo</span><span class="right">02 / 13</span></div>
+    </section>
+
+    <!-- =========================================================
+         SLIDE 3 — Enunciado vs entregado · 01:45 - 02:45 (1 min)
+         ========================================================= -->
+    <section>
+      <span class="kicker">02 · Enunciado vs entregado</span>
+      <h2>Estos eran los ejes <span style="color: var(--accent);">del encargo del cliente.</span></h2>
+
+      <table style="margin-top: 20px;">
         <thead>
-          <tr><th>Metrica</th><th>Argmax (baseline)</th><th>Threshold 0,35 (operativo)</th><th>Delta</th></tr>
+          <tr>
+            <th>Eje del enunciado</th>
+            <th>Entregado</th>
+          </tr>
         </thead>
         <tbody>
-          <tr><td>Accuracy</td><td class="num">0,8719</td><td class="num"><strong>0,8766</strong></td><td class="num" style="color: var(--ok)">+0,005</td></tr>
-          <tr><td>Macro-F1</td><td class="num">0,8456</td><td class="num"><strong>0,8594</strong></td><td class="num" style="color: var(--ok)">+0,014</td></tr>
-          <tr><td>Recall COVID-19</td><td class="num">0,6953</td><td class="num"><strong>0,8199</strong></td><td class="num" style="color: var(--ok)">+0,125</td></tr>
-          <tr><td>Precision COVID-19</td><td class="num">0,8071</td><td class="num">0,7513</td><td class="num" style="color: var(--warn)">-0,056</td></tr>
-          <tr><td>FN COVID-19</td><td class="num">110 / 361</td><td class="num"><strong>65 / 361</strong></td><td class="num" style="color: var(--ok)">-45 casos</td></tr>
+          <tr>
+            <td>Almacenes heterogeneos</td>
+            <td><span class="icon-inline"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><strong class="num">3</strong> — <strong>MongoDB</strong> (pacientes) · <strong>SQLite</strong> (auditoria pipeline) · <strong>MinIO</strong> (imagenes)</td>
+          </tr>
+          <tr>
+            <td>Paradigmas de IA</td>
+            <td><span class="icon-inline"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><strong class="num">2</strong> — CNN custom + reglas IF-THEN</td>
+          </tr>
+          <tr>
+            <td>Mecanismos de automatizacion</td>
+            <td><span class="icon-inline"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><strong class="num">4</strong> — informes + alertas + watcher + ingester</td>
+          </tr>
+          <tr>
+            <td>Framework distribuido (Spark / Dask / Beam)</td>
+            <td><span class="icon-inline"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><strong>PySpark</strong></td>
+          </tr>
+          <tr>
+            <td>API REST documentada</td>
+            <td><span class="icon-inline"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><strong>FastAPI</strong> + Swagger, 17 endpoints</td>
+          </tr>
+          <tr>
+            <td>Dashboard con visualizacion</td>
+            <td><span class="icon-inline"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><strong>Streamlit</strong>, 7 vistas, API-only</td>
+          </tr>
+          <tr>
+            <td>Despliegue con un solo comando</td>
+            <td><span class="icon-inline"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><code>docker compose up</code> · &lt; 1 min</td>
+          </tr>
+          <tr>
+            <td>Vibe Coding + SDD + diario IA</td>
+            <td><span class="icon-inline"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><strong class="num">6</strong> specs · <strong class="num">10</strong> ADRs · <strong class="num">31</strong> sesiones IA</td>
+          </tr>
         </tbody>
       </table>
 
-      <p class="fragment fade-in-soft" style="margin-top: 18px; font-size: 0.9em;">
-        El campo <code>decision_rule</code> se persiste en MongoDB y la API lo devuelve en cada
-        respuesta. El baseline argmax se conserva en <code>metrics.json</code> bajo
-        <code>comparison_argmax</code> para auditoria.
-      </p>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">08 / 14</span></div>
-      <aside class="notes">
-        [05:30 - 06:30] Es el aprendizaje mas honesto del proyecto. No reentrenamos: ajustamos la regla
-        de decision sobre las probabilidades. Subimos recall COVID 12,5 pp a cambio de 5,6 pp menos de precision
-        y 3,6 pp menos de recall Normal. Esta trazado y es reversible: cambiar una constante en predictor.py.
-      </aside>
+      <div class="slide-foot"><span>Enunciado vs entregado</span><span class="right">03 / 13</span></div>
     </section>
 
-    <!-- ============================================================
-         SLIDE 9 — Triaje por reglas
-         ============================================================ -->
+    <!-- =========================================================
+         SLIDE 4 — Arquitectura · 02:45 - 03:45 (1 min)
+         ========================================================= -->
     <section>
-      <div class="slide-crest"><span class="dot"></span><span>08 · Triaje</span></div>
-      <h2 style="margin-top: 60px;">Triaje basado en reglas IF-THEN</h2>
-      <p style="margin-top: 6px;">
-        Segundo paradigma de IA (ADR-008). No hay dataset etiquetado con la gravedad
-        real; entrenar sobre etiquetas inventadas seria fabricar ground truth.
-      </p>
-      <div class="grid grid-3" style="margin-top: 22px;">
-        <div class="card">
-          <div class="card-label">Grave</div>
-          <p style="font-size: 0.9em; color: var(--text-soft);">
-            6 reglas criticas sobre signos vitales (SpO2, FR, FC, PAS, T) o sintoma
-            critico explicito.
-          </p>
+      <span class="kicker">03 · Arquitectura</span>
+      <h2>Siete servicios Docker, un solo comando.</h2>
+
+      <svg class="arch-svg" viewBox="0 0 1100 360" preserveAspectRatio="xMidYMid meet" style="margin-top: 14px; max-height: 280px;">
+        <!-- ENTRADAS -->
+        <rect x="20"  y="40"  width="160" height="60" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/>
+        <text x="100" y="68" text-anchor="middle" font-family="Inter" font-size="13" fill="#0F172A">CSV pacientes</text>
+        <text x="100" y="86" text-anchor="middle" font-family="Inter" font-size="11" fill="#64748B">5.014 filas</text>
+        <rect x="20"  y="120" width="160" height="60" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/>
+        <text x="100" y="148" text-anchor="middle" font-family="Inter" font-size="13" fill="#0F172A">CSV admisiones</text>
+        <text x="100" y="166" text-anchor="middle" font-family="Inter" font-size="11" fill="#64748B">9.997 filas</text>
+        <rect x="20"  y="200" width="160" height="60" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/>
+        <text x="100" y="228" text-anchor="middle" font-family="Inter" font-size="13" fill="#0F172A">Radiografias PNG</text>
+        <text x="100" y="246" text-anchor="middle" font-family="Inter" font-size="11" fill="#64748B">COVID-19 Database</text>
+
+        <!-- PIPELINE -->
+        <rect x="240" y="120" width="200" height="120" rx="10" fill="#1D4ED8" stroke="#1D4ED8"/>
+        <text x="340" y="155" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#FFFFFF">Pipeline PySpark</text>
+        <text x="340" y="180" text-anchor="middle" font-family="Inter" font-size="11" fill="#BFDBFE">validate · dedupe · enrich</text>
+        <text x="340" y="200" text-anchor="middle" font-family="Inter" font-size="11" fill="#BFDBFE">data quality summary</text>
+        <text x="340" y="220" text-anchor="middle" font-family="Inter" font-size="11" fill="#BFDBFE">rejected_records</text>
+
+        <!-- STORES -->
+        <rect x="500" y="40"  width="170" height="60" rx="8" fill="#FFFFFF" stroke="#1D4ED8"/>
+        <text x="585" y="68" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#0F172A">MongoDB</text>
+        <text x="585" y="86" text-anchor="middle" font-family="Inter" font-size="11" fill="#64748B">patients · rejected</text>
+        <rect x="500" y="120" width="170" height="60" rx="8" fill="#FFFFFF" stroke="#1D4ED8"/>
+        <text x="585" y="148" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#0F172A">SQLite</text>
+        <text x="585" y="166" text-anchor="middle" font-family="Inter" font-size="11" fill="#64748B">pipeline_runs · quality</text>
+        <rect x="500" y="200" width="170" height="60" rx="8" fill="#FFFFFF" stroke="#1D4ED8"/>
+        <text x="585" y="228" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#0F172A">MinIO</text>
+        <text x="585" y="246" text-anchor="middle" font-family="Inter" font-size="11" fill="#64748B">PNG radiografias</text>
+
+        <!-- ML -->
+        <rect x="500" y="280" width="170" height="50" rx="8" fill="#FFFFFF" stroke="#15803D"/>
+        <text x="585" y="308" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#0F172A">Modelo CNN .keras</text>
+
+        <!-- API -->
+        <rect x="730" y="120" width="160" height="120" rx="10" fill="#15803D" stroke="#15803D"/>
+        <text x="810" y="155" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#FFFFFF">FastAPI</text>
+        <text x="810" y="180" text-anchor="middle" font-family="Inter" font-size="11" fill="#BBF7D0">/patients · /classify</text>
+        <text x="810" y="200" text-anchor="middle" font-family="Inter" font-size="11" fill="#BBF7D0">/alerts · /reports</text>
+        <text x="810" y="220" text-anchor="middle" font-family="Inter" font-size="11" fill="#BBF7D0">/triage · /model</text>
+
+        <!-- DASHBOARD -->
+        <rect x="940" y="120" width="140" height="120" rx="10" fill="#FFFFFF" stroke="#1D4ED8"/>
+        <text x="1010" y="155" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#0F172A">Dashboard</text>
+        <text x="1010" y="178" text-anchor="middle" font-family="Inter" font-size="11" fill="#64748B">7 vistas Streamlit</text>
+        <text x="1010" y="198" text-anchor="middle" font-family="Inter" font-size="11" fill="#64748B">API-only</text>
+
+        <!-- AUTOMATION -->
+        <rect x="730" y="280" width="160" height="50" rx="8" fill="#FFFFFF" stroke="#B45309"/>
+        <text x="810" y="308" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#0F172A">Informe diario CLI</text>
+
+        <!-- ARROWS -->
+        <g stroke="#94A3B8" stroke-width="1.2" fill="none" opacity="0.7">
+          <path d="M 180 70  C 200 70, 220 130, 240 150"/>
+          <path d="M 180 150 L 240 170"/>
+          <path d="M 180 230 C 200 230, 220 200, 240 200"/>
+          <path d="M 440 150 L 500 70"/>
+          <path d="M 440 170 L 500 150"/>
+          <path d="M 440 200 L 500 230"/>
+          <path d="M 440 220 L 500 300"/>
+          <path d="M 670 150 L 730 170"/>
+          <path d="M 670 300 L 730 200"/>
+          <path d="M 890 170 L 940 170"/>
+          <path d="M 810 240 L 810 280"/>
+        </g>
+      </svg>
+
+      <div class="arch-flow">
+        <div class="arch-step s-input">
+          <span class="step-num">1</span>
+          <div class="step-body">
+            <div class="step-title">Entra</div>
+            <div class="step-desc">3 fuentes heterogeneas: CSV pacientes, CSV admisiones, radiografias PNG.</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-label">Medio</div>
-          <p style="font-size: 0.9em; color: var(--text-soft);">
-            5 reglas intermedias: franjas de aviso o combinacion edad +
-            sintoma respiratorio.
-          </p>
+        <div class="arch-step s-process">
+          <span class="step-num">2</span>
+          <div class="step-body">
+            <div class="step-title">Procesa</div>
+            <div class="step-desc">PySpark valida, deduplica, enriquece y registra rechazados con motivo.</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-label">Leve</div>
-          <p style="font-size: 0.9em; color: var(--text-soft);">
-            Caso por defecto cuando ninguna regla anterior dispara.
-          </p>
+        <div class="arch-step s-store">
+          <span class="step-num">3</span>
+          <div class="step-body">
+            <div class="step-title">Guarda</div>
+            <div class="step-desc">Mongo (pacientes) · SQLite (auditoria pipeline) · MinIO (imagenes PNG).</div>
+          </div>
+        </div>
+        <div class="arch-step s-serve">
+          <span class="step-num">4</span>
+          <div class="step-body">
+            <div class="step-title">Sirve</div>
+            <div class="step-desc">FastAPI sirve todo · Dashboard Streamlit consume <em>solo</em> la API.</div>
+          </div>
         </div>
       </div>
-      <div class="card tight fragment fade-in-soft" style="margin-top: 18px;">
-        <div class="card-label">Trazabilidad</div>
-        <p style="font-size: 0.9em; color: var(--text-soft);">
-          Cada decision lleva la lista exacta de reglas disparadas y un
-          <code>rules_version</code>. La explicabilidad es <strong>directa</strong>:
-          no requiere SHAP ni Grad-CAM, las reglas son legibles.
-          <br><br>
-          Umbrales <strong>academicos</strong> elegidos para la entrega; <strong>no
-          validados clinicamente</strong>. La UI mantiene el disclaimer y las
-          recomendaciones operativas son genericas.
-        </p>
-      </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">09 / 14</span></div>
-      <aside class="notes">
-        [06:30 - 07:15] Por que dos paradigmas: el enunciado lo pide, pero ademas son tecnicamente
-        complementarios. Una CNN aprende lo que tiene datos; reglas escritas explicitan lo que NO tiene
-        ground truth pero si conocimiento de dominio formalizable. Sesion 07 ruleBasedSystem de Yuri.
-      </aside>
+
+      <div class="slide-foot"><span>Arquitectura</span><span class="right">04 / 13</span></div>
     </section>
 
-    <!-- ============================================================
-         SLIDE 10 — Alertas + informe diario
-         ============================================================ -->
+    <!-- =========================================================
+         SLIDE 5 — Datos + pipeline · 03:45 - 04:45 (1 min)
+         ========================================================= -->
     <section>
-      <div class="slide-crest"><span class="dot"></span><span>09 · Observabilidad</span></div>
-      <h2 style="margin-top: 60px;">Alertas e informe diario</h2>
-      <p style="margin-top: 6px;">
-        <strong>Vista derivada</strong> (ADR-009): cero estado nuevo. Las alertas
-        se calculan al consultar el endpoint, leyendo las fuentes que ya existen.
-      </p>
-      <div class="grid grid-3" style="margin-top: 22px;">
-        <div class="card">
-          <div class="card-label">Pipeline fallido</div>
-          <span class="pill crit"><span class="ldot"></span>HIGH</span>
-          <p style="font-size: 0.9em; color: var(--text-soft); margin-top: 8px;">
-            <code>pipeline_runs.status='failed'</code> en la ventana consultada.
-          </p>
-        </div>
-        <div class="card">
-          <div class="card-label">Calidad baja</div>
-          <span class="pill warn"><span class="ldot"></span>MEDIUM</span>
-          <p style="font-size: 0.9em; color: var(--text-soft); margin-top: 8px;">
-            <code>rejection_rate &gt; umbral</code> (por defecto 0,10).
-          </p>
-        </div>
-        <div class="card">
-          <div class="card-label">Triaje grave</div>
-          <span class="pill crit"><span class="ldot"></span>CRITICAL</span>
-          <p style="font-size: 0.9em; color: var(--text-soft); margin-top: 8px;">
-            <code>patients.triage.level='grave'</code> en la ventana.
-          </p>
-        </div>
-      </div>
-      <div class="card tight fragment fade-in-soft" style="margin-top: 18px;">
-        <div class="card-label">Informe diario reproducible</div>
-        <p style="font-size: 0.9em; color: var(--text-soft);">
-          CLI <code>python -m src.automation.daily_report --date YYYY-MM-DD</code>.
-          Genera <code>docs/reports/YYYY-MM-DD.md</code> con sha256 byte-a-byte
-          identico entre ejecuciones del mismo dia. Sin <code>generated_at</code> en el cuerpo.
-        </p>
-      </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">10 / 14</span></div>
-      <aside class="notes">
-        [07:15 - 08:00] Tres reglas, dos endpoints, un CLI. Cero estado persistido nuevo: las alertas
-        no se guardan, se calculan al consultar. Si quiero auditar historico de alertas, abro la fuente
-        (pipeline_runs, data_quality_summary, patients.triage). Reabrible: ADR-009 lo documenta.
-      </aside>
-    </section>
+      <span class="kicker">04 · Datos &amp; Pipeline Big Data</span>
+      <h2>Validamos, limpiamos y guardamos. <span style="color: var(--accent);">Sin perder nada por el camino.</span></h2>
 
-    <!-- ============================================================
-         SLIDE 11 — Dashboard / demo
-         ============================================================ -->
-    <section>
-      <div class="slide-crest"><span class="dot"></span><span>10 · Dashboard</span></div>
-      <h2 style="margin-top: 60px;">Dashboard como centro de turno</h2>
-      <div class="grid grid-2" style="margin-top: 18px;">
-        <div>
-          <p>
-            Streamlit en imagen Docker independiente (ADR-007). <strong>API-only</strong>:
-            cero imports de pymongo, sqlite, sqlalchemy o minio en <code>src/dashboard/</code>.
-          </p>
-          <ul style="margin-top: 8px;">
-            <li><strong>Operacion:</strong> Inicio · Triaje · Alertas · Pacientes · Clasificador</li>
-            <li><strong>Sistema:</strong> Calidad de datos · Pipeline runs</li>
-          </ul>
-          <p style="margin-top: 12px;">
-            Inicio muestra saludo de turno, volumen del sistema, barra critica
-            condicional, 3 chips de estado, 4 cards de actividad y 3 accesos rapidos.
-          </p>
+      <div class="grid grid-3" style="margin-top: 18px;">
+        <div class="big-metric">
+          <div class="m-label">Pacientes guardados</div>
+          <div class="m-value accent">4.790</div>
+          <div class="m-foot">filas validas que entraron en MongoDB</div>
         </div>
-        <div>
-          <div class="card" style="background: linear-gradient(180deg, #131F35, #182747);">
-            <div class="card-label">Flujo demo</div>
-            <ul style="margin-top: 8px;">
-              <li>Inicio · ver alertas criticas en la barra</li>
-              <li>Triaje · crear paciente con SpO2 = 85 → grave</li>
-              <li>Alertas · aparece <code>triage_severe / critical</code></li>
-              <li>Pacientes · paginar y abrir detalle</li>
-              <li>Clasificador · <code>HOSP-PRES-001/COVID-1.png</code> → COVID-19</li>
-              <li>Mostrar <code>decision_rule = covid_threshold_0.35</code> en respuesta</li>
+        <div class="big-metric">
+          <div class="m-label">Ingresos asociados</div>
+          <div class="m-value accent">8.569</div>
+          <div class="m-foot">cada paciente con todos sus ingresos dentro</div>
+        </div>
+        <div class="big-metric">
+          <div class="m-label">Filas rechazadas</div>
+          <div class="m-value warn">1.692</div>
+          <div class="m-foot">guardadas aparte con su motivo de rechazo</div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; margin-top: 18px; align-items: stretch;">
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div class="card">
+            <div class="label">Que hace el pipeline</div>
+            <ul style="margin-top: 8px; font-size: 0.85em;">
+              <li>Lee los CSVs, valida cada fila y descarta las malas con su motivo</li>
+              <li>Quita duplicados y enriquece (calcula edad, categoria de diagnostico...)</li>
+              <li>Si lo ejecuto 2 veces, no crea duplicados ni inventa numeros</li>
+              <li>Arranca en frio en <code>~50 s</code> · si ya estaba caliente, <code>~1 s</code></li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="label">Ningun dato se pierde en silencio</div>
+            <ul style="margin-top: 8px; font-size: 0.85em;">
+              <li>Las filas malas no se tiran — se guardan con su motivo y el dato crudo</li>
+              <li>Calculamos el % de rechazo por tipo de dato (pacientes, ingresos...)</li>
+              <li>Si el rechazo supera el <strong>10%</strong>, salta una alerta automatica</li>
+              <li>El operador puede consultar las filas rechazadas en el dashboard</li>
             </ul>
           </div>
         </div>
-      </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">11 / 14</span></div>
-      <aside class="notes">
-        [08:00 - 11:00] Demo en vivo. Bloque mas largo. Orden fijo. Si una vista cae, decirlo y seguir.
-        Si la imagen no aparece: HOSP-DEMO-001 con disclaimer. Si la API esta caida: chips rojos
-        en sidebar como ejemplo de error handling.
-      </aside>
-    </section>
-
-    <!-- ============================================================
-         SLIDE 12 — IA generativa + SDD
-         ============================================================ -->
-    <section>
-      <div class="slide-crest"><span class="dot"></span><span>11 · Metodologia</span></div>
-      <h2 style="margin-top: 60px;">IA generativa + Spec-Driven Development</h2>
-      <p style="margin-top: 6px;">
-        Cada feature pasa por <code>/spec → /planificar → /tareas → /implementar → /revisar</code>.
-        Dudas marcadas <code>[NEEDS CLARIFICATION]</code> antes de codificar.
-      </p>
-      <div class="grid grid-4" style="margin-top: 22px;">
-        <div class="metric"><div class="m-label">Specs aprobadas</div><div class="m-value num">6</div></div>
-        <div class="metric"><div class="m-label">ADRs</div><div class="m-value num">10</div></div>
-        <div class="metric"><div class="m-label">Sesiones IA</div><div class="m-value num">31</div></div>
-        <div class="metric"><div class="m-label">Tests verde</div><div class="m-value num">417</div><div class="m-delta">+ 1 skip esperado</div></div>
-      </div>
-      <p class="fragment fade-in-soft" style="margin-top: 20px; font-size: 0.9em;">
-        Cross-provider review con Codex cuando aporta valor (mitiga sycophancy del modelo).
-        Diario IA por sesion en <code>docs/diario-ia.md</code>. Lecciones en <code>tasks/lessons.md</code>.
-        La disciplina SDD es lo que ha permitido escribir esta memoria leyendo el repo, no recordando.
-      </p>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">12 / 14</span></div>
-      <aside class="notes">
-        [11:00 - 11:45] Eje obligatorio del enunciado. SDD descompone en 5 fases con artefacto revisable
-        por fase. La IA no inventa requisitos: trabaja sobre una spec aprobada. Mensaje final:
-        "la IA es multiplicador, SDD es la disciplina que hace seguro ese multiplicador".
-      </aside>
-    </section>
-
-    <!-- ============================================================
-         SLIDE 13 — Etica y limitaciones
-         ============================================================ -->
-    <section>
-      <div class="slide-crest"><span class="dot"></span><span>12 · Etica</span></div>
-      <h2 style="margin-top: 60px;">Etica, limitaciones y posicionamiento</h2>
-      <div class="grid grid-2" style="margin-top: 18px;">
-        <div>
-          <h3>Etico y legal</h3>
-          <ul>
-            <li><strong>Datos sinteticos</strong> por diseno (Faker + seed). Sin PII real.</li>
-            <li>Dataset Kaggle: licencia tal como la publica el autor; no asumimos generica.</li>
-            <li><strong>Asistencia, no diagnostico.</strong> Decision clinica siempre humana.</li>
-          </ul>
-        </div>
-        <div>
-          <h3>Limitaciones declaradas</h3>
-          <ul>
-            <li>Recall COVID-19 = 0,820 con threshold (era 0,695 con argmax). Aun se pierden 65 / 361.</li>
-            <li>Sin deteccion out-of-domain (imagen no torax → predice cualquier clase).</li>
-            <li>Sin interpretabilidad (Grad-CAM como mejora prioritaria).</li>
-            <li>Sin auth, sin replicacion, sin HA: entorno academico.</li>
-            <li>Triaje con umbrales academicos, no validados clinicamente.</li>
-          </ul>
-        </div>
-      </div>
-      <div class="card tight fragment fade-in-soft" style="margin-top: 20px;">
-        <div class="card-label">Donde NO se usaria sin cambios estructurales</div>
-        <p style="font-size: 0.9em; color: var(--text-soft);">
-          Decisiones clinicas con consecuencia para un paciente · entornos con PII real ·
-          operacion 24/7 sin observabilidad push · hospital con SLA real (Mongo y MinIO
-          nodos unicos) · generalizacion geografica del clasificador.
-        </p>
-      </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">13 / 14</span></div>
-      <aside class="notes">
-        [11:45 - 12:30] Honestidad total. La limitacion principal sigue siendo el recall COVID,
-        ahora 0,820. Mejor que antes; insuficiente para uso clinico real. Por eso el sistema se
-        entrega como asistencia y la decision la mantiene siempre el profesional.
-      </aside>
-    </section>
-
-    <!-- ============================================================
-         SLIDE 14 — Conclusion + Q&A
-         ============================================================ -->
-    <section>
-      <div class="slide-crest"><span class="dot"></span><span>13 · Cierre</span></div>
-      <h2 style="margin-top: 60px;">Conclusion</h2>
-      <p style="margin-top: 6px; font-size: 0.95em;">
-        Sistema completo, reproducible, documentado y honesto sobre lo que hace
-        y lo que no. SDD ha permitido entregar disciplina + IA combinadas en un
-        plazo academico ajustado.
-      </p>
-      <div class="grid grid-3" style="margin-top: 22px;">
-        <div class="metric accent">
-          <div class="m-label">Modelo</div>
-          <div class="m-value">0,8766</div>
-          <div class="m-delta">accuracy con threshold 0,35</div>
-        </div>
-        <div class="metric accent">
-          <div class="m-label">Recall COVID-19</div>
-          <div class="m-value">0,820</div>
-          <div class="m-delta">+12,5 pp vs argmax baseline</div>
-        </div>
-        <div class="metric accent">
-          <div class="m-label">Suite</div>
-          <div class="m-value">417 +1</div>
-          <div class="m-delta">tests verde · skip esperado</div>
-        </div>
-      </div>
-      <div class="grid grid-2 fragment fade-in-soft" style="margin-top: 24px;">
-        <div>
-          <h3>Trabajo futuro</h3>
-          <ul>
-            <li>Subir recall COVID por encima de 0,820 via transfer learning</li>
-            <li>Interpretabilidad: Grad-CAM por defecto</li>
-            <li>Deteccion out-of-domain</li>
-            <li>Persistir alertas con historico auditable (reabrir ADR-009)</li>
-          </ul>
-        </div>
-        <div style="display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 14px;">
-          <div style="font-size: 1.4em; color: var(--text); font-weight: 600;">Preguntas</div>
-          <div style="color: var(--text-mute); font-size: 12px; letter-spacing: 0.04em;">
-            <span class="num">github.com/MarinasAlejandro/lasalle-hospital</span>
+        <div style="display: flex; align-items: center; justify-content: center;">
+          <div class="scanner-frame">
+            <img src="img/art-pipeline.png" alt="Flujo del pipeline de datos en sala hospital">
+            <div class="scan"></div>
+            <div class="corners"><span class="c tl"></span><span class="c tr"></span><span class="c bl"></span><span class="c br"></span></div>
           </div>
         </div>
       </div>
-      <div class="slide-footer"><span class="left">laSalle Health Center</span><span class="right">14 / 14</span></div>
-      <aside class="notes">
-        [12:30 - cierre] Tres cifras finales en un panel. Trabajo futuro priorizado (refleja la memoria).
-        Q&A. Si preguntan por SDD o IA: remitir al diario y al CHANGELOG.
-      </aside>
+
+      <div class="slide-foot"><span>Datos &amp; Pipeline</span><span class="right">05 / 13</span></div>
+    </section>
+
+    <!-- =========================================================
+         SLIDE 6 — Modelo CNN · 04:45 - 06:15 (1 min 30 s)
+         ========================================================= -->
+    <section>
+      <span class="kicker">05 · Modelo CNN — clasificacion triple</span>
+      <h2>Una red neuronal <span style="color: var(--accent);">hecha a medida.</span> Entrenada desde cero sobre 12.120 radiografias.</h2>
+
+      <div style="display: grid; grid-template-columns: 1fr 1.1fr; gap: 18px; margin-top: 8px; align-items: start;">
+        <div>
+          <div class="scanner-frame" style="margin-bottom: 10px; max-height: 200px;">
+            <img src="img/art-modelo-scene.png" alt="Monitor mostrando radiografia de torax en escritorio clinico">
+            <div class="scan"></div>
+            <div class="corners"><span class="c tl"></span><span class="c tr"></span><span class="c bl"></span><span class="c br"></span></div>
+          </div>
+          <ul style="font-size: 0.72em; line-height: 1.4;">
+            <li><strong>Hecha por nosotros</strong>, sin coger un modelo preentrenado. Arquitectura que enseña Jordi: convolucionales + clasificador.</li>
+            <li>Pesa <strong>21 MB</strong> en disco · arranca con la API · responde en <strong>&lt;50 ms</strong>.</li>
+            <li>Aprende sobre <strong>12.120</strong> radiografias · validamos con <strong>1.515</strong> · y guardamos otras <strong>1.515</strong> para el examen final.</li>
+            <li>Clasifica en 3: <strong>Normal · Neumonia · COVID-19</strong>. Devuelve probabilidad, no veredicto.</li>
+          </ul>
+        </div>
+
+        <div>
+          <div class="capture" style="display: flex; align-items: center; justify-content: center; padding: 10px;">
+            <img src="img/confusion-matrix.png" alt="Matriz de confusion del clasificador sobre el split de test" style="display: block; margin: 0 auto; width: auto; max-width: 100%; max-height: 320px;">
+          </div>
+          <div class="capture-caption" style="font-size: 0.55em;">
+            Qué predijo el modelo (eje horizontal) vs qué era realmente (eje vertical) en las 1.515 imagenes del examen final. El error mas grave: marcar como <strong>Normal</strong> a un enfermo de <strong>COVID-19</strong>.
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-3 metrics-compact" style="margin-top: 10px; gap: 10px;">
+        <div class="big-metric">
+          <div class="m-label">Acierto general</div>
+          <div class="m-value">0,8766</div>
+          <div class="m-delta" style="color: var(--text-mute);">87,7 de cada 100 bien</div>
+        </div>
+        <div class="big-metric">
+          <div class="m-label">Equilibrio por clase</div>
+          <div class="m-value">0,8594</div>
+          <div class="m-delta" style="color: var(--text-mute);">no falla solo en una clase</div>
+        </div>
+        <div class="big-metric">
+          <div class="m-label">COVID detectados <span style="opacity: 0.6;">(de los reales)</span></div>
+          <div class="m-value crit">0,820</div>
+          <div class="m-delta">82 de cada 100 enfermos COVID</div>
+        </div>
+      </div>
+
+      <div class="slide-foot"><span>Modelo CNN</span><span class="right">06 / 13</span></div>
+    </section>
+
+    <!-- =========================================================
+         SLIDE 7 — Threshold COVID 0,35 · 06:15 - 07:30 (1 min 15 s)
+         ========================================================= -->
+    <section>
+      <span class="kicker">06 · Regla <code>covid_threshold_0.35</code></span>
+      <h2>Pillamos <span style="color: var(--ok);">45 contagiosos más</span> <span style="opacity: 0.55;">sin tocar el modelo.</span></h2>
+
+      <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 22px; margin-top: 18px; align-items: start;">
+        <div>
+          <div class="card" style="background: var(--bg); border-left: 4px solid var(--accent);">
+            <div class="label">La regla — en castellano</div>
+            <p style="margin: 8px 0 0; font-size: 0.78em; line-height: 1.5;">
+              Si el modelo ve un <strong>≥ 35%</strong> de probabilidad de COVID → <strong style="color: var(--crit);">decimos COVID</strong>.<br>
+              Si no → elegimos entre Normal y Neumonía.
+            </p>
+          </div>
+
+          <div style="margin-top: 14px; padding: 12px 14px; background: var(--accent-soft); border-radius: 8px;">
+            <div style="font-size: 0.5em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px;">Analogía</div>
+            <p style="margin: 0; font-size: 0.78em; line-height: 1.45;">
+              Es como <strong>bajar el listón del detector de humo</strong>: salta antes, pillamos más fuegos reales. A cambio, alguna falsa alarma. <strong>En hospital, prefieres falsas alarmas a contagiosos sueltos.</strong>
+            </p>
+          </div>
+
+          <p style="margin-top: 12px; font-size: 0.78em; color: var(--text-mute);">
+            <strong>El modelo es el mismo. Los pesos son los mismos.</strong> Solo cambia la regla de decisión. Cambiar de 0,35 a otro valor → editar una constante. Cada predicción guarda qué regla se aplicó. <strong>ADR-010</strong>.
+          </p>
+        </div>
+
+        <div>
+          <table>
+            <thead>
+              <tr>
+                <th>Métrica</th>
+                <th>Sin regla</th>
+                <th>Con regla 0,35</th>
+                <th>Cambio</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Acierto general</td>
+                <td class="num">0,8719</td>
+                <td class="num"><strong>0,8766</strong></td>
+                <td class="num" style="color: var(--ok);">+0,5 pp</td>
+              </tr>
+              <tr>
+                <td>Equilibrio por clase</td>
+                <td class="num">0,8456</td>
+                <td class="num"><strong>0,8594</strong></td>
+                <td class="num" style="color: var(--ok);">+1,4 pp</td>
+              </tr>
+              <tr style="background: var(--accent-soft);">
+                <td><strong>COVID detectados</strong><br><span style="font-size: 0.85em; color: var(--text-mute);">(de los enfermos reales)</span></td>
+                <td class="num">0,6953</td>
+                <td class="num"><strong>0,8199</strong></td>
+                <td class="num" style="color: var(--ok); font-weight: 700;">+12,5 pp</td>
+              </tr>
+              <tr>
+                <td>Precisión COVID<br><span style="font-size: 0.85em; color: var(--text-mute);">(qué % de los que llamamos COVID lo son)</span></td>
+                <td class="num">0,8071</td>
+                <td class="num">0,7513</td>
+                <td class="num" style="color: var(--warn);">−5,6 pp</td>
+              </tr>
+              <tr>
+                <td><strong>Contagiosos que se escapan</strong></td>
+                <td class="num">110 / 361</td>
+                <td class="num"><strong>65 / 361</strong></td>
+                <td class="num" style="color: var(--ok); font-weight: 700;">−45 casos</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="slide-foot"><span>Threshold · ADR-010</span><span class="right">07 / 13</span></div>
+    </section>
+
+    <!-- =========================================================
+         SLIDE 8 — Triaje por reglas · 07:30 - 08:45 (1 min 15 s)
+         ========================================================= -->
+    <section>
+      <span class="kicker">07 · Triaje basado en reglas</span>
+      <h2>El segundo paradigma. <span style="opacity: 0.55;">Sin datos reales que copiar, no hay ML honesto.</span></h2>
+
+      <div style="display: grid; grid-template-columns: 1.05fr 1fr; gap: 22px; margin-top: 14px; align-items: center;">
+        <div>
+          <p style="font-size: 0.95em;">
+            <strong>No tenemos un dataset con la gravedad real</strong> de cada paciente (nadie nos dijo "este es grave, este leve"). Si entrenamos un modelo con etiquetas que nos hemos inventado, el modelo aprende <em>nuestras opiniones</em>, no medicina. Por eso usamos reglas escritas. <strong>ADR-008</strong>.
+          </p>
+
+          <div class="triaje-cards">
+            <div class="tc tc-grave">
+              <div class="tc-head"><span class="tc-cross">+</span></div>
+              <svg viewBox="0 0 120 50" class="tc-ecg" aria-hidden="true">
+                <path d="M 0 25 L 30 25 L 38 10 L 46 40 L 54 8 L 62 42 L 70 25 L 120 25"/>
+              </svg>
+              <div class="tc-label">GRAVE</div>
+            </div>
+            <div class="tc tc-medio">
+              <div class="tc-head"><span class="tc-cross">+</span></div>
+              <svg viewBox="0 0 120 50" class="tc-ecg" aria-hidden="true">
+                <path d="M 0 25 L 30 25 L 40 14 L 50 36 L 60 14 L 70 36 L 80 25 L 120 25"/>
+              </svg>
+              <div class="tc-label">MEDIO</div>
+            </div>
+            <div class="tc tc-leve">
+              <div class="tc-head"><span class="tc-cross">+</span></div>
+              <svg viewBox="0 0 120 50" class="tc-ecg" aria-hidden="true">
+                <path d="M 0 25 L 40 25 L 50 20 L 60 30 L 70 22 L 80 28 L 120 25"/>
+              </svg>
+              <div class="tc-label">LEVE</div>
+            </div>
+          </div>
+
+          <p style="margin-top: 12px; font-size: 0.85em; color: var(--text-mute);">
+            <strong>6 reglas para grave · 5 para medio · leve por defecto.</strong> Cada decisión devuelve <em>qué reglas saltaron</em> (ej: "saturación de O₂ por debajo de 92"). El humano ve por qué se clasificó así.
+          </p>
+
+          <div style="margin-top: 12px; padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 6px;">
+            <div style="font-size: 0.5em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px;">Modelo del temario si hubiera dataset</div>
+            <p style="margin: 0; font-size: 0.75em; color: var(--text);">
+              <code>DecisionTreeClassifier</code> o <code>RandomForestClassifier</code> de scikit-learn (Aprenentatge Automatic). Un arbol de decision es <em>equivalente</em> a un conjunto de reglas IF-THEN, solo que los umbrales se aprenden de datos.
+            </p>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px;">
+          <div style="text-align: center;">
+            <div style="font-size: 0.5em; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-mute); margin-bottom: 8px;">Demo en vivo</div>
+            <div style="font-size: 0.75em; color: var(--text-soft); max-width: 280px; margin: 0 auto;">
+              Veremos el triaje funcionando en el dashboard: <code>SpO2 = 85</code> → <strong style="color: var(--crit);">GRAVE</strong>.
+            </div>
+          </div>
+          <a href="http://localhost:8501/triage" target="_blank" rel="noopener" class="demo-btn">
+            <span>Abrir Triaje en vivo</span>
+            <span class="arr">→</span>
+          </a>
+          <div style="font-size: 0.45em; color: var(--text-faint); font-family: ui-monospace, SFMono-Regular, monospace;">
+            localhost:8501/triage
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-foot"><span>Triaje · ADR-008</span><span class="right">08 / 13</span></div>
+    </section>
+
+    <!-- =========================================================
+         SLIDE 9 — Automatizacion · 08:45 - 09:45 (1 min)
+         ========================================================= -->
+    <section>
+      <span class="kicker">08 · Automatizacion · los 4 mecanismos del enunciado</span>
+      <h2>Cuatro cosas que <span style="color: var(--accent);">se hacen solas.</span></h2>
+
+      <div class="grid grid-2" style="margin-top: 16px; gap: 14px;">
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="pill warn"><span class="dot"></span>1 · Informe diario</span>
+          </div>
+          <p style="margin-top: 10px; font-size: 0.85em;">
+            Un comando genera el informe del día en Markdown. <strong>Si lo ejecuto 2 veces el mismo día, el fichero es idéntico</strong> (mismo contenido bit a bit). No inventa números entre ejecuciones.
+          </p>
+        </div>
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="pill crit"><span class="dot"></span>2 · Alertas automáticas</span>
+          </div>
+          <p style="margin-top: 10px; font-size: 0.85em;">
+            3 tipos: <em>pipeline ha fallado</em> · <em>calidad de datos baja</em> · <em>paciente grave en triaje</em>. Se calculan al pedirlas, no se guardan en una tabla aparte. <strong>ADR-009</strong>.
+          </p>
+        </div>
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="pill"><span class="dot"></span>3 · Detecta CSVs nuevos</span>
+          </div>
+          <p style="margin-top: 10px; font-size: 0.85em;">
+            Meto un CSV en <code>data/incoming/</code> y <strong>el pipeline arranca solo</strong>. Sin clicar nada, sin ejecutar comandos.
+          </p>
+        </div>
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="pill"><span class="dot"></span>4 · Sube imágenes</span>
+          </div>
+          <p style="margin-top: 10px; font-size: 0.85em;">
+            Las radiografías PNG se suben automáticamente a su almacén (MinIO) y se asocian al paciente. <strong>Cero pasos manuales</strong>.
+          </p>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 22px; margin-top: 18px; align-items: center;">
+        <p style="padding: 14px 18px; border-left: 4px solid var(--ok); background: var(--ok-bg); border-radius: 8px; font-size: 0.85em; color: #14532D; margin: 0;">
+          <strong>El operador deja de mirar logs.</strong> El sistema le avisa de lo que requiere atención, en lugar de hacerle buscarlo.
+        </p>
+        <div class="scanner-frame" style="max-width: 280px; justify-self: end;">
+          <img src="img/art-alertas-scene.png" alt="Visualizacion de IA detectando alerta en sala hospital">
+          <div class="scan"></div>
+          <div class="corners"><span class="c tl"></span><span class="c tr"></span><span class="c bl"></span><span class="c br"></span></div>
+        </div>
+      </div>
+
+      <div class="slide-foot"><span>Automatizacion</span><span class="right">09 / 13</span></div>
+    </section>
+
+    <!-- =========================================================
+         SLIDE 10 — Demo en vivo · 09:45 - 12:00 (2 min 15 s)
+         ========================================================= -->
+    <section>
+      <span class="kicker">09 · Demo en vivo</span>
+      <h2>Esto es lo que vera el operador del hospital <span style="opacity: 0.55;">cada turno</span>.</h2>
+
+      <div class="demo-flow">
+        <div class="step">
+          <div class="step-num">01</div>
+          <div class="step-title">Inicio</div>
+        </div>
+        <div class="step">
+          <div class="step-num">02</div>
+          <div class="step-title">Triaje · SpO2=85</div>
+        </div>
+        <div class="step">
+          <div class="step-num">03</div>
+          <div class="step-title">Alertas</div>
+        </div>
+        <div class="step">
+          <div class="step-num">04</div>
+          <div class="step-title">Pacientes</div>
+        </div>
+        <div class="step">
+          <div class="step-num">05</div>
+          <div class="step-title">Clasificador</div>
+        </div>
+      </div>
+
+      <div class="grid grid-3" style="margin-top: 16px; gap: 10px;">
+        <div>
+          <div class="capture"><img src="img/dash-inicio.png" alt="Vista Inicio"></div>
+          <div class="capture-caption">Inicio · "qué requiere atención hoy"</div>
+        </div>
+        <div>
+          <div class="capture"><img src="img/dash-alertas.png" alt="Vista Alertas"></div>
+          <div class="capture-caption">Alertas · texto en castellano natural, no códigos</div>
+        </div>
+        <div>
+          <div class="capture"><img src="img/dash-prediccion.png" alt="Resultado del clasificador"></div>
+          <div class="capture-caption">Clasificador · muestra el umbral aplicado (0,35)</div>
+        </div>
+      </div>
+
+      <p style="margin-top: 14px; font-size: 0.75em; color: var(--text-mute); text-align: center;">
+        Estas capturas son el <strong>plan B</strong> si la demo falla en directo. Y si la API se cae durante la demo, el dashboard <strong>sigue respondiendo</strong> y avisa con chips rojos cuál de los servicios no responde.
+      </p>
+
+      <div class="slide-foot"><span>Demo en vivo</span><span class="right">10 / 13</span></div>
+    </section>
+
+    <!-- =========================================================
+         SLIDE 11 — IA generativa + SDD · 12:00 - 12:45 (45 s)
+         ========================================================= -->
+    <section>
+      <span class="kicker">10 · Vibe Coding + SDD · eje obligatorio</span>
+      <h2>La IA <span style="color: var(--accent);">multiplica</span> lo que puedo hacer. <span style="opacity: 0.55;">Pero solo si hay disciplina detrás.</span></h2>
+
+      <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 22px; margin-top: 14px; align-items: start;">
+        <div>
+          <div style="padding: 14px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-card); font-size: 0.78em; color: var(--text); line-height: 1.5;">
+            <strong>Cómo trabajamos cada feature</strong>, en este orden:<br>
+            <span style="color: var(--text-mute);">1. Defino qué construir · 2. Aclaro dudas · 3. Diseño cómo · 4. Lo parto en tareas · 5. Lo analizo · 6. Implemento con tests · 7. Reviso</span>
+          </div>
+
+          <div class="grid grid-2" style="margin-top: 16px; gap: 10px;">
+            <div class="big-metric">
+              <div class="m-label">Specs aprobadas</div>
+              <div class="m-value accent">6</div>
+            </div>
+            <div class="big-metric">
+              <div class="m-label">ADRs</div>
+              <div class="m-value accent">10</div>
+            </div>
+            <div class="big-metric">
+              <div class="m-label">Sesiones IA</div>
+              <div class="m-value accent">31</div>
+            </div>
+            <div class="big-metric">
+              <div class="m-label">Tests verde</div>
+              <div class="m-value ok">417</div>
+              <div class="m-delta" style="color: var(--text-mute);">+ 1 skip esperado</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: center;">
+          <div class="scanner-frame">
+            <img src="img/art-sdd-workflow.png" alt="Flujo de trabajo con IA y SDD">
+            <div class="scan"></div>
+            <div class="corners"><span class="c tl"></span><span class="c tr"></span><span class="c bl"></span><span class="c br"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <p style="margin-top: 16px; font-size: 0.8em; color: var(--text-mute);">
+        Usamos <strong>Claude Code</strong> como herramienta principal y <strong>Codex</strong> para revisar las decisiones más delicadas (segundo par de ojos). Antes de programar, marcamos las dudas con <code>[NEEDS CLARIFICATION]</code> en vez de inventar. Cada sesión queda registrada en <code>docs/diario-ia.md</code>.
+      </p>
+
+      <div class="slide-foot"><span>Vibe Coding · SDD</span><span class="right">11 / 13</span></div>
+    </section>
+
+    <!-- =========================================================
+         SLIDE 12 — Etica + limitaciones · 12:45 - 13:30 (45 s)
+         ========================================================= -->
+    <section data-theme="dark">
+      <span class="kicker">11 · Etica y limitaciones · sin maquillaje</span>
+      <h2>Lo que sabemos que <span style="color: var(--d-crit);">no</span> hace este sistema.</h2>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 20px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
+            <div class="icon-tile" style="margin: 0; width: 38px; height: 38px;" aria-hidden="true">
+              <!-- Lucide: shield-check (MIT) -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+                <path d="m9 12 2 2 4-4"/>
+              </svg>
+            </div>
+            <h3 style="margin: 0;">Etico y legal</h3>
+          </div>
+          <ul style="font-size: 0.95em;">
+            <li><strong>Datos inventados</strong> con Faker. Cero datos reales de pacientes.</li>
+            <li>Dataset Kaggle: usamos la licencia <strong>que el autor publica</strong>, no asumimos.</li>
+            <li><strong>Ayudamos al médico, no le sustituimos.</strong> La decisión clínica sigue siendo humana.</li>
+          </ul>
+        </div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
+            <div class="icon-tile tone-crit" style="margin: 0; width: 38px; height: 38px;" aria-hidden="true">
+              <!-- Lucide: triangle-alert (MIT) -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/>
+                <path d="M12 9v4"/>
+                <path d="M12 17h.01"/>
+              </svg>
+            </div>
+            <h3 style="margin: 0;">Lo que NO hace</h3>
+          </div>
+          <ul style="font-size: 0.95em;">
+            <li>Aún se nos escapan <strong>65 enfermos de COVID</strong> de cada 361 (recall 0,820).</li>
+            <li>Si le metes una foto que NO es radiografía, devolverá una clase con confianza arbitraria.</li>
+            <li>No muestra <em>qué parte de la imagen</em> ha mirado para decidir (queda como trabajo futuro).</li>
+            <li>Sin login, sin copia de seguridad, sin alta disponibilidad.</li>
+            <li>Los umbrales del triaje son académicos, no validados por médicos.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div style="margin-top: 22px; padding: 14px 18px; border-left: 4px solid var(--d-crit); background: rgba(248, 113, 113, 0.08); border-radius: 6px;">
+        <p style="margin: 0; font-size: 0.85em; color: var(--d-text);">
+          <strong>Dónde NO usaríamos este sistema sin cambios serios:</strong> decisiones que afecten al paciente, hospitales con datos reales, entornos que exijan disponibilidad 24/7.
+        </p>
+      </div>
+
+      <div class="slide-foot"><span>Etica · Limitaciones</span><span class="right">12 / 13</span></div>
+    </section>
+
+    <!-- =========================================================
+         SLIDE 13 — Cierre · 13:30 - 14:00 (30 s) + Q&A
+         ========================================================= -->
+    <section data-theme="dark">
+      <span class="kicker">12 · Cierre</span>
+      <h2>Que se lleva el hospital. Que le queda por delante.</h2>
+
+      <div class="grid grid-3" style="margin-top: 24px;">
+        <div class="big-metric">
+          <div class="m-label">Acierto general</div>
+          <div class="m-value accent">0,8766</div>
+          <div class="m-foot" style="color: var(--d-text-mute);">87,7 de cada 100 bien</div>
+        </div>
+        <div class="big-metric">
+          <div class="m-label">COVID detectados</div>
+          <div class="m-value accent">0,820</div>
+          <div class="m-delta">+45 contagiosos pillados con la regla</div>
+        </div>
+        <div class="big-metric">
+          <div class="m-label">Tests</div>
+          <div class="m-value accent">417 + 1</div>
+          <div class="m-foot" style="color: var(--d-text-mute);">todos en verde</div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 26px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
+            <div class="icon-tile" style="margin: 0; width: 38px; height: 38px;" aria-hidden="true">
+              <!-- Lucide: sparkles (MIT) -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+                <path d="M20 3v4"/>
+                <path d="M22 5h-4"/>
+                <path d="M4 17v2"/>
+                <path d="M5 18H3"/>
+              </svg>
+            </div>
+            <h3 style="margin: 0;">Que le queda por delante</h3>
+          </div>
+          <ul style="font-size: 0.95em;">
+            <li>Subir el COVID detectado por encima de <strong>90 de cada 100</strong> usando modelos preentrenados</li>
+            <li>Mostrar <strong>qué zona</strong> de la radiografía mira el modelo para decidir</li>
+            <li>Detectar imágenes que <strong>no son radiografías</strong> de tórax</li>
+            <li>Certificación CE/FDA si llegara a uso clínico real</li>
+          </ul>
+        </div>
+        <div style="display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 14px;">
+          <div style="padding: 16px 20px; border: 1px solid var(--d-line-soft); border-radius: 10px; background: rgba(97, 232, 200, 0.04); display: flex; gap: 14px; align-items: flex-start;">
+            <div class="icon-tile tone-ok" style="margin: 0; flex-shrink: 0; width: 38px; height: 38px;" aria-hidden="true">
+              <!-- Lucide: heart-pulse (MIT) -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/>
+                <path d="M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>
+              </svg>
+            </div>
+            <p style="margin: 0; font-size: 0.85em; color: var(--d-text);">
+              Lo que entregamos hoy es una <strong>base solida, honesta y reproducible</strong>. En consultoria sanitaria, esa honestidad vale mas que vender humo.
+            </p>
+          </div>
+          <div style="font-size: 1.6em; color: var(--d-text); font-weight: 700; letter-spacing: -0.01em;">Gracias. ¿Preguntas?</div>
+        </div>
+      </div>
+
+      <div class="slide-foot"><span>laSalle Health Center</span><span class="right">13 / 13</span></div>
     </section>
 
   </div>
@@ -1037,7 +1722,7 @@ si no                   → argmax(Normal, Pneumonia)
     controls: false,
     progress: true,
     center: false,
-    transition: 'fade',
+    transition: 'slide',
     transitionSpeed: 'default',
     backgroundTransition: 'fade',
     width: 1280,

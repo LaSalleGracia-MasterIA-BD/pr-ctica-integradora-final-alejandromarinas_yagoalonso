@@ -1,7 +1,8 @@
-"""Read-side access to the hospital MongoDB collections.
+"""Acceso de lectura a las colecciones MongoDB del hospital.
 
-Kept separate from `MongoWriter` so read and write surfaces can evolve
-independently. Mongo connection management mirrors the writer.
+Se mantiene separado de `MongoWriter` para que las superficies de lectura
+y escritura puedan evolucionar de forma independiente. La gestion de la
+conexion a Mongo refleja a la del writer.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ class MongoReader:
     def close(self) -> None:
         self._client.close()
 
-    # -- Patients -----------------------------------------------------------
+    # -- Pacientes ----------------------------------------------------------
 
     def count_patients(self) -> int:
         return self.db.patients.count_documents({})
@@ -36,7 +37,7 @@ class MongoReader:
     def find_patient(self, external_id: str) -> dict | None:
         return self.db.patients.find_one({"external_id": external_id}, {"_id": 0})
 
-    # -- Admissions ---------------------------------------------------------
+    # -- Ingresos -----------------------------------------------------------
 
     def count_admissions(self) -> int:
         pipeline = [
@@ -56,7 +57,7 @@ class MongoReader:
         ]
         return list(self.db.patients.aggregate(pipeline))
 
-    # -- Radiographies ------------------------------------------------------
+    # -- Radiografias -------------------------------------------------------
 
     def count_radiographies(self) -> int:
         pipeline = [
@@ -79,17 +80,17 @@ class MongoReader:
         ]
         return list(self.db.patients.aggregate(pipeline))
 
-    # NOTE: pipeline_runs reads moved to `src/api/sql_reader.py` (ADR-004).
+    # NOTA: las lecturas de pipeline_runs se movieron a `src/api/sql_reader.py` (ADR-004).
 
-    # -- Radiography classification ----------------------------------------
+    # -- Clasificacion de radiografias -------------------------------------
 
     def get_radiography_classification(self, minio_object_key: str) -> dict | None:
-        """Return the persisted classification for a radiography, or None.
+        """Devuelve la clasificacion persistida de una radiografia, o None.
 
-        Used by GET /api/v1/radiographies/classification?key=... to serve
-        the cached result without re-inferring. None is returned both when
-        the key does not exist in any patient and when it exists but its
-        `classification` is null.
+        Usado por GET /api/v1/radiographies/classification?key=... para
+        servir el resultado cacheado sin reinferir. Devuelve None tanto
+        cuando la key no existe en ningun paciente como cuando existe pero
+        su `classification` es nulo.
         """
         pipeline = [
             {"$unwind": "$radiographies"},

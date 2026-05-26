@@ -1,10 +1,10 @@
-"""Generate dummy PNG radiography images for local testing and demos.
+"""Genera imagenes PNG dummy de radiografias para testing local y demos.
 
-These are NOT medical data — just valid 1x1 PNG placeholders named with the
-convention `{patient_external_id}_xray{n}.png`. Use this to exercise the
-ingestion pipeline without depending on the real Kaggle dataset.
+Estas NO son datos medicos — solo placeholders PNG 1x1 validos nombrados con
+la convencion `{patient_external_id}_xray{n}.png`. Usa esto para ejercitar
+el pipeline de ingesta sin depender del dataset real de Kaggle.
 
-For training the actual ML model, download the real dataset — see
+Para entrenar el modelo ML real, descarga el dataset real — ver
 docs/runbooks/download-radiography-dataset.md.
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ from src.pipeline.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# Minimal valid 1x1 RGBA PNG
+# PNG RGBA 1x1 minimo valido
 PNG_BYTES = bytes.fromhex(
     "89504E470D0A1A0A"
     "0000000D49484452"

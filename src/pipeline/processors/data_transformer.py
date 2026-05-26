@@ -1,16 +1,16 @@
-"""Enrich hospital records and compute aggregated metrics.
+"""Enriquece registros hospitalarios y calcula metricas agregadas.
 
-The transformer works on rows that have already passed validation and cleaning
-(T7). Enrichment adds derived fields; aggregations produce summary DataFrames
-intended for the API/dashboard layer.
+El transformer opera sobre filas que ya pasaron validacion y limpieza
+(T7). El enriquecimiento anade campos derivados; las agregaciones producen
+DataFrames de resumen pensados para la capa API/dashboard.
 
-Design notes:
-  - `age` is a snapshot at processing time. The raw `birth_date` is kept so
-    downstream consumers can recompute if needed.
-  - `diagnosis_category` maps ICD-10 codes to the three clinical categories
-    aligned with the project's classification goal: COVID-19, Pneumonia,
-    Other (anything else). Null codes become "Unknown" so counts remain
-    meaningful even before validation catches them upstream.
+Notas de diseno:
+  - `age` es un snapshot en el momento del procesado. El `birth_date` raw
+    se conserva para que los consumidores downstream puedan recalcular si lo necesitan.
+  - `diagnosis_category` mapea codigos ICD-10 a las tres categorias clinicas
+    alineadas con el objetivo de clasificacion del proyecto: COVID-19, Pneumonia,
+    Other (cualquier otro). Los codigos nulos pasan a "Unknown" para que los
+    conteos sigan siendo utiles incluso antes de que la validacion upstream los capture.
 """
 from __future__ import annotations
 
@@ -22,10 +22,10 @@ from src.pipeline.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# ICD-10 prefixes grouped by the clinical category we care about.
+# Prefijos ICD-10 agrupados por la categoria clinica que nos interesa.
 COVID_ICD10_PREFIXES = ("U07",)
-# J12-J18 cover viral and bacterial pneumonias (unspecified, lobar, broncho,
-# viral, bacterial, aspiration, and unspecified pneumonia).
+# J12-J18 cubren neumonias virales y bacterianas (no especificada, lobar, bronco,
+# viral, bacteriana, por aspiracion y neumonia no especificada).
 PNEUMONIA_ICD10_PREFIXES = ("J12", "J13", "J14", "J15", "J16", "J17", "J18")
 
 
@@ -33,10 +33,10 @@ class DataTransformer:
     def enrich_patients(
         self, df: DataFrame, reference_date: date | None = None
     ) -> DataFrame:
-        """Add an `age` column computed from `birth_date`.
+        """Anade una columna `age` calculada desde `birth_date`.
 
-        Passing `reference_date` keeps tests deterministic. Production callers
-        typically omit it to use `current_date()`.
+        Pasar `reference_date` mantiene los tests deterministas. Los callers
+        de produccion normalmente lo omiten para usar `current_date()`.
         """
         if reference_date is None:
             ref = F.current_date()
@@ -54,7 +54,7 @@ class DataTransformer:
         return enriched
 
     def enrich_admissions(self, df: DataFrame) -> DataFrame:
-        """Add a `diagnosis_category` column derived from `diagnosis_code`."""
+        """Anade una columna `diagnosis_category` derivada de `diagnosis_code`."""
         code = F.col("diagnosis_code")
         covid_pred = self._prefix_match(code, COVID_ICD10_PREFIXES)
         pneumonia_pred = self._prefix_match(code, PNEUMONIA_ICD10_PREFIXES)
@@ -90,7 +90,7 @@ class DataTransformer:
 
     @staticmethod
     def _prefix_match(column, prefixes: tuple[str, ...]):
-        """Build a boolean expression: `column` starts with any of the prefixes."""
+        """Construye una expresion booleana: `column` empieza con alguno de los prefijos."""
         expr = F.lit(False)
         for prefix in prefixes:
             expr = expr | column.startswith(prefix)

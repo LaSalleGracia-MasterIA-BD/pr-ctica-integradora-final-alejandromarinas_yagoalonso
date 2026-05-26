@@ -1,11 +1,11 @@
-"""Write operations against the SQLite metadata store.
+"""Operaciones de escritura contra el store de metadatos en SQLite.
 
-Replaces the `start_pipeline_run`, `finish_pipeline_run` methods that used to
-live in `MongoWriter`, and adds `write_quality_summary` for the new
-`data_quality_summary` table.
+Reemplaza los metodos `start_pipeline_run` y `finish_pipeline_run` que
+antes vivian en `MongoWriter`, y anade `write_quality_summary` para la
+nueva tabla `data_quality_summary`.
 
-Identifiers are plain `uuid.uuid4()` strings — see ADR-004 for why we do NOT
-reuse `bson.ObjectId` here.
+Los identificadores son strings de `uuid.uuid4()` — ver ADR-004 sobre
+por que NO reutilizamos `bson.ObjectId` aqui.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 
 class SqlWriter:
-    """Thin wrapper around a SQLAlchemy session for write operations."""
+    """Wrapper ligero sobre una sesion de SQLAlchemy para escrituras."""
 
     def __init__(self, engine) -> None:
         self._engine = engine
@@ -40,12 +40,12 @@ class SqlWriter:
         self._engine.dispose()
 
     def ping(self) -> bool:
-        """Return True if the engine can execute a trivial query."""
+        """Devuelve True si el engine puede ejecutar una query trivial."""
         with self._engine.connect() as conn:
             return conn.execute(text("SELECT 1")).scalar() == 1
 
     def start_pipeline_run(self, trigger_type: str = "manual") -> str:
-        """Insert a new run with `status=running` and return its UUID."""
+        """Inserta un run nuevo con `status=running` y devuelve su UUID."""
         run_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
         row = PipelineRunRow(
@@ -70,11 +70,11 @@ class SqlWriter:
         stats: dict[str, Any] | None = None,
         error_message: str | None = None,
     ) -> None:
-        """Update a run with final status, stats and timestamp.
+        """Actualiza un run con el status final, stats y timestamp.
 
-        If `run_id` does not exist, the call is a no-op with a warning log;
-        we do NOT raise because losing the audit trail of a finished run is
-        worse than letting the caller continue.
+        Si `run_id` no existe, la llamada es no-op con un warning en el
+        log; NO lanzamos excepcion porque perder el audit trail de un
+        run terminado es peor que dejar al caller seguir adelante.
         """
         with self._SessionFactory() as session:
             row = session.get(PipelineRunRow, run_id)
@@ -103,7 +103,7 @@ class SqlWriter:
     def write_quality_summary(
         self, run_id: str, summaries: list[dict]
     ) -> int:
-        """Persist one row per dimension for a given run."""
+        """Persiste una fila por dimension para un run dado."""
         if not summaries:
             return 0
         now = datetime.now(timezone.utc)
@@ -131,10 +131,10 @@ class SqlWriter:
 
 
 def get_sql_writer_from_env() -> SqlWriter:
-    """Build a SqlWriter using the env-configured engine.
+    """Construye un SqlWriter usando el engine configurado por env.
 
-    Schema creation is NOT done here on purpose: it is the responsibility of
-    `bootstrap.py` so we have a single place that owns DDL.
+    La creacion del schema NO se hace aqui a proposito: es responsabilidad
+    de `bootstrap.py` para tener un unico sitio que posea el DDL.
     """
     engine = get_sql_engine_from_env()
     return SqlWriter(engine)

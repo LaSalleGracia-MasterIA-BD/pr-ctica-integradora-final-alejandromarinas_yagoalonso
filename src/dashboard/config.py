@@ -1,8 +1,8 @@
-"""Dashboard configuration sourced from environment variables.
+"""Configuracion del dashboard que se lee de variables de entorno.
 
-Three constants. No state, no logic. The dashboard is API-only: nothing
-here points to MongoDB, SQLite or MinIO directly (that goes through the
-API REST layer).
+Tres constantes. Sin estado, sin logica. El dashboard es API-only:
+nada aqui apunta a MongoDB, SQLite o MinIO directamente (todo pasa por
+la capa REST de la API).
 """
 from __future__ import annotations
 

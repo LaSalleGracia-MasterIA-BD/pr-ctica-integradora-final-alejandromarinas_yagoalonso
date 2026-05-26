@@ -1,4 +1,4 @@
-"""Centralized logging configuration for the hospital pipeline."""
+"""Configuracion centralizada de logging para el pipeline del hospital."""
 from __future__ import annotations
 
 import logging
@@ -10,9 +10,9 @@ DEFAULT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def setup_logging(level: str | None = None, log_format: str | None = None) -> None:
-    """Configure the root logger once for the entire pipeline.
+    """Configura el root logger una unica vez para todo el pipeline.
 
-    Subsequent calls are no-ops to avoid duplicating handlers.
+    Las llamadas posteriores son no-op para evitar duplicar handlers.
     """
     root = logging.getLogger()
     if root.handlers:
@@ -29,6 +29,6 @@ def setup_logging(level: str | None = None, log_format: str | None = None) -> No
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Return a logger that shares the pipeline-wide configuration."""
+    """Devuelve un logger que comparte la configuracion global del pipeline."""
     setup_logging()
     return logging.getLogger(name)
